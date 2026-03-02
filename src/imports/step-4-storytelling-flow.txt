@@ -1,0 +1,110 @@
+Actúa como Product Designer en Figma. Estoy en Startería > Step 3C “Resultados y decisión” dentro del mismo dashboard/proyecto.
+
+Objetivo:
+Habilitar el paso del Step 3 al Step 4 dentro del MISMO flujo del dashboard (sin nuevas apps/pantallas externas).
+El Step 4 debe desbloquearse cuando Step 3 esté aprobado (demo) y permitir estructurar la historia del experimento para presentarla.
+
+Contexto actual:
+- En Step 3C ya existe el bloque “Preparar Step 4 — Contar la historia” con story outline, bullets y evidencias.
+- Abajo existe un bloque “Sesión agendada / Step 3 aprobado” (modo demo).
+- Necesito que, una vez Step 3 esté aprobado, el Step 4 se marque como “Disponible/Desbloqueado” y pueda navegar al Step 4.
+
+Reglas (importante):
+- Mantén el mismo layout y estilo del dashboard: sidebar, header, componentes, tipografía, spacing.
+- No crees una navegación paralela. Step 4 debe sentirse continuidad natural.
+- No inventes datos reales: usa placeholders explícitos “(Contenido de ejemplo para prototipo)”.
+- Nombra frames/layers ordenado.
+
+Cambios a implementar:
+
+A) Desbloqueo + navegación
+1) En el menú de Steps del proyecto (donde se listan Step 1–4), cambia el estado visual del Step 4 a “Disponible” cuando Step 3 esté en estado “Aprobado (demo)”.
+2) Actualiza los links de navegación:
+   - El item “Step 4” debe navegar a un frame nuevo “S4_Overview” (no a un frame bloqueado).
+3) En el bloque “Preparar Step 4 — Contar la historia”, agrega un botón principal:
+   - “Ir al Step 4”
+   - Este botón debe navegar a “S4_Overview”.
+4) Si existe un frame “Step 4 bloqueado”, mantenlo como fallback, pero no debe ser el destino cuando Step 3 esté aprobado.
+
+B) Crear Step 4 dentro del mismo dashboard (frames mínimos para testear)
+Crea 4 frames del Step 4, manteniendo exactamente el mismo patrón de submódulos (como Step 2 y Step 3):
+
+Frame 1: “S4_Overview — Step 4: Contar la historia”
+- Sidebar y header iguales.
+- Título: “Step 4 — Contar la historia” + chip de estado (“Disponible” o “En progreso”).
+- Submódulos del Step 4:
+  A - Narrativa (story outline)
+  B - Evidencias y soporte (assets)
+  C - Presentación (deck) y ensayo
+
+En el cuerpo del Overview:
+- Card “Resumen para contar” que jale (placeholder) del Step 3: problema, hipótesis, experimento, resultado, decisión.
+- Card “Checklist para cerrar Step 4” (5 ítems):
+  - Story outline completo
+  - Evidencias seleccionadas
+  - Mensajes clave definidos
+  - Deck generado (borrador)
+  - Ensayo listo (talk track)
+
+Frame 2: “S4A_Narrativa — Story outline”
+- Editor guiado por secciones:
+  1) Problema
+  2) Hipótesis
+  3) Experimento
+  4) Resultados
+  5) Decisión
+  6) Aprendizajes
+  7) Próximo paso
+- Cada sección con:
+  - Campo de texto
+  - Hint de 1 línea (qué debe incluir)
+  - Contador simple (opcional) “breve y accionable”
+- Botón “Mejorar con IA” (overlay) que sugiera:
+  - Versión 1: ejecutiva (corta)
+  - Versión 2: storytelling (más narrativa)
+  - Versión 3: técnica (más datos)
+  (solo placeholder, sin lógica real)
+
+Frame 3: “S4B_Evidencias — Evidencias y soporte”
+- Lista de evidencias importadas del Step 3 (placeholder):
+  - Archivo / Link / Nota (con fecha)
+- Función: seleccionar cuáles van en la historia (checkbox “Incluir en deck”).
+- Campo “Qué demuestra esta evidencia” (1 línea por evidencia).
+- Botón “Recomendar evidencias con IA” (overlay) que sugiera top 3 evidencias y por qué (placeholder).
+
+Frame 4: “S4C_Deck — Presentación y ensayo”
+- Card “Estructura del deck” (6–8 láminas) con títulos y bullets placeholder:
+  1) Contexto y problema
+  2) Insight del usuario / fricción
+  3) Hipótesis y métrica
+  4) Experimento (cómo se hizo)
+  5) Resultados vs umbral
+  6) Decisión (Go/Iterar/No-Go) + por qué
+  7) Aprendizajes clave
+  8) Próximo paso / pedido a comité
+- Botón “Generar borrador con IA” (overlay) para proponer 2 variantes de deck:
+  - Variante ejecutiva (6 slides)
+  - Variante completa (8 slides)
+- Sección “Talk track (ensayo)”:
+  - Campo para guion de 60–90 segundos
+  - Checklist de ensayo (tiempo, claridad, evidencia, pedido final)
+
+C) Gating del Step 4 (demo)
+- Agrega al final del Step 4 un bloque “Enviar a revisión IA” y luego “Sesión con experto obligatoria” (mismo patrón que Step 2/3), pero:
+  - En este prototipo, basta con mostrar los bloques (no necesitas lógica compleja).
+- Asegura que el flujo de prototipo sea:
+  Step 3C (aprobado) -> click “Ir al Step 4” -> S4_Overview -> S4A/S4B/S4C.
+
+Interacciones:
+- “Ir al Step 4” navega a S4_Overview.
+- Submódulos A/B/C navegan a sus frames.
+- Overlays de IA se abren y cierran (visual).
+
+Nomenclatura:
+- S4_Overview
+- S4A_Narrativa
+- S4B_Evidencias
+- S4C_Deck
+- Overlay_S4_AI_Narrativa
+- Overlay_S4_AI_Evidencias
+- Overlay_S4_AI_Deck
