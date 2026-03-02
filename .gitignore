@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Claude Flow runtime data
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+.claude-flow/neural/
+.claude-flow/metrics/
+.claude-flow/learning/
+.claude-flow/security/
+.claude-flow/hooks/
+.claude-flow/daemon.log
+.claude-flow/daemon.pid
+.claude-flow/daemon-state.json
+.claude-flow/*.log
+.claude-flow/*.tmp
+
+# Swarm orchestration data
+.swarm/
+
+# Claude Code runtime data
+.claude/memory.db
+.claude/settings.local.json
+.claude/agents/
+.claude/helpers/
+.claude/commands/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+*.tmp
+.vercel
+.claude/
+.env*.local
