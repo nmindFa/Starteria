@@ -49,3 +49,5 @@ Thumbs.db
 *.log
 *.tmp
 .vercel
+.claude/
+.env*.local
