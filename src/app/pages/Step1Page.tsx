@@ -17,14 +17,6 @@ import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator'
 
 type ModuleId = 'A' | 'B' | 'C' | 'D' | 'S';
 
-interface CardRetoData {
-  retoFrase: string;
-  alcanceEtapa: 'antes' | 'durante' | 'después' | '';
-  alcanceLimites: string;
-  senalObservable: string;
-  evidenciaTexto: string;
-}
-
 interface ModuleASISData {
   casoReal: string;
   pasos: string[];
@@ -39,40 +31,27 @@ interface ModuleASISData {
   corteAlcance: string;
 }
 
-interface PreparacionEntrevistasData {
-  conLider: '' | 'prioridad' | 'impacto' | 'alcance';
-  conAfectados: '' | 'paso_exacto' | 'parches' | 'frecuencia';
+interface TemaInvestigacion {
+  id: string;
+  titulo: string;
+  preguntaClave: string;
+  via: '' | 'entrevistas' | 'data' | 'ambas';
+  perfilesIds: string[];
+  fuente: string;
+  preguntas: string[];
 }
 
-interface MetricaB {
+interface PerfilEntrevista {
   id: string;
   nombre: string;
-  tipo: '' | 'tiempo' | 'cantidad' | 'costo' | 'calidad' | 'riesgo' | 'otro';
-  baseline: string;
-  baselineNoDisponible: boolean;
-  fuente: string;
-  frecuencia: string;
-  senalMejora: string;
-  esProxy: boolean;
+  porQue: string;
 }
 
 interface ModuleBData {
-  cadenaImpacto: string;
-  // Estado de medición
-  estadoMedicion: '' | 'si' | 'parcial' | 'no';
-  mFuente: string;
-  mFrecuencia: string;
-  queMideHoy: string;
-  queFaltaMedir: string;
-  porQueNo: '' | 'no_prioridad' | 'no_herramienta' | 'no_responsable' | 'otro';
-  datoMinimo: string;
-  // Métricas
-  metricas: MetricaB[];
-  // Plan mínimo
-  planMetrica: string;
-  planComoObtener: '' | 'entrevista' | 'sistema' | 'observacion' | 'documento' | 'otro';
-  planQuienDa: string;
-  planPlazo: '' | '24_72h' | '1_semana' | '2_semanas';
+  objetivoGeneral: string;
+  temas: TemaInvestigacion[];
+  perfiles: PerfilEntrevista[];
+  guiaGenerada: boolean;
 }
 
 interface ModuleCData {
@@ -122,6 +101,13 @@ interface SintesisData {
   version: number;
 }
 
+interface EvidenciaA {
+  id: string;
+  tipo: '' | 'dato' | 'ticket' | 'testimonio' | 'benchmark' | 'observacion';
+  desc: string;
+  fuente: string;
+}
+
 const MOCK_FEEDBACK_IA = {
   status: 'Iterar' as const,
   summary: 'El análisis AS-IS está bien documentado y las métricas tienen baseline definido. Sin embargo, faltan los actores clave y hay inconsistencias en las restricciones.',
@@ -161,26 +147,14 @@ export function Step1Page() {
   const [showIAPanel, setShowIAPanel] = useState(false);
   const [iaLoading, setIaLoading] = useState(false);
   const [showMentorModal, setShowMentorModal] = useState(false);
-  const [cardRetoCopyMsg, setCardRetoCopyMsg] = useState(false);
-  const [cardRetoGenerada, setCardRetoGenerada] = useState(false);
-  const [mejorIAFrase, setMejorIAFrase] = useState(false);
+  const [fichaCopyMsg, setFichaCopyMsg] = useState(false);
   const [showMentorOptions, setShowMentorOptions] = useState(false);
-  const [proxyTooltipId, setProxyTooltipId] = useState<string | null>(null);
-  const [iaLoading_B, setIaLoading_B] = useState(false);
+
+  const [iaLoadingB, setIaLoadingB] = useState(false);
+  const [expandedTemaId, setExpandedTemaId] = useState<string | null>('t1');
+  const [expandedPerfilId, setExpandedPerfilId] = useState<string | null>('p1');
+  const [guiaVisible, setGuiaVisible] = useState(false);
   const [showOpcionalesC, setShowOpcionalesC] = useState(false);
-
-  const [cardReto, setCardReto] = useState<CardRetoData>({
-    retoFrase: '',
-    alcanceEtapa: '',
-    alcanceLimites: '',
-    senalObservable: '',
-    evidenciaTexto: '',
-  });
-
-  const [preparacion, setPreparacion] = useState<PreparacionEntrevistasData>({
-    conLider: '',
-    conAfectados: '',
-  });
 
   // Module data states
   const [asisData, setAsisData] = useState<ModuleASISData>({
@@ -198,22 +172,41 @@ export function Step1Page() {
   });
 
   const [bData, setBData] = useState<ModuleBData>({
-    cadenaImpacto: 'Solicitud de accesos por correo informal → TI no prioriza → accesos retrasados 7–10 días → empleado sin herramientas → baja productividad → costos de espera y frustración → riesgo de rotación temprana.',
-    estadoMedicion: 'parcial',
-    mFuente: '',
-    mFrecuencia: '',
-    queMideHoy: 'Tiempo total de onboarding (días) en reportes de RRHH.',
-    queFaltaMedir: 'Tiempo específico de espera de accesos TI. Costo por ingreso sin productividad.',
-    porQueNo: '',
-    datoMinimo: '',
-    metricas: [
-      { id: '1', nombre: 'Tiempo de espera de accesos TI', tipo: 'tiempo', baseline: '7–10 días promedio', baselineNoDisponible: false, fuente: 'Estimación RRHH + TI', frecuencia: 'Por ingreso', senalMejora: 'Reducción a menos de 2 días', esProxy: false },
-      { id: '2', nombre: 'Costo por empleado sin productividad', tipo: 'costo', baseline: 'No disponible', baselineNoDisponible: true, fuente: '', frecuencia: 'Por ingreso', senalMejora: 'Reducción >50%', esProxy: true },
+    objetivoGeneral: 'Confirmar si el retraso en la asignación de accesos TI es una causa sistémica de la baja productividad en el onboarding, y si afecta a la mayoría de los empleados nuevos de TechCorp.',
+    temas: [
+      {
+        id: 't1',
+        titulo: 'Magnitud real del problema',
+        preguntaClave: '¿Qué tan frecuente ocurre el retraso y cuántos empleados lo experimentan por ciclo de incorporación?',
+        via: 'ambas',
+        perfilesIds: ['p1'],
+        fuente: 'Registros de solicitudes TI y reportes de RRHH Q4 2024',
+        preguntas: ['¿Con qué frecuencia enfrentan retrasos en los accesos?', '¿Cuántos días promedio espera un empleado nuevo sin herramientas?'],
+      },
+      {
+        id: 't2',
+        titulo: 'Tiempo y costo operativo por caso',
+        preguntaClave: '¿Cuánto tiempo y dinero pierde la organización por cada caso de retraso?',
+        via: 'data',
+        perfilesIds: [],
+        fuente: 'Registros de RRHH, sistema de tickets TI, datos de nómina',
+        preguntas: [],
+      },
+      {
+        id: 't3',
+        titulo: 'Variación por perfil de empleado',
+        preguntaClave: '¿El impacto es igual para todos los perfiles o hay segmentos que lo sufren de forma más crítica?',
+        via: 'entrevistas',
+        perfilesIds: ['p1', 'p2'],
+        fuente: '',
+        preguntas: ['¿Cómo afecta el retraso en tu área específica?', '¿Qué herramientas necesitas urgente el primer día?'],
+      },
     ],
-    planMetrica: 'Costo por empleado sin productividad',
-    planComoObtener: 'entrevista',
-    planQuienDa: 'Gerente de Finanzas / RRHH',
-    planPlazo: '1_semana',
+    perfiles: [
+      { id: 'p1', nombre: 'Coordinadora de RRHH', porQue: 'Ejecuta el proceso y tiene contacto directo con el quiebre' },
+      { id: 'p2', nombre: 'Jefe de TI', porQue: 'Responsable del handoff y priorización de solicitudes de acceso' },
+    ],
+    guiaGenerada: false,
   });
 
   const [cData, setCData] = useState<ModuleCData>({
@@ -253,7 +246,82 @@ export function Step1Page() {
     version: 1,
   });
 
-  const saveState = useAutosave([asisData, bData, cData, dData, sintesisData, preparacion]);
+  // ── Módulo A — nuevos estados (rediseño Step1A) ──────────────────────────
+  const [step0Collapsed, setStep0Collapsed] = useState(false);
+  const [actoresProceso, setActoresProceso] = useState('RRHH, TI, Área receptora, Empleado nuevo');
+  const [momentoData, setMomentoData] = useState({ cuando: '', frecuencia: '', quienSufre: '', duracion: '' });
+  const [evidenciasA, setEvidenciasA] = useState<EvidenciaA[]>([
+    { id: '1', tipo: 'dato', desc: 'Promedio de 18 días en incorporación según registros de RRHH 2024.', fuente: 'Registros RRHH Q4 2024' },
+  ]);
+  const [iaModAState, setIaModAState] = useState<'idle' | 'loading' | 'done'>('idle');
+  const [fichaConfirmada, setFichaConfirmada] = useState(false);
+
+  const addEvidenciaA = () =>
+    setEvidenciasA(p => [...p, { id: Date.now().toString(), tipo: '', desc: '', fuente: '' }]);
+  const updateEvidenciaA = (id: string, changes: Partial<EvidenciaA>) =>
+    setEvidenciasA(p => p.map(e => e.id === id ? { ...e, ...changes } : e));
+  const removeEvidenciaA = (id: string) =>
+    setEvidenciasA(p => p.filter(e => e.id !== id));
+
+  const nivelSustento: 'sin' | 'debil' | 'solido' = (() => {
+    const count = evidenciasA.filter(e => e.desc.trim()).length;
+    if (count === 0) return 'sin';
+    if (count === 1) return 'debil';
+    return 'solido';
+  })();
+
+  const bloque1Ok = asisData.casoReal.trim().length > 0 && asisData.pasos.filter(p => p.trim()).length >= 2;
+  const bloque2Ok = asisData.quiebreIndex !== null;
+  const bloque3Ok = asisData.consecuencia.trim().length > 0 && asisData.causaInmediata.trim().length > 0;
+  const listoParaIA = bloque1Ok && bloque2Ok && bloque3Ok;
+
+  // Lectura consolidada derivada del estado real — sin textos placeholder
+  const lecturaConsolidada = (() => {
+    const pasoQuiebre = asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex]
+      ? asisData.pasos[asisData.quiebreIndex]
+      : 'el paso identificado';
+    const causaCorta = asisData.causaInmediata
+      ? asisData.causaInmediata.split('.')[0].toLowerCase()
+      : 'una causa operativa sin responsable claro';
+    const consecuenciaCorta = asisData.consecuencia
+      ? asisData.consecuencia.split('.')[0].toLowerCase()
+      : 'un impacto directo en los involucrados';
+    const procesoCorto = asisData.casoReal
+      ? asisData.casoReal.split(' ').slice(0, 8).join(' ') + (asisData.casoReal.split(' ').length > 8 ? '…' : '')
+      : 'el proceso descrito';
+    const sustentoLabel = nivelSustento === 'solido'
+      ? 'sólido'
+      : nivelSustento === 'debil'
+      ? 'inicial — suficiente para avanzar con cautela'
+      : 'aún débil — conviene reforzarlo en el Módulo B';
+    return `El reto ocurre en "${pasoQuiebre}" dentro del proceso: ${procesoCorto}. La causa directa es que ${causaCorta}. Como resultado, ${consecuenciaCorta}. El sustento disponible es ${sustentoLabel}.`;
+  })();
+
+  // Temas prioritarios para investigar — derivados del contexto real del módulo
+  const temasPrioritarios = [
+    {
+      n: 1,
+      titulo: 'Magnitud real del problema',
+      desc: `¿Cuántos casos exactos presentan retraso en "${asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex] ? asisData.pasos[asisData.quiebreIndex].toLowerCase() : 'el paso quiebre'}"? ¿Hay registros en sistema o se trabaja con estimaciones informales?`,
+    },
+    {
+      n: 2,
+      titulo: 'Tiempo y costo real por caso',
+      desc: `¿Cuánto tarda en promedio resolver el quiebre, y cuántas horas-persona consume en ${actoresProceso ? actoresProceso.split(',')[0].trim() : 'los actores involucrados'}? ¿Existe algún cálculo o referencia de costo?`,
+    },
+    {
+      n: 3,
+      titulo: 'Variación del impacto entre perfiles',
+      desc: `¿El problema afecta igual a todos los involucrados o hay perfiles que lo sufren de forma más crítica? Identificar esos segmentos ayudará a enfocar la acción.`,
+    },
+    {
+      n: 4,
+      titulo: 'Parches actuales y sus límites',
+      desc: `¿Qué hacen hoy ${actoresProceso ? actoresProceso.split(',')[0].trim() : 'los actores'} para compensar el problema mientras existe? ¿Por qué esas soluciones improvisadas no resuelven el quiebre de fondo?`,
+    },
+  ];
+
+  const saveState = useAutosave([asisData, bData, cData, dData, sintesisData]);
 
   if (!project || !step) return <div className="p-6"><p className="text-slate-500">Proyecto o Step no encontrado.</p></div>;
 
@@ -280,31 +348,19 @@ export function Step1Page() {
 
   // ── Módulo B helpers — defined before `modules` to avoid temporal dead zone ──
 
-  const necesitaPlanMinimo = () => {
-    if (bData.estadoMedicion === 'no') return true;
-    return bData.metricas.some(m => m.baselineNoDisponible);
-  };
-
   const getModuloBMissing = () => {
     const m: string[] = [];
-    if (!bData.cadenaImpacto.trim()) m.push('Cadena de impacto (¿Qué provoca este reto?)');
-    if (!bData.estadoMedicion) m.push('Estado actual de medición');
-    if (bData.metricas.length === 0) m.push('Al menos 1 métrica creada');
-    else {
-      const incompletas = bData.metricas.filter(met => {
-        if (!met.nombre.trim()) return true;
-        if (!met.tipo) return true;
-        if (!met.baseline.trim() && !met.baselineNoDisponible) return true;
-        return false;
-      });
-      if (incompletas.length > 0)
-        m.push(`${incompletas.length} métrica(s) sin nombre, tipo o línea base`);
-    }
-    if (necesitaPlanMinimo()) {
-      if (!bData.planMetrica.trim()) m.push('Plan mínimo: qué métrica medir primero');
-      if (!bData.planComoObtener) m.push('Plan mínimo: cómo la obtendrás');
-      if (!bData.planPlazo) m.push('Plan mínimo: plazo');
-    }
+    if (!bData.objetivoGeneral.trim()) m.push('Define el objetivo general de la investigación');
+    const temasConTitulo = bData.temas.filter(t => t.titulo.trim()).length;
+    if (temasConTitulo < 3) m.push(`Define al menos 3 frentes de investigación (llevas ${temasConTitulo})`);
+    const temasSinVia = bData.temas.filter(t => t.titulo.trim() && !t.via).length;
+    if (temasSinVia > 0) m.push(`${temasSinVia} frente(s) sin modalidad de captura definida`);
+    const hayEntrevistas = bData.temas.some(t => (t.via === 'entrevistas' || t.via === 'ambas') && t.titulo.trim());
+    if (hayEntrevistas && bData.perfiles.length === 0) m.push('Define al menos 1 perfil a entrevistar');
+    const temasSinPerfil = bData.temas.filter(t => (t.via === 'entrevistas' || t.via === 'ambas') && t.titulo.trim() && t.perfilesIds.length === 0).length;
+    if (temasSinPerfil > 0) m.push(`${temasSinPerfil} frente(s) por entrevistas sin perfil vinculado`);
+    const temasSinFuente = bData.temas.filter(t => (t.via === 'data' || t.via === 'ambas') && t.titulo.trim() && !t.fuente.trim()).length;
+    if (temasSinFuente > 0) m.push(`${temasSinFuente} frente(s) por data sin fuente definida`);
     return m;
   };
 
@@ -324,8 +380,8 @@ export function Step1Page() {
   const moduloDListo = () => getModuloDMissing().length === 0;
 
   const modules: { id: ModuleId; label: string; shortName: string; unlocked: boolean; completed: boolean }[] = [
-    { id: 'A', label: 'Módulo A: Proceso actual', shortName: 'A · Proceso actual', unlocked: true, completed: true },
-    { id: 'B', label: 'Módulo B: Medición', shortName: 'B · Medición', unlocked: true, completed: moduloBListo() },
+    { id: 'A', label: 'Módulo A: Análisis inicial', shortName: 'A · Análisis inicial', unlocked: true, completed: fichaConfirmada || (bloque1Ok && bloque2Ok && bloque3Ok) },
+    { id: 'B', label: 'Módulo B: Investigación de campo', shortName: 'B · Investigación', unlocked: true, completed: moduloBListo() },
     { id: 'C', label: 'Módulo C: Restricciones', shortName: 'C · Restricciones', unlocked: true, completed: semaforo === 'verde' },
     { id: 'D', label: 'Módulo D: Actores y validación', shortName: 'D · Validación', unlocked: semaforo !== 'rojo', completed: moduloDListo() },
     { id: 'S', label: 'Síntesis + Revisión de rumbo', shortName: 'Síntesis', unlocked: false, completed: false },
@@ -344,122 +400,169 @@ export function Step1Page() {
 
   const canSend = modules.slice(0, 4).every(m => m.completed) || true; // for demo
 
-  // ── Card del reto helpers ──────────────────────────────────────────────────
-
-  const autoFillCardReto = () => {
-    const pasoNombre = asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex]
-      ? `Paso ${asisData.quiebreIndex + 1} — ${asisData.pasos[asisData.quiebreIndex]}`
-      : asisData.quiebre || '[paso]';
-    const consecuencia = asisData.consecuencia ? asisData.consecuencia.split('.')[0] : '[consecuencia]';
-    const causa = asisData.causaInmediata ? asisData.causaInmediata.split('.')[0] : '[causa]';
-    const proceso = asisData.casoReal ? asisData.casoReal.split(' ').slice(0, 6).join(' ') + '…' : '[proceso]';
-    setCardReto(prev => ({
-      ...prev,
-      retoFrase: `Hoy ${proceso} se rompe en ${pasoNombre}, causando ${consecuencia}, porque ${causa}.`,
-      alcanceEtapa: asisData.alcance === 'transversal' ? '' : (asisData.alcance as 'antes' | 'durante' | 'después' | ''),
-    }));
-    setCardRetoGenerada(true);
-  };
-
-  const mejorarFraseConIA = () => {
-    setMejorIAFrase(true);
-    setTimeout(() => {
-      setCardReto(prev => ({
-        ...prev,
-        retoFrase: 'Hoy el proceso de incorporación de nuevos empleados se rompe en el alta de sistemas (TI), causando hasta 10 días sin acceso a herramientas y pérdida de productividad, porque no existe un tiempo objetivo ni priorización formal para solicitudes de onboarding.',
-      }));
-      setMejorIAFrase(false);
-    }, 1800);
-  };
-
-  const cardRetoCompleta = () => {
-    if (!cardRetoGenerada) return false;
-    if (!cardReto.retoFrase.trim()) return false;
-    if (!cardReto.alcanceEtapa) return false;
-    if (!cardReto.senalObservable.trim()) return false;
-    if (!cardReto.evidenciaTexto.trim()) return false;
-    return true;
-  };
-
   const getModuloAMissing = () => {
     const m: string[] = [];
-    if (!asisData.casoReal.trim()) m.push('Cuéntame el reto (Sección 1)');
-    if (asisData.pasos.filter(p => p.trim()).length < 2) m.push('Al menos 2 pasos del recorrido (Sección 2)');
-    if (asisData.quiebreIndex === null) m.push('Selecciona en qué momento ocurre el reto (Sección 3)');
-    if (!asisData.consecuencia.trim()) m.push('Consecuencia del reto (Sección 4)');
-    if (!asisData.causaInmediata.trim()) m.push('Causa inmediata (Sección 4)');
-    if (!cardRetoGenerada) m.push('Card del reto (genera la card al final)');
-    else if (!cardReto.retoFrase.trim()) m.push('Reto en 1 frase (en la Card del reto)');
+    if (!asisData.casoReal.trim()) m.push('Descripción del reto (Bloque 1)');
+    if (asisData.pasos.filter(p => p.trim()).length < 2) m.push('Al menos 2 pasos del proceso (Bloque 1)');
+    if (asisData.quiebreIndex === null) m.push('Paso quiebre seleccionado (Bloque 2)');
+    if (!asisData.consecuencia.trim()) m.push('Consecuencia del reto (Bloque 3)');
+    if (!asisData.causaInmediata.trim()) m.push('Causa inmediata (Bloque 3)');
+    if (!fichaConfirmada) m.push('Analiza con IA y confirma la ficha consolidada');
     return m;
   };
 
-  const addMetrica = () => {
-    const nueva: MetricaB = {
-      id: Date.now().toString(),
-      nombre: '',
-      tipo: '',
-      baseline: '',
-      baselineNoDisponible: false,
-      fuente: '',
-      frecuencia: '',
-      senalMejora: '',
-      esProxy: false,
-    };
-    setBData(p => ({ ...p, metricas: [...p.metricas, nueva] }));
+  // ── Módulo B — CRUD helpers ────────────────────────────────────────────────
+
+  const addTema = () => {
+    const newId = Date.now().toString();
+    setBData(p => ({
+      ...p,
+      temas: [...p.temas, { id: newId, titulo: '', preguntaClave: '', via: '', perfilesIds: [], fuente: '', preguntas: [''] }],
+    }));
+    setExpandedTemaId(newId);
   };
 
-  const updateMetrica = (id: string, changes: Partial<MetricaB>) => {
-    setBData(p => ({ ...p, metricas: p.metricas.map(m => m.id === id ? { ...m, ...changes } : m) }));
+  const updateTema = (id: string, changes: Partial<TemaInvestigacion>) => {
+    setBData(p => ({ ...p, temas: p.temas.map(t => t.id === id ? { ...t, ...changes } : t) }));
   };
 
-  const removeMetrica = (id: string) => {
-    setBData(p => ({ ...p, metricas: p.metricas.filter(m => m.id !== id) }));
+  const removeTema = (id: string) => {
+    setBData(p => ({ ...p, temas: p.temas.filter(t => t.id !== id) }));
   };
 
-  const suggestCadenaIA = () => {
-    setIaLoading_B(true);
+  const addPreguntaTema = (temaId: string) => {
+    setBData(p => ({
+      ...p,
+      temas: p.temas.map(t => t.id === temaId && t.preguntas.length < 3 ? { ...t, preguntas: [...t.preguntas, ''] } : t),
+    }));
+  };
+
+  const updatePreguntaTema = (temaId: string, idx: number, val: string) => {
+    setBData(p => ({
+      ...p,
+      temas: p.temas.map(t => t.id === temaId ? { ...t, preguntas: t.preguntas.map((q, i) => i === idx ? val : q) } : t),
+    }));
+  };
+
+  const removePreguntaTema = (temaId: string, idx: number) => {
+    setBData(p => ({
+      ...p,
+      temas: p.temas.map(t => t.id === temaId ? { ...t, preguntas: t.preguntas.filter((_, i) => i !== idx) } : t),
+    }));
+  };
+
+  const togglePerfilEnTema = (temaId: string, perfilId: string) => {
+    setBData(p => ({
+      ...p,
+      temas: p.temas.map(t => {
+        if (t.id !== temaId) return t;
+        const hasIt = t.perfilesIds.includes(perfilId);
+        return { ...t, perfilesIds: hasIt ? t.perfilesIds.filter(id => id !== perfilId) : [...t.perfilesIds, perfilId] };
+      }),
+    }));
+  };
+
+  const addPerfil = () => {
+    const newId = Date.now().toString();
+    setBData(p => ({
+      ...p,
+      perfiles: [...p.perfiles, { id: newId, nombre: '', porQue: '' }],
+    }));
+    setExpandedPerfilId(newId);
+  };
+
+  const updatePerfil = (id: string, changes: Partial<PerfilEntrevista>) => {
+    setBData(p => ({ ...p, perfiles: p.perfiles.map(pf => pf.id === id ? { ...pf, ...changes } : pf) }));
+  };
+
+  const removePerfil = (id: string) => {
+    setBData(p => ({
+      ...p,
+      perfiles: p.perfiles.filter(pf => pf.id !== id),
+      temas: p.temas.map(t => ({ ...t, perfilesIds: t.perfilesIds.filter(pid => pid !== id) })),
+    }));
+  };
+
+  const sugerirObjetivoIA = () => {
+    setIaLoadingB(true);
     setTimeout(() => {
-      const fraseReto = cardReto.retoFrase || asisData.casoReal;
+      const pasoQuiebre = asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex]
+        ? asisData.pasos[asisData.quiebreIndex]
+        : 'el paso quiebre';
       setBData(p => ({
         ...p,
-        cadenaImpacto: fraseReto
-          ? `${asisData.causaInmediata ? asisData.causaInmediata.split('.')[0] : 'Falla en el proceso'} → retrasos en ${asisData.quiebre || 'paso clave'} → ${asisData.consecuencia ? asisData.consecuencia.split(',')[0].toLowerCase() : 'impacto operativo'} → costos de reproceso → experiencia negativa y riesgo de pérdida de talento.`
-          : p.cadenaImpacto,
+        objetivoGeneral: `Confirmar si el fallo en "${pasoQuiebre}" es una causa sistémica y cuantificable del problema, qué tan extendido está entre los afectados, y qué hace que los parches actuales no lo resuelvan de fondo.`,
       }));
-      setIaLoading_B(false);
+      setIaLoadingB(false);
+    }, 1400);
+  };
+
+  const sugerirTemasIA = () => {
+    setIaLoadingB(true);
+    setTimeout(() => {
+      const pasoQ = asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex]
+        ? asisData.pasos[asisData.quiebreIndex].toLowerCase()
+        : 'el paso quiebre';
+      const actor = actoresProceso ? actoresProceso.split(',')[0].trim() : 'los involucrados';
+      setBData(p => ({
+        ...p,
+        temas: [
+          { id: 't-ia-1', titulo: 'Magnitud real del problema', preguntaClave: `¿Qué tan frecuente ocurre el fallo en "${pasoQ}" y cuántos casos lo presentan?`, via: 'ambas', perfilesIds: p.perfiles.slice(0, 1).map(pf => pf.id), fuente: 'Registros internos, sistema de tickets, reportes históricos', preguntas: ['¿Con qué frecuencia ocurre?', '¿Afecta a todos los perfiles o solo a algunos?'] },
+          { id: 't-ia-2', titulo: 'Tiempo y costo operativo por caso', preguntaClave: '¿Cuánto tiempo y dinero genera cada ocurrencia del problema?', via: 'data', perfilesIds: [], fuente: 'Datos de nómina, registros de tiempo, sistema de tickets', preguntas: [] },
+          { id: 't-ia-3', titulo: 'Variación por perfil de afectado', preguntaClave: '¿El impacto es homogéneo o hay segmentos que lo viven de forma más crítica?', via: 'entrevistas', perfilesIds: p.perfiles.map(pf => pf.id), fuente: '', preguntas: ['¿Cómo afecta el problema en tu área?', '¿Qué intentaste para compensarlo?'] },
+          { id: 't-ia-4', titulo: 'Parches actuales y sus límites', preguntaClave: `¿Qué hace hoy ${actor} para compensar el problema y por qué no lo resuelve?`, via: 'entrevistas', perfilesIds: p.perfiles.slice(0, 1).map(pf => pf.id), fuente: '', preguntas: ['¿Qué solución temporal usan hoy?', '¿Por qué esa solución no resuelve el problema de fondo?'] },
+        ],
+      }));
+      setIaLoadingB(false);
+    }, 1800);
+  };
+
+  const sugerirPerfilesIA = () => {
+    setIaLoadingB(true);
+    setTimeout(() => {
+      const actoresArr = actoresProceso
+        ? actoresProceso.split(',').map(a => a.trim()).slice(0, 3)
+        : ['Responsable del proceso', 'Persona afectada', 'Decisor'];
+      const perfilesSugeridos: PerfilEntrevista[] = actoresArr.map((actor, i) => ({
+        id: `p-ia-${i + 1}`,
+        nombre: actor,
+        porQue: i === 0 ? 'Ejecuta el proceso y tiene visibilidad directa del quiebre' : i === 1 ? 'Sufre las consecuencias; puede cuantificar el impacto real' : 'Toma decisiones sobre priorización y recursos',
+      }));
+      setBData(p => ({ ...p, perfiles: perfilesSugeridos }));
+      setIaLoadingB(false);
     }, 1600);
   };
 
-  const TIPO_METRICA_LABELS: Record<string, string> = {
-    tiempo: '⏱ Tiempo',
-    cantidad: '🔢 Cantidad',
-    costo: '💰 Costo',
-    calidad: '✅ Calidad',
-    riesgo: '⚠️ Riesgo',
-    otro: '📐 Otro',
+  const generarGuiaIA = () => {
+    setIaLoadingB(true);
+    setTimeout(() => {
+      setBData(p => ({ ...p, guiaGenerada: true }));
+      setGuiaVisible(true);
+      setIaLoadingB(false);
+    }, 2000);
   };
 
-  const PLAN_COMO_LABELS: Record<string, string> = {
-    entrevista: 'Entrevista con el responsable',
-    sistema: 'Consulta en sistema / base de datos',
-    observacion: 'Observación directa del proceso',
-    documento: 'Revisión de documentos / reportes',
-    otro: 'Otro método',
-  };
+  // ── Copiar Ficha consolidada ───────────────────────────────────────────────
 
-  // ── Copy Card Reto ──────────────────────────────────────────────────────────
-
-  const handleCopyCardReto = () => {
+  const handleCopiarFicha = () => {
+    const pasoQuiebre = asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex]
+      ? `Paso ${asisData.quiebreIndex + 1}: ${asisData.pasos[asisData.quiebreIndex]}`
+      : '—';
+    const evidencia = evidenciasA.filter(e => e.desc.trim()).map(e => `[${e.tipo || 'sin tipo'}] ${e.desc}`).join(' · ') || 'Sin evidencia registrada';
     const text = [
-      `RETO: ${cardReto.retoFrase}`,
-      `ALCANCE: ${cardReto.alcanceEtapa} | Límites: ${cardReto.alcanceLimites || 'Sin definir'}`,
-      `SEÑAL OBSERVABLE: ${cardReto.senalObservable}`,
-      `EVIDENCIA (${asisData.evidenciaTipo || '—'}): ${cardReto.evidenciaTexto || asisData.evidenciaNota}`,
-      `PREPARACIÓN ENTREVISTAS — Líder: ${preparacion.conLider || '—'} | Afectados: ${preparacion.conAfectados || '—'}`,
+      `RESUMEN INICIAL DEL PROBLEMA — Step 1 · Módulo A`,
+      ``,
+      `SÍNTESIS: ${lecturaConsolidada}`,
+      `QUIEBRE: ${pasoQuiebre}`,
+      `ACTORES: ${actoresProceso || '—'}`,
+      `CONSECUENCIA: ${asisData.consecuencia || '—'}`,
+      `CAUSA INMEDIATA: ${asisData.causaInmediata || '—'}`,
+      `EVIDENCIA: ${evidencia}`,
+      `DIAGNÓSTICO IA: Claridad Alta · Importancia Media-alta · Sustento ${nivelSustento === 'solido' ? 'Sólido' : nivelSustento === 'debil' ? 'Inicial' : 'Débil'} · Coherente con Step 0`,
     ].join('\n');
     navigator.clipboard.writeText(text);
-    setCardRetoCopyMsg(true);
-    setTimeout(() => setCardRetoCopyMsg(false), 2000);
+    setFichaCopyMsg(true);
+    setTimeout(() => setFichaCopyMsg(false), 2000);
   };
 
   return (
@@ -562,15 +665,12 @@ export function Step1Page() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo A: Proceso actual</h1>
-                    <StatusChip status="Completado" size="sm" />
+                    <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo A: Análisis inicial del problema</h1>
+                    <StatusChip status={fichaConfirmada ? 'Completado' : bloque1Ok && bloque2Ok && bloque3Ok ? 'En progreso' : 'Pendiente'} size="sm" />
                   </div>
-                  <p className="text-sm text-slate-500">Documenta el proceso tal como ocurre hoy, dónde ocurre el reto y por qué.</p>
+                  <p className="text-sm text-slate-500">Encuadra el proceso, cuándo y por qué ocurre el reto. La IA analiza todo al final.</p>
                 </div>
                 <div className="flex gap-2 shrink-0 ml-3">
-                  <button onClick={openIAPanel} className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 px-2.5 py-1.5 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors" style={{ fontWeight: 500 }}>
-                    <Sparkles size={11} /> Mejorar con IA
-                  </button>
                   <div className="relative">
                     <button onClick={() => setShowMentorOptions(v => !v)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors" style={{ fontWeight: 500 }}>
                       <MessageSquare size={11} /> Mentor <ChevronDown size={10} />
@@ -585,223 +685,356 @@ export function Step1Page() {
                 </div>
               </div>
 
-              {/* ── Ancla del Paso 0 (solo lectura) ── */}
-              <div className={`rounded-xl border p-4 ${step0?.quePasaQueQuieres ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-200'}`}>
-                <div className="flex items-center justify-between mb-3">
+              {/* ── Progress 3 bloques ── */}
+              <div className="flex items-center gap-1">
+                {[
+                  { label: '1 · Recorrido del proceso', ok: bloque1Ok },
+                  { label: '2 · Momento del reto', ok: bloque2Ok },
+                  { label: '3 · Consecuencia / Evidencia', ok: bloque3Ok },
+                ].map((b, i) => (
+                  <div key={i} className="flex-1 flex items-center gap-1.5">
+                    {i > 0 && <div className="w-3 h-px bg-slate-200 shrink-0" />}
+                    <div className={`flex-1 flex items-center gap-1.5 px-3 py-2 rounded-lg ${b.ok ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
+                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs shrink-0 ${b.ok ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                        {b.ok ? '✓' : String(i + 1)}
+                      </span>
+                      <span className={`text-xs truncate ${b.ok ? 'text-emerald-700' : 'text-slate-500'}`} style={{ fontWeight: b.ok ? 600 : 400 }}>{b.label}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Banner: Tu punto de partida (Step 0) — colapsable ── */}
+              <div className={`rounded-xl border overflow-hidden ${step0?.quePasaQueQuieres ? 'border-indigo-200' : 'border-slate-200'}`}>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setStep0Collapsed(v => !v)}
+                  onKeyDown={e => e.key === 'Enter' && setStep0Collapsed(v => !v)}
+                  className={`w-full flex items-center justify-between px-4 py-3 cursor-pointer select-none ${step0?.quePasaQueQuieres ? 'bg-indigo-50' : 'bg-slate-50'}`}
+                >
                   <div className="flex items-center gap-2">
                     <Target size={13} className={step0?.quePasaQueQuieres ? 'text-indigo-500' : 'text-slate-400'} />
-                    <p className="text-xs" style={{ fontWeight: 700 }}>
-                      <span className={step0?.quePasaQueQuieres ? 'text-indigo-700' : 'text-slate-600'}>Ancla del Paso 0</span>
-                      <span className="ml-1.5 text-slate-400 text-xs px-1.5 py-0.5 bg-white/60 rounded" style={{ fontWeight: 400 }}>Solo lectura</span>
+                    <p className="text-xs" style={{ fontWeight: 600 }}>
+                      <span className={step0?.quePasaQueQuieres ? 'text-indigo-700' : 'text-slate-600'}>📋 Tu punto de partida (Step 0)</span>
+                      <span className="ml-2 text-xs font-normal text-slate-400">Solo lectura · úsalo para completar este módulo</span>
                     </p>
                   </div>
-                  <button onClick={() => navigate(`/projects/${projectId}/step/0`)} className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 transition-colors" style={{ fontWeight: 500 }}>
-                    <ExternalLink size={10} /> Ver Paso 0
-                  </button>
-                </div>
-                {step0?.quePasaQueQuieres ? (
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-                    {[
-                      { label: 'Impacta a', value: step0.impacta?.join(', ') || '—' },
-                      { label: 'Etapa del proceso', value: step0.parteProceso ? ({ antes: 'Antes', durante: 'Durante', despues: 'Después', transversal: 'Transversal', otra: 'Otra' } as Record<string,string>)[step0.parteProceso] || '—' : '—' },
-                      { label: 'Impacto a 3 meses', value: step0.impacto3meses ? ({ ingresos: 'Pérdida de ingresos', costos: 'Costos y reprocesos', riesgo: 'Riesgo', cliente: 'Exp. del cliente', productividad: 'Productividad y clima', no_claro: 'Por definir', otro: 'Otro' } as Record<string,string>)[step0.impacto3meses] || '—' : '—' },
-                      { label: 'Respaldo disponible', value: step0.respaldo ? ({ datos: 'Datos internos', testimonios: 'Testimonios', benchmark: 'Ref. externa', hipotesis: 'Hipótesis', otro: 'Otro' } as Record<string,string>)[step0.respaldo] || '—' : '—' },
-                      { label: 'Sí mínimo', value: step0.siMinimo?.length ? step0.siMinimo[0] + (step0.siMinimo.length > 1 ? ` +${step0.siMinimo.length - 1}` : '') : '—' },
-                    ].map((row, i) => (
-                      <div key={i} className={i === 4 ? 'col-span-2' : ''}>
-                        <p className="text-xs text-indigo-400" style={{ fontWeight: 600, letterSpacing: '0.02em' }}>{row.label.toUpperCase()}</p>
-                        <p className="text-xs text-indigo-800 mt-0.5">{row.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400 italic">Paso 0 aún no completado — <span className="text-amber-600" style={{ fontWeight: 600 }}>completa el Paso 0 primero para anclar el reto</span></p>
-                )}
-              </div>
-
-              {/* ══════════════════════════════════
-                  SECCIÓN 1
-              ══════════════════════════════════ */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>1</span>
-                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Para tener claridad, cuéntame el reto que quieres abordar. <span className="text-red-500">*</span></h2>
-                </div>
-                <p className="text-xs text-slate-400 ml-8">Describe el proceso y la situación que quieres mejorar, en el contexto real de tu organización.</p>
-                <div className="ml-8 p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-500 italic">
-                  <span style={{ fontWeight: 600 }} className="not-italic text-slate-600">Ejemplo:</span> "En TechCorp, el proceso de incorporación de nuevos empleados involucra RRHH, TI y el área receptora. Actualmente dura entre 15 y 21 días, y durante ese tiempo el empleado no puede trabajar porque no tiene accesos."
-                </div>
-                <textarea
-                  value={asisData.casoReal}
-                  onChange={e => setAsisData(p => ({ ...p, casoReal: e.target.value }))}
-                  rows={3}
-                  placeholder="Describe el proceso real: qué ocurre, quiénes participan, cuánto dura y cuál es el problema que enfrentan hoy."
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
-                />
-                {asisData.casoReal.trim() && (
-                  <div className="flex items-center gap-2 ml-0">
-                    <CheckCircle2 size={13} className="text-emerald-500" />
-                    <span className="text-xs text-emerald-600" style={{ fontWeight: 500 }}>Listo</span>
-                  </div>
-                )}
-              </div>
-
-              {/* ══════════════════════════════════
-                  SECCIÓN 2
-              ══════════════════════════════════ */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>2</span>
-                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Ahora dime el recorrido del proceso donde ocurre ese reto. <span className="text-red-500">*</span></h2>
-                </div>
-                <p className="text-xs text-slate-400 ml-8">Escribe los pasos principales del proceso, en orden. Empieza con los más relevantes y agrega si necesitas.</p>
-                <div className="ml-8 space-y-2">
-                  {asisData.pasos.map((p, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 600 }}>{i + 1}</span>
-                      <input
-                        value={p}
-                        onChange={e => { const np = [...asisData.pasos]; np[i] = e.target.value; setAsisData(prev => ({ ...prev, pasos: np })); }}
-                        placeholder={`Paso ${i + 1}… Ej. Alta en sistemas de TI`}
-                        className={`flex-1 border rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${asisData.quiebreIndex === i ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
-                      />
-                      {asisData.pasos.length > 2 && (
-                        <button
-                          onClick={() => {
-                            const np = asisData.pasos.filter((_, j) => j !== i);
-                            const newIdx = asisData.quiebreIndex === i ? null : asisData.quiebreIndex !== null && asisData.quiebreIndex > i ? asisData.quiebreIndex - 1 : asisData.quiebreIndex;
-                            setAsisData(prev => ({ ...prev, pasos: np, quiebreIndex: newIdx }));
-                          }}
-                          className="text-slate-300 hover:text-red-400 transition-colors shrink-0"
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {asisData.pasos.length < 8 && (
-                    <button
-                      onClick={() => setAsisData(p => ({ ...p, pasos: [...p.pasos, ''] }))}
-                      className="flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 px-3 py-2 border border-dashed border-indigo-200 rounded-xl hover:border-indigo-400 transition-colors ml-8"
+                  <div className="flex items-center gap-2">
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={e => { e.stopPropagation(); navigate(`/projects/${projectId}/step/0`); }}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); navigate(`/projects/${projectId}/step/0`); } }}
+                      className="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-0.5 cursor-pointer"
                       style={{ fontWeight: 500 }}
                     >
-                      <Plus size={12} /> Agregar paso
-                    </button>
-                  )}
-                </div>
-                {asisData.pasos.filter(p => p.trim()).length >= 2 && (
-                  <div className="flex items-center gap-2 ml-8">
-                    <CheckCircle2 size={13} className="text-emerald-500" />
-                    <span className="text-xs text-emerald-600" style={{ fontWeight: 500 }}>{asisData.pasos.filter(p => p.trim()).length} pasos registrados</span>
-                  </div>
-                )}
-              </div>
-
-              {/* ══════════════════════════════════
-                  SECCIÓN 3
-              ══════════════════════════════════ */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>3</span>
-                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>¿En qué momento ocurre el reto? <span className="text-red-500">*</span></h2>
-                </div>
-                <p className="text-xs text-slate-400 ml-8">Selecciona el paso donde se produce la falla principal. Ese es el "quiebre".</p>
-
-                {/* Selector de paso */}
-                <div className="ml-8 space-y-2">
-                  {asisData.pasos.filter(p => p.trim()).length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">Completa al menos un paso en la Sección 2 para poder seleccionarlo.</p>
-                  ) : (
-                    asisData.pasos.map((p, i) => p.trim() ? (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          setAsisData(prev => ({ ...prev, quiebreIndex: i, quiebre: `Paso ${i + 1} — ${p}` }));
-                        }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-all ${
-                          asisData.quiebreIndex === i
-                            ? 'border-red-400 bg-red-50 text-red-800'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                        }`}
-                        style={{ fontWeight: asisData.quiebreIndex === i ? 600 : 400 }}
-                      >
-                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs shrink-0 ${
-                          asisData.quiebreIndex === i ? 'border-red-500 bg-red-500 text-white' : 'border-slate-300'
-                        }`} style={{ fontWeight: 700 }}>
-                          {asisData.quiebreIndex === i ? '✗' : i + 1}
-                        </span>
-                        <span>{p}</span>
-                        {asisData.quiebreIndex === i && (
-                          <span className="ml-auto text-xs text-red-500 px-2 py-0.5 bg-red-100 rounded-full shrink-0">Aquí ocurre el reto</span>
-                        )}
-                      </button>
-                    ) : null)
-                  )}
-                </div>
-
-                {/* Detalle del quiebre */}
-                {asisData.quiebreIndex !== null && (
-                  <div className="ml-8 space-y-1.5">
-                    <label className="block text-xs text-slate-600" style={{ fontWeight: 500 }}>
-                      Describe brevemente qué pasa en ese momento <span className="text-slate-400">(opcional pero recomendado)</span>
-                    </label>
-                    <textarea
-                      value={asisData.quiebreDetalle}
-                      onChange={e => setAsisData(p => ({ ...p, quiebreDetalle: e.target.value }))}
-                      rows={2}
-                      placeholder="Ej. El empleado espera entre 7 y 10 días para recibir accesos porque TI no tiene priorización formal para estas solicitudes."
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
-                    />
-                  </div>
-                )}
-
-                {asisData.quiebreIndex !== null && (
-                  <div className="flex items-center gap-2 ml-8">
-                    <CheckCircle2 size={13} className="text-emerald-500" />
-                    <span className="text-xs text-emerald-600" style={{ fontWeight: 500 }}>
-                      Quiebre en Paso {asisData.quiebreIndex + 1}: {asisData.pasos[asisData.quiebreIndex]}
+                      <ExternalLink size={10} /> Ver Paso 0
                     </span>
+                    <ChevronDown size={14} className={`text-slate-400 transition-transform ${step0Collapsed ? '' : 'rotate-180'}`} />
+                  </div>
+                </div>
+                {!step0Collapsed && (
+                  <div className="px-4 py-3 bg-white border-t border-indigo-100">
+                    {step0?.quePasaQueQuieres ? (
+                      <>
+                        <p className="text-xs text-indigo-800 mb-2.5 italic">"{step0.quePasaQueQuieres}"</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
+                          {[
+                            { label: 'Área afectada', value: step0.impacta?.join(', ') || '—' },
+                            { label: 'Impacto (3 m)', value: step0.impacto3meses ? ({ ingresos: 'Pérdida de ingresos', costos: 'Costos y reprocesos', riesgo: 'Riesgo', cliente: 'Exp. del cliente', productividad: 'Productividad y clima', no_claro: 'Por definir', otro: 'Otro' } as Record<string,string>)[step0.impacto3meses] || '—' : '—' },
+                            { label: 'Etapa del proceso', value: step0.parteProceso ? ({ antes: 'Antes', durante: 'Durante', despues: 'Después', transversal: 'Transversal', otra: 'Otra' } as Record<string,string>)[step0.parteProceso] || '—' : '—' },
+                            { label: 'Respaldo', value: step0.respaldo ? ({ datos: 'Datos internos', testimonios: 'Testimonios', benchmark: 'Ref. externa', hipotesis: 'Hipótesis', otro: 'Otro' } as Record<string,string>)[step0.respaldo] || '—' : '—' },
+                          ].map((row, i) => (
+                            <div key={i}>
+                              <p className="text-xs text-indigo-400" style={{ fontWeight: 600, letterSpacing: '0.03em' }}>{row.label.toUpperCase()}</p>
+                              <p className="text-xs text-indigo-800 mt-0.5">{row.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic py-1">Step 0 aún no completado. <span className="text-amber-600" style={{ fontWeight: 600 }}>Completa el Paso 0 primero para anclar el reto.</span></p>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* ══════════════════════════════════
-                  SECCIÓN 4
-              ══════════════════════════════════ */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>4</span>
-                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Consecuencia, causa inmediata y evidencia del reto. <span className="text-red-500">*</span></h2>
+              {/* ════════════════════════════════════
+                  BLOQUE 1 · Recorrido del proceso
+              ════════════════════════════════════ */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>1</span>
+                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Recorrido del proceso donde ocurre el reto</h2>
+                  {bloque1Ok && <CheckCircle2 size={14} className="text-emerald-500 ml-auto shrink-0" />}
                 </div>
-                <p className="text-xs text-slate-400 ml-8">Tres preguntas clave para entender el impacto real antes de avanzar.</p>
+                <div className="p-4 space-y-4">
+                  <p className="text-xs text-slate-400">Describe el proceso y la situación real, luego agrega los pasos en orden.</p>
 
-                <div className="ml-8 space-y-4">
-                  {/* 4a. Consecuencia */}
+                  {/* Descripción del proceso */}
                   <div>
-                    <label className="block text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>¿Qué consecuencia tiene este reto? <span className="text-red-500">*</span></label>
-                    <p className="text-xs text-slate-400 mb-2">
-                      <span style={{ fontWeight: 600 }}>Consecuencia</span> = qué pasa cuando el reto ocurre, y a quién afecta. No el síntoma, sino el impacto concreto.
-                    </p>
+                    <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>
+                      Cuéntame el reto que quieres abordar <span className="text-red-500">*</span>
+                    </label>
+                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-500 italic mb-2">
+                      <span style={{ fontWeight: 600 }} className="not-italic text-slate-600">Ej:</span> "En TechCorp, el proceso de incorporación dura 15–21 días. Durante ese tiempo el empleado no tiene accesos y no puede trabajar."
+                    </div>
                     <textarea
-                      value={asisData.consecuencia}
-                      onChange={e => setAsisData(p => ({ ...p, consecuencia: e.target.value }))}
-                      rows={2}
-                      placeholder="Ej. El empleado no puede trabajar durante 7–10 días, generando frustración y costos de productividad estimados en $3,200 USD por ingreso."
+                      value={asisData.casoReal}
+                      onChange={e => setAsisData(p => ({ ...p, casoReal: e.target.value }))}
+                      rows={3}
+                      placeholder="Describe el proceso real: qué ocurre, quiénes participan, cuánto dura y cuál es el problema hoy."
                       className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
                     />
-                    {asisData.consecuencia.trim() && (
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <CheckCircle2 size={12} className="text-emerald-500" />
-                        <span className="text-xs text-emerald-600" style={{ fontWeight: 500 }}>Listo</span>
+                  </div>
+
+                  {/* Pasos del proceso */}
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-2" style={{ fontWeight: 500 }}>
+                      Pasos del proceso (en orden) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="space-y-2">
+                      {asisData.pasos.map((p, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 600 }}>{i + 1}</span>
+                          <input
+                            value={p}
+                            onChange={e => { const np = [...asisData.pasos]; np[i] = e.target.value; setAsisData(prev => ({ ...prev, pasos: np })); }}
+                            placeholder={i === 0 ? 'Ej. Firma de contrato y documentos legales' : i === 1 ? 'Ej. Alta en sistemas de TI (accesos, correo)' : `Paso ${i + 1}…`}
+                            className={`flex-1 border rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${asisData.quiebreIndex === i ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
+                          />
+                          {asisData.pasos.length > 2 && (
+                            <button
+                              onClick={() => {
+                                const np = asisData.pasos.filter((_, j) => j !== i);
+                                const newIdx = asisData.quiebreIndex === i ? null : asisData.quiebreIndex !== null && asisData.quiebreIndex > i ? asisData.quiebreIndex - 1 : asisData.quiebreIndex;
+                                setAsisData(prev => ({ ...prev, pasos: np, quiebreIndex: newIdx }));
+                              }}
+                              className="text-slate-300 hover:text-red-400 transition-colors shrink-0"
+                            ><X size={14} /></button>
+                          )}
+                        </div>
+                      ))}
+                      {asisData.pasos.length < 8 && (
+                        <button
+                          onClick={() => setAsisData(p => ({ ...p, pasos: [...p.pasos, ''] }))}
+                          className="flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 px-3 py-2 border border-dashed border-indigo-200 rounded-xl hover:border-indigo-400 transition-colors"
+                          style={{ fontWeight: 500 }}
+                        ><Plus size={12} /> Agregar paso</button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actores del proceso */}
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>¿Quiénes participan en este proceso?</label>
+                    <p className="text-xs text-slate-400 mb-1.5">Los actores involucrados en el flujo, no solo los afectados.</p>
+                    <input
+                      value={actoresProceso}
+                      onChange={e => setActoresProceso(e.target.value)}
+                      placeholder="Ej. RRHH, TI, Área receptora, Empleado nuevo"
+                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+
+                  {bloque1Ok && (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 size={13} className="text-emerald-500" />
+                      <span className="text-xs text-emerald-600" style={{ fontWeight: 500 }}>
+                        {asisData.pasos.filter(p => p.trim()).length} pasos · {asisData.casoReal.slice(0, 50)}{asisData.casoReal.length > 50 ? '…' : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ════════════════════════════════════
+                  BLOQUE 2 · ¿En qué momento ocurre el reto?
+              ════════════════════════════════════ */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>2</span>
+                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>¿En qué momento ocurre el reto?</h2>
+                  {bloque2Ok && <CheckCircle2 size={14} className="text-emerald-500 ml-auto shrink-0" />}
+                </div>
+                <div className="p-4 space-y-4">
+                  <p className="text-xs text-slate-400">Selecciona el paso donde ocurre la falla y acota cuándo, con qué frecuencia y cuánto dura.</p>
+
+                  {/* Selector de quiebre */}
+                  <div>
+                    <label className="block text-xs text-slate-600 mb-2" style={{ fontWeight: 500 }}>
+                      ¿En qué paso se produce la falla principal? (el "quiebre") <span className="text-red-500">*</span>
+                    </label>
+                    {asisData.pasos.filter(p => p.trim()).length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">Completa al menos 2 pasos en el Bloque 1 primero.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {asisData.pasos.map((p, i) => p.trim() ? (
+                          <button key={i}
+                            onClick={() => setAsisData(prev => ({ ...prev, quiebreIndex: i, quiebre: `Paso ${i + 1} — ${p}` }))}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-all ${asisData.quiebreIndex === i ? 'border-red-400 bg-red-50 text-red-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
+                            style={{ fontWeight: asisData.quiebreIndex === i ? 600 : 400 }}
+                          >
+                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs shrink-0 ${asisData.quiebreIndex === i ? 'border-red-500 bg-red-500 text-white' : 'border-slate-300'}`} style={{ fontWeight: 700 }}>
+                              {asisData.quiebreIndex === i ? '✗' : i + 1}
+                            </span>
+                            <span>{p}</span>
+                            {asisData.quiebreIndex === i && <span className="ml-auto text-xs text-red-500 px-2 py-0.5 bg-red-100 rounded-full shrink-0">Aquí ocurre el reto</span>}
+                          </button>
+                        ) : null)}
                       </div>
                     )}
                   </div>
 
-                  {/* 4b. Causa inmediata */}
+                  {/* Detalle del quiebre */}
+                  {asisData.quiebreIndex !== null && (
+                    <div>
+                      <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>
+                        ¿Qué pasa exactamente en ese momento? <span className="text-slate-400">(recomendado)</span>
+                      </label>
+                      <textarea
+                        value={asisData.quiebreDetalle}
+                        onChange={e => setAsisData(p => ({ ...p, quiebreDetalle: e.target.value }))}
+                        rows={2}
+                        placeholder="Ej. El empleado espera 7–10 días porque TI no tiene priorización formal para estas solicitudes."
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                      />
+                    </div>
+                  )}
+
+                  {/* Grid 2×2: cuándo / frecuencia / quién / duración */}
                   <div>
-                    <label className="block text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>¿Cuál es la causa inmediata? <span className="text-red-500">*</span></label>
+                    <label className="block text-xs text-slate-600 mb-2" style={{ fontWeight: 500 }}>Acota el momento y alcance del reto</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="border border-slate-200 rounded-xl p-3 bg-white">
+                        <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 600 }}>🕐 ¿CUÁNDO ocurre?</p>
+                        <select
+                          value={momentoData.cuando}
+                          onChange={e => setMomentoData(p => ({ ...p, cuando: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 text-slate-700 bg-slate-50"
+                        >
+                          <option value="">Seleccionar…</option>
+                          <option value="siempre">Siempre que ocurre el proceso</option>
+                          <option value="condicion">Solo bajo ciertas condiciones</option>
+                          <option value="pico">En picos de demanda</option>
+                          <option value="otro">Otro</option>
+                        </select>
+                        {momentoData.cuando === 'condicion' || momentoData.cuando === 'otro' ? (
+                          <input className="w-full mt-1.5 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                            placeholder="Especifica…" value={momentoData.cuando === 'otro' ? '' : ''}
+                            onChange={e => setMomentoData(p => ({ ...p, cuando: e.target.value }))} />
+                        ) : null}
+                      </div>
+                      <div className="border border-slate-200 rounded-xl p-3 bg-white">
+                        <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 600 }}>📊 FRECUENCIA estimada</p>
+                        <select
+                          value={momentoData.frecuencia}
+                          onChange={e => setMomentoData(p => ({ ...p, frecuencia: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 text-slate-700 bg-slate-50"
+                        >
+                          <option value="">Seleccionar…</option>
+                          <option value="diario">Diario</option>
+                          <option value="semanal">Semanal</option>
+                          <option value="mensual">Mensual</option>
+                          <option value="evento">Por evento</option>
+                        </select>
+                        <input className="w-full mt-1.5 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          placeholder="Ej. ~25 veces/mes"
+                          value={momentoData.quienSufre}
+                          onChange={e => setMomentoData(p => ({ ...p, quienSufre: e.target.value }))} />
+                      </div>
+                      <div className="border border-slate-200 rounded-xl p-3 bg-white">
+                        <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 600 }}>👥 ¿QUIÉN lo sufre más?</p>
+                        <input
+                          value={momentoData.quienSufre}
+                          onChange={e => setMomentoData(p => ({ ...p, quienSufre: e.target.value }))}
+                          placeholder={step0?.impacta?.join(', ') || 'Ej. Empleados nuevos'}
+                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50"
+                        />
+                        <p className="text-xs text-slate-400 mt-1">Puedes usar el mismo del Step 0 o ajustarlo.</p>
+                      </div>
+                      <div className="border border-slate-200 rounded-xl p-3 bg-white">
+                        <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 600 }}>⏱ DURACIÓN del impacto</p>
+                        <select
+                          value={momentoData.duracion}
+                          onChange={e => setMomentoData(p => ({ ...p, duracion: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 text-slate-700 bg-slate-50"
+                        >
+                          <option value="">Seleccionar…</option>
+                          <option value="horas">Horas</option>
+                          <option value="dias">Días</option>
+                          <option value="semanas">Semanas</option>
+                          <option value="meses">Meses</option>
+                        </select>
+                        <input className="w-full mt-1.5 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          placeholder="Ej. 7–21 días promedio"
+                          value={asisData.quiebreDetalle.slice(0, 30)}
+                          readOnly />
+                      </div>
+                    </div>
+                    {/* Resumen auto-generado */}
+                    {(momentoData.cuando || momentoData.frecuencia) && (
+                      <div className="mt-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-xl">
+                        <p className="text-xs text-indigo-700">
+                          <span style={{ fontWeight: 600 }}>Resumen:</span> El reto ocurre{momentoData.cuando === 'siempre' ? ' siempre que' : momentoData.cuando ? ` bajo ciertas condiciones en` : ''} {asisData.quiebre ? `"${asisData.quiebre}"` : 'el paso seleccionado'}{momentoData.frecuencia ? ` · frecuencia ${momentoData.frecuencia}` : ''}{momentoData.quienSufre ? ` · afecta a ${momentoData.quienSufre}` : ''}.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ════════════════════════════════════
+                  BLOQUE 3 · Consecuencia / Causa / Evidencia
+              ════════════════════════════════════ */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>3</span>
+                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Consecuencia, causa inmediata y evidencia del reto</h2>
+                  {bloque3Ok && <CheckCircle2 size={14} className="text-emerald-500 ml-auto shrink-0" />}
+                </div>
+                <div className="p-4 space-y-5">
+                  <p className="text-xs text-slate-400">Tres preguntas clave para entender el impacto real antes de que la IA analice.</p>
+
+                  {/* 3a. Consecuencia */}
+                  <div>
+                    <label className="block text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>
+                      ¿Qué consecuencia tiene este reto? <span className="text-red-500">*</span>
+                    </label>
                     <p className="text-xs text-slate-400 mb-2">
-                      <span style={{ fontWeight: 600 }}>Causa inmediata</span> = la razón directa por la que ocurre el quiebre. No el problema de fondo, sino lo que lo dispara hoy.
+                      <span style={{ fontWeight: 600 }}>Consecuencia</span> = qué pasa cuando el reto ocurre y a quién afecta. No el síntoma, sino el impacto concreto.
+                    </p>
+                    <div className="flex gap-2 mb-2 flex-wrap">
+                      {(['Operativa', 'Económica', 'Humana', 'Estratégica'] as const).map(tipo => (
+                        <button key={tipo}
+                          onClick={() => setAsisData(p => ({ ...p, alcance: (tipo === 'Operativa' ? 'durante' : tipo === 'Económica' ? 'después' : tipo === 'Humana' ? 'antes' : 'transversal') as typeof p.alcance }))}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                            (tipo === 'Operativa' && asisData.alcance === 'durante') ||
+                            (tipo === 'Económica' && asisData.alcance === 'después') ||
+                            (tipo === 'Humana' && asisData.alcance === 'antes') ||
+                            (tipo === 'Estratégica' && asisData.alcance === 'transversal')
+                              ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                          }`} style={{ fontWeight: 500 }}>{tipo}</button>
+                      ))}
+                    </div>
+                    <textarea
+                      value={asisData.consecuencia}
+                      onChange={e => setAsisData(p => ({ ...p, consecuencia: e.target.value }))}
+                      rows={2}
+                      placeholder="Ej. El empleado no puede trabajar durante 7–10 días, generando costos de productividad y frustración."
+                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">No listes causas todavía — solo qué pasa como resultado del quiebre.</p>
+                  </div>
+
+                  {/* 3b. Causa inmediata */}
+                  <div>
+                    <label className="block text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>
+                      ¿Cuál es la causa inmediata? <span className="text-red-500">*</span>
+                    </label>
+                    <p className="text-xs text-slate-400 mb-2">
+                      <span style={{ fontWeight: 600 }}>Causa inmediata</span> = la razón directa por la que ocurre el quiebre. No la causa raíz, sino lo que lo dispara hoy.
                     </p>
                     <textarea
                       value={asisData.causaInmediata}
@@ -810,341 +1043,337 @@ export function Step1Page() {
                       placeholder="Ej. TI recibe solicitudes por correo informal, sin priorización ni tiempo objetivo definido para onboarding."
                       className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
                     />
-                    {asisData.causaInmediata.trim() && (
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <CheckCircle2 size={12} className="text-emerald-500" />
-                        <span className="text-xs text-emerald-600" style={{ fontWeight: 500 }}>Listo</span>
-                      </div>
-                    )}
+                    <p className="text-xs text-slate-400 mt-1">No llegues aún a la causa raíz. ¿Qué está fallando operativamente hoy?</p>
                   </div>
 
-                  {/* 4c. Evidencia */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-                      <FileText size={13} className="text-slate-500" />
-                      <p className="text-xs text-slate-700" style={{ fontWeight: 600 }}>Sube evidencia de que el reto existe</p>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      {/* Tipo de evidencia */}
+                  {/* 3c. Evidencias (multi-item) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
                       <div>
-                        <label className="block text-xs text-slate-600 mb-2" style={{ fontWeight: 500 }}>¿Qué tipo de evidencia tienes?</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {([
-                            { v: 'dato', label: '📊 Dato', desc: 'Número, tiempo o frecuencia medible' },
-                            { v: 'ticket', label: '🎫 Ticket / incidente', desc: 'Registro de un sistema de soporte o gestión' },
-                            { v: 'testimonio', label: '💬 Testimonio', desc: 'Cita directa de alguien involucrado' },
-                            { v: 'benchmark', label: '📌 Referencia externa', desc: 'Cómo lo resuelven en otro lugar' },
-                          ] as const).map(opt => (
-                            <button
-                              key={opt.v}
-                              onClick={() => setAsisData(p => ({ ...p, evidenciaTipo: opt.v }))}
-                              className={`text-left px-3 py-2.5 rounded-xl border transition-all ${
-                                asisData.evidenciaTipo === opt.v
-                                  ? 'border-indigo-400 bg-indigo-50'
-                                  : 'border-slate-200 bg-white hover:border-slate-300'
-                              }`}
+                        <label className="block text-sm text-slate-700" style={{ fontWeight: 500 }}>Evidencia disponible</label>
+                        <p className="text-xs text-slate-400 mt-0.5">No necesita ser perfecta. Lo que ya tienes cuenta.</p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        nivelSustento === 'solido' ? 'bg-emerald-100 text-emerald-700' :
+                        nivelSustento === 'debil' ? 'bg-amber-100 text-amber-700' :
+                        'bg-slate-100 text-slate-500'
+                      }`} style={{ fontWeight: 600 }}>
+                        {nivelSustento === 'solido' ? '●●● Evidencia sólida' : nivelSustento === 'debil' ? '●● Evidencia débil' : '● Sin evidencia'}
+                      </span>
+                    </div>
+                    {nivelSustento === 'sin' && (
+                      <p className="text-xs text-slate-400 italic mb-2">Sin evidencia ingresada. La IA lo considerará en el nivel de sustento — no bloquea el análisis.</p>
+                    )}
+                    <div className="space-y-2">
+                      {evidenciasA.map((ev) => (
+                        <div key={ev.id} className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <select
+                              value={ev.tipo}
+                              onChange={e => updateEvidenciaA(ev.id, { tipo: e.target.value as EvidenciaA['tipo'] })}
+                              className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 text-slate-700 bg-slate-50"
                             >
-                              <p className={`text-xs ${asisData.evidenciaTipo === opt.v ? 'text-indigo-700' : 'text-slate-700'}`} style={{ fontWeight: 600 }}>{opt.label}</p>
-                              <p className="text-xs text-slate-400 mt-0.5">{opt.desc}</p>
-                            </button>
+                              <option value="">Tipo de evidencia…</option>
+                              <option value="dato">📊 Dato / número</option>
+                              <option value="ticket">🎫 Ticket / incidente</option>
+                              <option value="testimonio">💬 Testimonio</option>
+                              <option value="benchmark">📌 Ref. externa</option>
+                              <option value="observacion">👁 Observación directa</option>
+                            </select>
+                            {evidenciasA.length > 1 && (
+                              <button onClick={() => removeEvidenciaA(ev.id)} className="text-slate-300 hover:text-red-400 transition-colors shrink-0"><X size={14} /></button>
+                            )}
+                          </div>
+                          <input
+                            value={ev.desc}
+                            onChange={e => updateEvidenciaA(ev.id, { desc: e.target.value })}
+                            placeholder={
+                              ev.tipo === 'dato' ? 'Ej. 18 días promedio — Registros RRHH Q4 2024' :
+                              ev.tipo === 'ticket' ? 'Ej. 47 tickets "sin accesos" en el último trimestre' :
+                              ev.tipo === 'testimonio' ? 'Ej. «Tardamos más de 2 semanas en dar accesos» — Coord. RRHH' :
+                              ev.tipo === 'benchmark' ? 'Ej. En Empresa X el proceso dura 2 días con portal self-service' :
+                              'Describe qué demuestra esta evidencia (1–2 líneas)'
+                            }
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                          />
+                          <input
+                            value={ev.fuente}
+                            onChange={e => updateEvidenciaA(ev.id, { fuente: e.target.value })}
+                            placeholder="Fuente (opcional): informe, sistema, persona…"
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 transition-all bg-slate-50"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={addEvidenciaA}
+                      className="mt-2 flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 px-3 py-2 border border-dashed border-indigo-200 rounded-xl hover:border-indigo-400 transition-colors w-full justify-center"
+                      style={{ fontWeight: 500 }}>
+                      <Plus size={12} /> Agregar evidencia
+                    </button>
+                    <div className="mt-2">
+                      <EvidenceUploader />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ════════════════════════════════════
+                  ANÁLISIS IA (al cierre del módulo)
+              ════════════════════════════════════ */}
+              <div className="border-2 border-violet-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-violet-50 border-b border-violet-100 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-violet-500" />
+                    <p className="text-sm text-violet-800" style={{ fontWeight: 600 }}>Análisis inicial del problema con IA</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${iaModAState === 'done' ? 'bg-emerald-100 text-emerald-700' : iaModAState === 'loading' ? 'bg-indigo-100 text-indigo-700' : 'bg-violet-100 text-violet-600'}`} style={{ fontWeight: 600 }}>
+                      {iaModAState === 'done' ? 'Analizado' : iaModAState === 'loading' ? 'Analizando…' : 'Pendiente'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-violet-400 italic w-full">La IA combina tu Step 0 + los 3 bloques de este módulo para evaluar el problema.</p>
+                </div>
+
+                <div className="p-4">
+                  {iaModAState === 'idle' && (
+                    <div className="text-center py-4">
+                      {!listoParaIA && (
+                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-left">
+                          <p className="text-xs text-amber-700 mb-1" style={{ fontWeight: 600 }}>Para analizar, completa:</p>
+                          {!bloque1Ok && <p className="text-xs text-amber-600">· Bloque 1: descripción del reto + al menos 2 pasos</p>}
+                          {!bloque2Ok && <p className="text-xs text-amber-600">· Bloque 2: selecciona el paso quiebre</p>}
+                          {!bloque3Ok && <p className="text-xs text-amber-600">· Bloque 3: consecuencia y causa inmediata</p>}
+                        </div>
+                      )}
+                      <Sparkles size={24} className="text-violet-300 mx-auto mb-2" />
+                      <p className="text-sm text-slate-500 mb-1">Completa los 3 bloques y analiza el problema con IA.</p>
+                      <p className="text-xs text-slate-400 mb-4">Recibirás 8 dimensiones: claridad, importancia, impacto, sustento, coherencia con Step 0, qué falta y si necesitas acotar.</p>
+                      <button
+                        disabled={!listoParaIA}
+                        onClick={() => {
+                          setIaModAState('loading');
+                          setTimeout(() => setIaModAState('done'), 1800);
+                        }}
+                        className={`flex items-center gap-2 mx-auto text-sm px-6 py-2.5 rounded-xl transition-colors ${listoParaIA ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                        style={{ fontWeight: 500 }}>
+                        <Sparkles size={14} /> Analizar problema con IA
+                      </button>
+                    </div>
+                  )}
+
+                  {iaModAState === 'loading' && (
+                    <div className="flex flex-col items-center py-8 gap-3">
+                      <div className="w-8 h-8 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" />
+                      <p className="text-sm text-slate-500">Analizando Step 0 + Módulo A…</p>
+                      <p className="text-xs text-slate-400">Evaluando claridad, importancia estratégica, sustento y coherencia.</p>
+                    </div>
+                  )}
+
+                  {iaModAState === 'done' && (
+                    <div className="space-y-5">
+
+                      {/* ── A. Resumen de claridad del problema ── */}
+                      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs text-indigo-400 uppercase tracking-wide" style={{ fontWeight: 700, letterSpacing: '0.06em' }}>Resumen de claridad del problema</span>
+                          <span className="text-xs px-2 py-0.5 bg-indigo-600 text-white rounded-full" style={{ fontWeight: 600 }}>Módulo A · completado</span>
+                        </div>
+                        <p className="text-sm text-indigo-900 leading-relaxed">{lecturaConsolidada}</p>
+                      </div>
+
+                      {/* ── B. TEMAS PRIORITARIOS — sección hero ── */}
+                      <div className="rounded-xl border-2 border-indigo-300 overflow-hidden">
+                        <div className="bg-indigo-600 px-4 py-3">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <TrendingUp size={15} className="text-indigo-200" />
+                            <p className="text-white text-sm" style={{ fontWeight: 700 }}>Temas prioritarios para investigar</p>
+                          </div>
+                          <p className="text-indigo-200 text-xs">Antes de avanzar al Módulo B, conviene clarificar estos puntos. Serán la base de lo que definas a continuación.</p>
+                        </div>
+                        <div className="bg-white divide-y divide-indigo-50">
+                          {temasPrioritarios.map((tema) => (
+                            <div key={tema.n} className="flex items-start gap-4 px-4 py-3.5">
+                              <span className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0 mt-0.5" style={{ fontWeight: 700 }}>{tema.n}</span>
+                              <div className="flex-1">
+                                <p className="text-sm text-slate-800 mb-0.5" style={{ fontWeight: 600 }}>{tema.titulo}</p>
+                                <p className="text-xs text-slate-500 leading-relaxed">{tema.desc}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="bg-indigo-50 border-t border-indigo-100 px-4 py-2.5 flex items-center gap-2">
+                          <ChevronRight size={13} className="text-indigo-400" />
+                          <p className="text-xs text-indigo-600" style={{ fontWeight: 500 }}>
+                            En el <span style={{ fontWeight: 700 }}>Módulo B</span> definirás qué información capturar para responder estas preguntas.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* ── C. Diagnóstico secundario — 5 dimensiones ── */}
+                      <div>
+                        <p className="text-xs text-slate-400 mb-2 uppercase tracking-wide" style={{ fontWeight: 600, letterSpacing: '0.05em' }}>Diagnóstico del problema</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            {
+                              label: 'Claridad',
+                              chip: 'Alta',
+                              chipBg: 'bg-emerald-100',
+                              chipText: 'text-emerald-700',
+                              desc: 'El quiebre operativo está bien acotado y la consecuencia es medible.',
+                            },
+                            {
+                              label: 'Importancia estratégica',
+                              chip: 'Media-alta',
+                              chipBg: 'bg-amber-100',
+                              chipText: 'text-amber-700',
+                              desc: 'Impacta recurrentemente a todos los ingresos nuevos y escala con el crecimiento.',
+                            },
+                            {
+                              label: 'Impacto estimado',
+                              chip: 'Alto',
+                              chipBg: 'bg-red-100',
+                              chipText: 'text-red-700',
+                              desc: 'Pérdida de productividad por días sin herramientas y carga adicional en los actores.',
+                            },
+                            {
+                              label: 'Nivel de sustento',
+                              chip: nivelSustento === 'solido' ? 'Sólido' : nivelSustento === 'debil' ? 'Inicial' : 'Débil',
+                              chipBg: nivelSustento === 'solido' ? 'bg-emerald-100' : 'bg-amber-100',
+                              chipText: nivelSustento === 'solido' ? 'text-emerald-700' : 'text-amber-700',
+                              desc: nivelSustento === 'solido'
+                                ? 'Tienes datos y testimonios que sustentan el problema.'
+                                : 'Tienes señales claras. El Módulo B te ayudará a cuantificarlo mejor.',
+                            },
+                            {
+                              label: 'Coherencia con Step 0',
+                              chip: 'Coherente',
+                              chipBg: 'bg-emerald-100',
+                              chipText: 'text-emerald-700',
+                              desc: 'El quiebre del Módulo A es una versión más acotada y operativa del reto planteado en el Step 0.',
+                            },
+                          ].map((d, i) => (
+                            <div key={i} className={`border border-slate-200 rounded-xl p-3 bg-white ${i === 4 ? 'col-span-2' : ''}`}>
+                              <p className="text-xs text-slate-400 mb-1.5" style={{ fontWeight: 600, letterSpacing: '0.03em' }}>{d.label.toUpperCase()}</p>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${d.chipBg} ${d.chipText} mb-1.5 inline-block`} style={{ fontWeight: 700 }}>{d.chip}</span>
+                              <p className="text-xs text-slate-500">{d.desc}</p>
+                            </div>
                           ))}
                         </div>
                       </div>
 
-                      {/* Nota: qué demuestra */}
-                      <div>
-                        <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>
-                          ¿Qué demuestra esta evidencia? <span className="text-slate-400">(1–2 líneas)</span>
-                        </label>
-                        <input
-                          value={asisData.evidenciaNota}
-                          onChange={e => setAsisData(p => ({ ...p, evidenciaNota: e.target.value }))}
-                          placeholder={
-                            asisData.evidenciaTipo === 'dato' ? 'Ej. 18 días promedio de incorporación — Registros RRHH Q4 2024' :
-                            asisData.evidenciaTipo === 'ticket' ? 'Ej. 47 tickets de "sin accesos" registrados en el último trimestre' :
-                            asisData.evidenciaTipo === 'testimonio' ? 'Ej. «Coordinadora RRHH: tardamos más de 2 semanas en dar accesos»' :
-                            asisData.evidenciaTipo === 'benchmark' ? 'Ej. En Empresa X, el proceso dura 2 días con un portal self-service' :
-                            'Describe brevemente qué demuestra esta evidencia sobre el reto'
-                          }
-                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                        />
-                      </div>
-
-                      {/* Subida de archivo / link */}
-                      <div>
-                        <label className="block text-xs text-slate-600 mb-2" style={{ fontWeight: 500 }}>Adjunta el archivo o link (opcional)</label>
-                        <EvidenceUploader />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Resumen generado — Módulo A ── */}
-              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-                <p className="text-xs text-indigo-700 mb-2.5" style={{ fontWeight: 600 }}>📋 Resumen generado — Módulo A</p>
-                <div className="space-y-1.5 text-xs text-indigo-600">
-                  <p>
-                    <span style={{ fontWeight: 600 }}>Proceso:</span>{' '}
-                    {asisData.casoReal ? asisData.casoReal.slice(0, 70) + (asisData.casoReal.length > 70 ? '…' : '') : <span className="text-indigo-300 italic">Pendiente</span>}
-                  </p>
-                  <p>
-                    <span style={{ fontWeight: 600 }}>Recorrido:</span>{' '}
-                    {asisData.pasos.filter(Boolean).length > 0
-                      ? `${asisData.pasos.filter(Boolean).length} pasos · ${asisData.pasos.filter(Boolean).join(' → ').slice(0, 60)}${asisData.pasos.filter(Boolean).join(' → ').length > 60 ? '…' : ''}`
-                      : <span className="text-indigo-300 italic">Pendiente</span>}
-                  </p>
-                  <p>
-                    <span style={{ fontWeight: 600 }}>Quiebre:</span>{' '}
-                    {asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex]
-                      ? `Paso ${asisData.quiebreIndex + 1} — ${asisData.pasos[asisData.quiebreIndex]}`
-                      : <span className="text-indigo-300 italic">No seleccionado</span>}
-                  </p>
-                  <p>
-                    <span style={{ fontWeight: 600 }}>Consecuencia:</span>{' '}
-                    {asisData.consecuencia ? asisData.consecuencia.slice(0, 70) + (asisData.consecuencia.length > 70 ? '…' : '') : <span className="text-indigo-300 italic">Pendiente</span>}
-                  </p>
-                  <p>
-                    <span style={{ fontWeight: 600 }}>Causa inmediata:</span>{' '}
-                    {asisData.causaInmediata ? asisData.causaInmediata.slice(0, 70) + (asisData.causaInmediata.length > 70 ? '…' : '') : <span className="text-indigo-300 italic">Pendiente</span>}
-                  </p>
-                  {asisData.evidenciaNota && (
-                    <p>
-                      <span style={{ fontWeight: 600 }}>Evidencia ({asisData.evidenciaTipo || 'sin tipo'}):</span> {asisData.evidenciaNota.slice(0, 60)}{asisData.evidenciaNota.length > 60 ? '…' : ''}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* ════════════════════════════════════════════════════
-                  CARD DEL RETO
-              ════════════════════════════════════════════════════ */}
-              <div className="border-2 border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
-                <div className="px-5 py-4 bg-slate-900 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                    <FileText size={16} className="text-white" />
-                  </div>
-                  <div>
-                    <p className="text-white text-sm" style={{ fontWeight: 700 }}>Card del reto</p>
-                    <p className="text-slate-400 text-xs mt-0.5">
-                      Output del Módulo A. Sintetiza el reto para conversar con el área y avanzar al siguiente módulo.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-5 space-y-5">
-                  {!cardRetoGenerada && (
-                    <div className="flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                      <Info size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-xs text-slate-600 mb-3">La card se genera con los datos que completaste. Podrás editar cada campo después.</p>
-                        <button onClick={autoFillCardReto} className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm transition-colors" style={{ fontWeight: 500 }}>
-                          <Sparkles size={13} /> Generar Card del reto
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {cardRetoGenerada && (
-                    <div className="space-y-5">
-
-                      {/* A — Reto en 1 frase */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>A</span>
-                          <label className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Reto en 1 frase <span className="text-red-500">*</span></label>
-                        </div>
-                        <p className="text-xs text-slate-400 mb-2 ml-7">
-                          Formato: "Hoy [proceso] se rompe en [paso], causando [consecuencia], porque [causa]."
-                        </p>
-                        <div className="ml-7">
-                          <textarea value={cardReto.retoFrase} onChange={e => setCardReto(p => ({ ...p, retoFrase: e.target.value }))} rows={3} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none" />
-                          <button onClick={mejorarFraseConIA} disabled={mejorIAFrase} className="mt-2 flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 disabled:opacity-50 transition-colors" style={{ fontWeight: 500 }}>
-                            {mejorIAFrase ? <><span className="animate-spin inline-block">⟳</span> Mejorando…</> : <><Sparkles size={11} /> Mejorar con IA</>}
+                      {/* ── D. CTAs ── */}
+                      {!fichaConfirmada ? (
+                        <div className="pt-1 space-y-2">
+                          <button
+                            onClick={() => setFichaConfirmada(true)}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors"
+                            style={{ fontWeight: 600 }}>
+                            <CheckCircle2 size={15} /> Guardar este análisis y avanzar al Módulo B
                           </button>
+                          <button
+                            onClick={() => setIaModAState('idle')}
+                            className="w-full border border-slate-200 text-slate-500 bg-white hover:bg-slate-50 rounded-xl py-2.5 text-sm transition-colors"
+                            style={{ fontWeight: 500 }}>
+                            Revisar mis respuestas antes de guardar
+                          </button>
+                          <p className="text-center text-xs text-slate-400">Este análisis es un punto de partida. Puedes ajustar tus respuestas si algo no encaja.</p>
                         </div>
-                      </div>
-
-                      {/* B — Alcance */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>B</span>
-                          <label className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Alcance</label>
+                      ) : (
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2">
+                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                          <p className="text-xs text-emerald-700" style={{ fontWeight: 600 }}>Análisis guardado. El mentor lo revisará antes de que avances al Step 2.</p>
                         </div>
-                        <div className="ml-7 space-y-3">
-                          <div>
-                            <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 500 }}>Etapa principal</p>
-                            <div className="flex gap-2 flex-wrap">
-                              {(['antes', 'durante', 'después'] as const).map(opt => (
-                                <button key={opt} onClick={() => setCardReto(p => ({ ...p, alcanceEtapa: opt }))} className={`px-3 py-2 rounded-xl border text-sm capitalize transition-colors ${cardReto.alcanceEtapa === opt ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`} style={{ fontWeight: cardReto.alcanceEtapa === opt ? 600 : 400 }}>{opt}</button>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1.5" style={{ fontWeight: 500 }}>Qué NO entra en este reto</p>
-                            <input value={cardReto.alcanceLimites} onChange={e => setCardReto(p => ({ ...p, alcanceLimites: e.target.value }))} placeholder="Ej. No incluye firma de contratos ni inducción presencial" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* C — Impacto validado */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>C</span>
-                          <label className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Impacto validado</label>
-                        </div>
-                        <div className="ml-7 space-y-3">
-                          {step0?.impacto3meses && (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                                <p className="text-xs text-indigo-400 mb-0.5" style={{ fontWeight: 600 }}>IMPACTO PRINCIPAL (3 MESES)</p>
-                                <p className="text-xs text-indigo-800">{({ ingresos: 'Pérdida de ingresos', costos: 'Costos y reprocesos', riesgo: 'Riesgo', cliente: 'Exp. del cliente', productividad: 'Productividad y clima', no_claro: 'Por definir', otro: 'Otro' } as Record<string,string>)[step0.impacto3meses] || '—'}</p>
-                              </div>
-                              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                                <p className="text-xs text-indigo-400 mb-0.5" style={{ fontWeight: 600 }}>A QUIÉN IMPACTA</p>
-                                <p className="text-xs text-indigo-800">{step0.impacta?.join(', ') || '—'}</p>
-                              </div>
-                            </div>
-                          )}
-                          <div>
-                            <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>Señal observable hoy</label>
-                            <input value={cardReto.senalObservable} onChange={e => setCardReto(p => ({ ...p, senalObservable: e.target.value }))} placeholder="Ej. 7–10 días sin accesos, retrabajo en RRHH, reclamos en encuesta de ingreso" className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
-                          </div>
-                          {asisData.evidenciaNota && (
-                            <div className="flex items-start gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
-                              <Info size={12} className="text-slate-400 shrink-0 mt-0.5" />
-                              <p className="text-xs text-slate-600">
-                                <span style={{ fontWeight: 600 }}>Evidencia registrada ({asisData.evidenciaTipo || 'sin tipo'}):</span>{' '}{asisData.evidenciaNota}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* D — Evidencia mínima */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>D</span>
-                          <label className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Evidencia mínima</label>
-                        </div>
-                        <div className="ml-7">
-                          <textarea value={cardReto.evidenciaTexto} onChange={e => setCardReto(p => ({ ...p, evidenciaTexto: e.target.value }))} rows={2} placeholder="Resume la evidencia en 1–2 líneas para la card. Ej. «18 días promedio — Registros RRHH 2024»" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none" />
-                        </div>
-                      </div>
-
-                      {/* Botones de la Card */}
-                      <div className="pt-3 border-t border-slate-100 flex items-center gap-3 flex-wrap">
-                        <button onClick={handleCopyCardReto} className="flex items-center gap-2 border border-slate-200 hover:bg-slate-50 text-slate-600 bg-white px-3.5 py-2 rounded-xl text-sm transition-colors" style={{ fontWeight: 500 }}>
-                          <Copy size={13} /> {cardRetoCopyMsg ? '¡Copiado!' : 'Copiar resumen'}
-                        </button>
-                        <button onClick={() => setShowMentorModal(true)} className="flex items-center gap-2 border border-indigo-200 hover:bg-indigo-50 text-indigo-600 bg-white px-3.5 py-2 rounded-xl text-sm transition-colors" style={{ fontWeight: 500 }}>
-                          <MessageSquare size={13} /> Pedir ayuda a mentor
-                        </button>
-                        <button onClick={autoFillCardReto} className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 transition-colors" style={{ fontWeight: 500 }}>
-                          <Sparkles size={11} /> Regenerar card
-                        </button>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
-              {/* ─────────────── FIN CARD DEL RETO ─────────────── */}
 
-              {/* ════════════════════════════════════════════════════
-                  PREPARACIÓN DE ENTREVISTAS → MÓDULO D
-              ════════════════════════════════════════════════════ */}
-              <div className="border-2 border-slate-200 rounded-2xl overflow-hidden bg-white">
-                <div className="px-5 py-4 bg-slate-100 border-b border-slate-200 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
-                    <Users size={16} className="text-slate-500" />
-                  </div>
-                  <div className="flex-1">
+              {/* ════════════════════════════════════
+                  FICHA CONSOLIDADA
+              ═══════���════════════════════════════ */}
+              {fichaConfirmada && (
+                <div className="border-2 border-indigo-200 rounded-xl overflow-hidden">
+                  {/* Header */}
+                  <div className="px-4 py-3 bg-indigo-600 flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-slate-800 text-sm" style={{ fontWeight: 700 }}>Qué validar en entrevistas</p>
-                      <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-200 rounded-full">Se hace en el Módulo D</span>
+                      <FileText size={14} className="text-indigo-200 shrink-0" />
+                      <p className="text-sm text-white" style={{ fontWeight: 700 }}>Resumen inicial del problema</p>
+                      <span className="text-xs px-2 py-0.5 bg-white/20 text-white rounded-full" style={{ fontWeight: 600 }}>Step 1 · Módulo A</span>
                     </div>
-                    <p className="text-slate-500 text-xs mt-0.5">
-                      Define aquí qué quieres confirmar. Las entrevistas con guía y registro de evidencia las harás en Actores/entrevistas.
-                    </p>
+                    <button onClick={handleCopiarFicha} className="flex items-center gap-1.5 text-xs text-indigo-200 hover:text-white px-2.5 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors" style={{ fontWeight: 500 }}>
+                      <Copy size={11} /> {fichaCopyMsg ? '¡Copiado!' : 'Copiar resumen'}
+                    </button>
+                  </div>
+
+                  {/* Lectura consolidada — protagonista */}
+                  <div className="px-4 py-4 bg-indigo-50 border-b border-indigo-100">
+                    <p className="text-xs text-indigo-400 mb-1.5" style={{ fontWeight: 600, letterSpacing: '0.04em' }}>SÍNTESIS DEL RETO</p>
+                    <p className="text-sm text-indigo-900 leading-relaxed">{lecturaConsolidada}</p>
+                  </div>
+
+                  {/* Datos del módulo */}
+                  <div className="divide-y divide-slate-100 bg-white">
+                    {[
+                      {
+                        label: 'Quiebre identificado',
+                        value: asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex]
+                          ? `Paso ${asisData.quiebreIndex + 1}: ${asisData.pasos[asisData.quiebreIndex]}`
+                          : '—',
+                      },
+                      { label: 'Actores del proceso', value: actoresProceso || '—' },
+                      { label: 'Consecuencia principal', value: asisData.consecuencia || '—' },
+                      { label: 'Causa inmediata', value: asisData.causaInmediata || '—' },
+                      {
+                        label: 'Evidencia disponible',
+                        value: evidenciasA.filter(e => e.desc.trim()).length > 0
+                          ? evidenciasA.filter(e => e.desc.trim()).map(e => `[${e.tipo || 'sin tipo'}] ${e.desc}`).join(' · ')
+                          : 'Sin evidencia registrada aún',
+                      },
+                    ].map((row, i) => (
+                      <div key={i} className="px-4 py-3 flex gap-4 items-start">
+                        <p className="text-xs text-slate-400 shrink-0 w-36 pt-0.5" style={{ fontWeight: 600, letterSpacing: '0.02em' }}>{row.label.toUpperCase()}</p>
+                        <p className="text-xs text-slate-700 flex-1 leading-relaxed">{row.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Diagnóstico IA — fila compacta */}
+                  <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-2 items-center">
+                    <span className="text-xs text-slate-500" style={{ fontWeight: 600 }}>Diagnóstico IA:</span>
+                    {[
+                      { label: 'Claridad Alta', color: 'bg-emerald-100 text-emerald-700' },
+                      { label: 'Importancia Media-alta', color: 'bg-amber-100 text-amber-700' },
+                      { label: `Sustento ${nivelSustento === 'solido' ? 'Sólido' : nivelSustento === 'debil' ? 'Inicial' : 'Débil'}`, color: nivelSustento === 'solido' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' },
+                      { label: 'Coherente con Step 0', color: 'bg-indigo-100 text-indigo-700' },
+                    ].map((chip, i) => (
+                      <span key={i} className={`text-xs px-2 py-0.5 rounded-full ${chip.color}`} style={{ fontWeight: 600 }}>{chip.label}</span>
+                    ))}
+                  </div>
+
+                  {/* Temas prioritarios — compacto */}
+                  <div className="px-4 py-3 border-t border-indigo-100 bg-indigo-50">
+                    <p className="text-xs text-indigo-600 mb-2" style={{ fontWeight: 700 }}>Temas a investigar en el Módulo B</p>
+                    <ul className="space-y-1">
+                      {temasPrioritarios.map(t => (
+                        <li key={t.n} className="flex items-start gap-2 text-xs text-indigo-800">
+                          <span className="text-indigo-400 shrink-0 mt-0.5" style={{ fontWeight: 700 }}>{t.n}.</span>
+                          <span style={{ fontWeight: 500 }}>{t.titulo}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-4 py-3 bg-white border-t border-slate-100 flex items-center gap-3 flex-wrap">
+                    <span className="text-xs text-amber-700 px-2 py-0.5 bg-amber-100 rounded-full" style={{ fontWeight: 600 }}>⏳ Pendiente revisión del mentor</span>
+                    <span className="text-xs text-slate-400">Tu mentor lo revisará antes de que avances al Step 2.</span>
+                    <button onClick={() => setActiveModule('B')}
+                      className="ml-auto flex items-center gap-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors"
+                      style={{ fontWeight: 600 }}>
+                      Ir al Módulo B <ChevronRight size={12} />
+                    </button>
                   </div>
                 </div>
-
-                <div className="p-5 space-y-5">
-                  {/* Selector 1: Con el líder */}
-                  <div>
-                    <label className="block text-sm text-slate-700 mb-2" style={{ fontWeight: 500 }}>Con el líder debo confirmar…</label>
-                    <div className="space-y-2">
-                      {([
-                        { v: 'prioridad', label: 'La prioridad del reto', desc: 'Si para el área es un problema urgente o secundario.' },
-                        { v: 'impacto', label: 'El impacto real en el negocio', desc: 'Si el daño que describí coincide con lo que ellos perciben.' },
-                        { v: 'alcance', label: 'El alcance correcto', desc: 'Si el proceso que delimitamos es el que realmente importa.' },
-                      ] as const).map(opt => (
-                        <button
-                          key={opt.v}
-                          onClick={() => setPreparacion(p => ({ ...p, conLider: opt.v }))}
-                          className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                            preparacion.conLider === opt.v
-                              ? 'border-indigo-400 bg-indigo-50'
-                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 mt-0.5 ${preparacion.conLider === opt.v ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'}`} />
-                          <div>
-                            <p className={`text-sm ${preparacion.conLider === opt.v ? 'text-indigo-700' : 'text-slate-700'}`} style={{ fontWeight: preparacion.conLider === opt.v ? 600 : 500 }}>{opt.label}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{opt.desc}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Selector 2: Con los afectados */}
-                  <div>
-                    <label className="block text-sm text-slate-700 mb-2" style={{ fontWeight: 500 }}>Con los afectados debo confirmar…</label>
-                    <div className="space-y-2">
-                      {([
-                        { v: 'paso_exacto', label: 'El paso exacto donde ocurre el reto', desc: 'Si el quiebre que identifiqué coincide con lo que ellos experimentan.' },
-                        { v: 'parches', label: 'Cómo lo resuelven hoy (parches)', desc: 'Qué hacen para compensar el problema mientras existe.' },
-                        { v: 'frecuencia', label: 'Con qué frecuencia ocurre', desc: 'Si es un problema constante o esporádico, y cuánto les afecta.' },
-                      ] as const).map(opt => (
-                        <button
-                          key={opt.v}
-                          onClick={() => setPreparacion(p => ({ ...p, conAfectados: opt.v }))}
-                          className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                            preparacion.conAfectados === opt.v
-                              ? 'border-indigo-400 bg-indigo-50'
-                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 mt-0.5 ${preparacion.conAfectados === opt.v ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'}`} />
-                          <div>
-                            <p className={`text-sm ${preparacion.conAfectados === opt.v ? 'text-indigo-700' : 'text-slate-700'}`} style={{ fontWeight: preparacion.conAfectados === opt.v ? 600 : 500 }}>{opt.label}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{opt.desc}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Aviso y CTA */}
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                    <Info size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-xs text-slate-600 mb-3">
-                        En el <span style={{ fontWeight: 600 }}>Módulo D</span> harás las entrevistas con guía estructurada y registrarás la evidencia que obtengas. Lo que definiste aquí sirve de brújula.
-                      </p>
-                      <button
-                        onClick={() => setActiveModule('D')}
-                        className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
-                        style={{ fontWeight: 500 }}
-                      >
-                        Ir a Actores / entrevistas <ChevronRight size={12} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* ─────────────── FIN PREPARACIÓN ENTREVISTAS ─────────────── */}
+              )}
 
               {/* Gating check + Botón principal */}
               {(() => {
@@ -1178,7 +1407,7 @@ export function Step1Page() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════
-              MODULE B: MEDICIÓN E IMPACTO
+              MODULE B: INVESTIGACIÓN DE CAMPO — nueva arquitectura
           ══════════════════════════════════════════════════════════════ */}
           {activeModule === 'B' && (
             <div className="space-y-6">
@@ -1187,11 +1416,11 @@ export function Step1Page() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo B: Medición e impacto</h1>
+                    <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo B: Investigación de campo</h1>
                     <StatusChip status={moduloBListo() ? 'Completado' : 'En progreso'} size="sm" />
                   </div>
-                  <p className="text-sm text-slate-500 max-w-lg">
-                    Define cómo medir la situación de hoy (línea base) y qué señal indicaría mejora. Si hoy no se mide, lo dejamos registrado y definimos cómo lo vas a medir.
+                  <p className="text-sm text-slate-500 max-w-xl">
+                    Define <em>qué</em> necesitas entender, <em>desde qué ángulos</em> lo abordarás y <em>cómo</em> obtendrás la información para validar que el reto vale la pena resolver.
                   </p>
                 </div>
                 <div className="flex gap-2 shrink-0 ml-3">
@@ -1212,544 +1441,768 @@ export function Step1Page() {
                 </div>
               </div>
 
-              {/* ── Mini-card: Resumen del reto (Módulo A) — Solo lectura ── */}
-              {cardReto.retoFrase ? (
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Target size={13} className="text-indigo-400" />
-                    <p className="text-xs text-indigo-600" style={{ fontWeight: 700 }}>Resumen del reto — Módulo A</p>
-                    <span className="text-xs text-indigo-300 px-1.5 py-0.5 bg-white/60 rounded ml-1" style={{ fontWeight: 400 }}>Solo lectura</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    <div>
-                      <p className="text-xs text-indigo-400 mb-0.5" style={{ fontWeight: 600, letterSpacing: '0.04em' }}>RETO</p>
-                      <p className="text-xs text-indigo-800" style={{ fontWeight: 500 }}>"{cardReto.retoFrase}"</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3 mt-1">
-                      {asisData.consecuencia && (
-                        <div>
-                          <p className="text-xs text-indigo-400 mb-0.5" style={{ fontWeight: 600, letterSpacing: '0.04em' }}>CONSECUENCIA</p>
-                          <p className="text-xs text-indigo-700">{asisData.consecuencia.slice(0, 60)}{asisData.consecuencia.length > 60 ? '…' : ''}</p>
-                        </div>
-                      )}
-                      {asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex] && (
-                        <div>
-                          <p className="text-xs text-indigo-400 mb-0.5" style={{ fontWeight: 600, letterSpacing: '0.04em' }}>DÓNDE OCURRE</p>
-                          <p className="text-xs text-indigo-700">Paso {asisData.quiebreIndex + 1} — {asisData.pasos[asisData.quiebreIndex]}</p>
-                        </div>
-                      )}
-                      {step0?.impacta?.length ? (
-                        <div>
-                          <p className="text-xs text-indigo-400 mb-0.5" style={{ fontWeight: 600, letterSpacing: '0.04em' }}>IMPACTA A</p>
-                          <p className="text-xs text-indigo-700">{step0.impacta.join(', ')}</p>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
-                  <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-xs text-amber-800 mb-2" style={{ fontWeight: 500 }}>
-                      No hay reto definido en el Módulo A. Complétalo primero para que las métricas tengan contexto.
-                    </p>
-                    <button onClick={() => setActiveModule('A')} className="flex items-center gap-1 text-xs text-amber-700 px-2.5 py-1.5 bg-amber-100 hover:bg-amber-200 rounded-lg border border-amber-200 transition-colors" style={{ fontWeight: 500 }}>
-                      Ir al Módulo A <ChevronRight size={11} />
+              {/* ── Contexto IA ── */}
+              <div className="rounded-xl bg-violet-50 border border-violet-200 p-4 flex items-start gap-3">
+                <Sparkles size={14} className="text-violet-500 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-xs text-violet-800 mb-1" style={{ fontWeight: 600 }}>Punto de partida: análisis del Módulo A</p>
+                  <p className="text-xs text-violet-600 leading-relaxed">{lecturaConsolidada}</p>
+                  {!fichaConfirmada && (
+                    <button onClick={() => setActiveModule('A')} className="mt-2 flex items-center gap-1 text-xs text-violet-600 px-2.5 py-1 bg-violet-100 hover:bg-violet-200 rounded-lg border border-violet-200 transition-colors" style={{ fontWeight: 500 }}>
+                      Completar Módulo A primero <ChevronRight size={10} />
                     </button>
-                  </div>
+                  )}
                 </div>
-              )}
-
-              {/* ════════════════════════════════════════
-                  1. CADENA DE IMPACTO
-              ════════════════════════════════════════ */}
-              <div className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <label className="block text-sm text-slate-800 mb-0.5" style={{ fontWeight: 600 }}>
-                      ¿Qué provoca este reto? <span className="text-slate-400" style={{ fontWeight: 400 }}>(cadena de impacto)</span> <span className="text-red-500">*</span>
-                    </label>
-                    <p className="text-xs text-slate-400">Escribe 3–5 efectos en orden: <span className="text-slate-600">problema → efecto → impacto final.</span> Usa flechas (→) para conectarlos.</p>
-                  </div>
-                  <button
-                    onClick={suggestCadenaIA}
-                    disabled={iaLoading_B}
-                    className="shrink-0 flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 px-2.5 py-1.5 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors disabled:opacity-50 border border-violet-100"
-                    style={{ fontWeight: 500 }}
-                  >
-                    {iaLoading_B ? <><span className="animate-spin inline-block">⟳</span> Generando…</> : <><Sparkles size={11} /> Sugerir con IA</>}
-                  </button>
-                </div>
-                <textarea
-                  value={bData.cadenaImpacto}
-                  onChange={e => setBData(p => ({ ...p, cadenaImpacto: e.target.value }))}
-                  rows={3}
-                  placeholder="Ej. Solicitud informal → TI sin priorización → accesos retrasados 7–10 días → empleado sin herramientas → baja productividad → costos de espera → riesgo de rotación temprana."
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
-                />
-                {bData.cadenaImpacto.trim() && (
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={13} className="text-emerald-500" />
-                    <span className="text-xs text-emerald-600" style={{ fontWeight: 500 }}>Cadena registrada</span>
-                  </div>
-                )}
               </div>
 
-              {/* ════════════════════════════════════════
-                  2. ESTADO ACTUAL DE MEDICIÓN
-              ════════════════════════════════════════ */}
+              {/* ═══════════════════════════════════════════════════════
+                  SECCIÓN 1 — OBJETIVO GENERAL DE LA INVESTIGACIÓN
+              ═══════════════════════════════════════════════════════ */}
               <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
-                <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-                  <BarChart2 size={14} className="text-slate-400" />
-                  <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Estado actual de medición <span className="text-red-500">*</span></p>
-                </div>
-                <div className="p-5 space-y-4">
-                  <p className="text-sm text-slate-600">¿Hoy se está midiendo algo sobre este reto?</p>
-                  <div className="space-y-2">
-                    {([
-                      { v: 'si',      label: 'Sí, ya se mide',                icon: '📊', desc: 'Hay datos o métricas activas sobre este problema.' },
-                      { v: 'parcial', label: 'Se mide parcialmente (datos sueltos)', icon: '📋', desc: 'Hay algo, pero falta sistematizarlo.' },
-                      { v: 'no',      label: 'No se mide todavía',             icon: '❓', desc: 'No hay datos formales. Lo registramos y definimos cómo medirlo.' },
-                    ] as const).map(opt => (
-                      <button
-                        key={opt.v}
-                        onClick={() => setBData(p => ({ ...p, estadoMedicion: opt.v }))}
-                        className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                          bData.estadoMedicion === opt.v
-                            ? 'border-indigo-400 bg-indigo-50'
-                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className="text-base shrink-0 mt-0.5">{opt.icon}</span>
-                        <div className="flex-1">
-                          <p className={`text-sm ${bData.estadoMedicion === opt.v ? 'text-indigo-700' : 'text-slate-700'}`} style={{ fontWeight: bData.estadoMedicion === opt.v ? 600 : 500 }}>{opt.label}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">{opt.desc}</p>
-                        </div>
-                        <span className={`w-4 h-4 rounded-full border-2 shrink-0 mt-1 flex items-center justify-center ${bData.estadoMedicion === opt.v ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'}`}>
-                          {bData.estadoMedicion === opt.v && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Condicional: Sí */}
-                  {bData.estadoMedicion === 'si' && (
-                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-                      <div>
-                        <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>Fuente donde está el dato <span className="text-red-500">*</span></label>
-                        <input
-                          value={bData.mFuente}
-                          onChange={e => setBData(p => ({ ...p, mFuente: e.target.value }))}
-                          placeholder="Ej. Dashboard de RRHH, sistema SAP, Excel de gerencia"
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>Frecuencia de actualización</label>
-                        <input
-                          value={bData.mFrecuencia}
-                          onChange={e => setBData(p => ({ ...p, mFrecuencia: e.target.value }))}
-                          placeholder="Ej. Mensual, por cohorte, en tiempo real"
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                        />
-                      </div>
+                <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>1</span>
+                    <div>
+                      <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>La gran pregunta que guía la investigación <span className="text-red-500">*</span></p>
+                      <p className="text-xs text-slate-400">Una sola pregunta central — todos los frentes responderán a esta.</p>
                     </div>
-                  )}
-
-                  {/* Condicional: Parcial */}
-                  {bData.estadoMedicion === 'parcial' && (
-                    <div className="space-y-3 pt-2 border-t border-slate-100">
-                      <div>
-                        <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>¿Qué se mide hoy? <span className="text-red-500">*</span></label>
-                        <input
-                          value={bData.queMideHoy}
-                          onChange={e => setBData(p => ({ ...p, queMideHoy: e.target.value }))}
-                          placeholder="Ej. Tiempo total de onboarding en reportes de RRHH."
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>¿Qué falta medir?</label>
-                        <input
-                          value={bData.queFaltaMedir}
-                          onChange={e => setBData(p => ({ ...p, queFaltaMedir: e.target.value }))}
-                          placeholder="Ej. Tiempo específico de espera de accesos TI. Costo por ingreso."
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Condicional: No */}
-                  {bData.estadoMedicion === 'no' && (
-                    <div className="space-y-3 pt-2 border-t border-slate-100">
-                      <div>
-                        <label className="text-xs text-slate-600 mb-2 block" style={{ fontWeight: 500 }}>¿Por qué no se mide? <span className="text-slate-400">(selecciona la razón principal)</span></label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {([
-                            { v: 'no_prioridad', label: 'No fue prioridad hasta ahora' },
-                            { v: 'no_herramienta', label: 'No hay sistema para medirlo' },
-                            { v: 'no_responsable', label: 'No hay un responsable definido' },
-                            { v: 'otro', label: 'Otro motivo' },
-                          ] as const).map(opt => (
-                            <button
-                              key={opt.v}
-                              onClick={() => setBData(p => ({ ...p, porQueNo: opt.v }))}
-                              className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${bData.porQueNo === opt.v ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
-                              style={{ fontWeight: bData.porQueNo === opt.v ? 600 : 400 }}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>¿Qué dato mínimo podrías conseguir en 1 semana?</label>
-                        <input
-                          value={bData.datoMinimo}
-                          onChange={e => setBData(p => ({ ...p, datoMinimo: e.target.value }))}
-                          placeholder="Ej. Tiempo de espera promedio — preguntarle a TI esta semana."
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ════════════════════════════════════════
-                  3. CONSTRUCTOR DE MÉTRICAS
-              ════════════════════════════════════════ */}
-              <div className="space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Métricas para entender el estado actual <span className="text-red-500">*</span></p>
-                    <p className="text-xs text-slate-400 mt-0.5">Agrega 1–5 métricas. Empieza por la más importante. Si no tienes el dato, márcalo como "No disponible" y lo planificamos.</p>
                   </div>
                   <button
-                    onClick={addMetrica}
-                    disabled={bData.metricas.length >= 5}
-                    className="shrink-0 flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    onClick={sugerirObjetivoIA}
+                    disabled={iaLoadingB}
+                    className="shrink-0 flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 px-2.5 py-1.5 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-100 transition-colors disabled:opacity-50"
                     style={{ fontWeight: 500 }}
                   >
-                    <Plus size={12} /> Agregar métrica
+                    {iaLoadingB ? <><span className="animate-spin inline-block w-3 h-3 border-2 border-violet-400 border-t-transparent rounded-full" /> Generando…</> : <><Sparkles size={11} /> IA sugiere</>}
                   </button>
                 </div>
-
-                {bData.metricas.length === 0 && (
-                  <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center">
-                    <BarChart2 size={20} className="text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm text-slate-400 mb-3" style={{ fontWeight: 500 }}>Aún no agregaste métricas.</p>
-                    <button onClick={addMetrica} className="flex items-center gap-1.5 text-xs text-indigo-600 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors mx-auto" style={{ fontWeight: 500 }}>
-                      <Plus size={12} /> Agregar primera métrica
-                    </button>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {bData.metricas.map((met, idx) => (
-                    <div key={met.id} className="border border-slate-200 rounded-2xl bg-white overflow-hidden">
-                      {/* Card header */}
-                      <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border-b border-slate-100">
-                        <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>{idx + 1}</span>
-                        <p className="text-xs text-slate-600 flex-1" style={{ fontWeight: 600 }}>
-                          {met.nombre || <span className="text-slate-400 italic" style={{ fontWeight: 400 }}>Nueva métrica — completa el nombre</span>}
-                        </p>
-                        {met.tipo && (
-                          <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-100 rounded-full">{TIPO_METRICA_LABELS[met.tipo]}</span>
-                        )}
-                        {met.baselineNoDisponible && (
-                          <span className="text-xs text-amber-600 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full">Sin dato</span>
-                        )}
-                        <button
-                          onClick={() => removeMetrica(met.id)}
-                          className="text-slate-300 hover:text-red-400 transition-colors shrink-0 ml-1"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-
-                      {/* Card body */}
-                      <div className="p-4 space-y-3">
-                        {/* Fila 1: Nombre + Tipo */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="col-span-2 sm:col-span-1">
-                            <label className="text-xs text-slate-500 mb-1 block" style={{ fontWeight: 500 }}>Nombre de la métrica <span className="text-red-400">*</span></label>
-                            <input
-                              value={met.nombre}
-                              onChange={e => updateMetrica(met.id, { nombre: e.target.value })}
-                              placeholder="Ej. Tiempo de espera de accesos TI"
-                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                            />
-                          </div>
-                          <div className="col-span-2 sm:col-span-1">
-                            <label className="text-xs text-slate-500 mb-1 block" style={{ fontWeight: 500 }}>Tipo / qué indica <span className="text-red-400">*</span></label>
-                            <div className="flex flex-wrap gap-1.5">
-                              {(['tiempo', 'cantidad', 'costo', 'calidad', 'riesgo', 'otro'] as const).map(t => (
-                                <button
-                                  key={t}
-                                  onClick={() => updateMetrica(met.id, { tipo: t })}
-                                  className={`px-2.5 py-1 rounded-lg border text-xs transition-all ${met.tipo === t ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}
-                                  style={{ fontWeight: met.tipo === t ? 600 : 400 }}
-                                >
-                                  {TIPO_METRICA_LABELS[t]}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Fila 2: Línea base */}
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs text-slate-500" style={{ fontWeight: 500 }}>Línea base actual <span className="text-red-400">*</span></label>
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={met.baselineNoDisponible}
-                                onChange={e => updateMetrica(met.id, { baselineNoDisponible: e.target.checked, baseline: e.target.checked ? 'No disponible' : '' })}
-                                className="w-3 h-3 rounded accent-indigo-600"
-                              />
-                              <span className="text-xs text-slate-500">No disponible aún</span>
-                            </label>
-                          </div>
-                          {met.baselineNoDisponible ? (
-                            <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
-                              <AlertTriangle size={12} className="text-amber-500 shrink-0" />
-                              <span className="text-xs text-amber-700">Dato no disponible — se incluirá en el Plan mínimo.</span>
-                            </div>
-                          ) : (
-                            <input
-                              value={met.baseline}
-                              onChange={e => updateMetrica(met.id, { baseline: e.target.value })}
-                              placeholder="Ej. 7–10 días promedio, $3,200 USD/empleado, NPS 42"
-                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                            />
-                          )}
-                        </div>
-
-                        {/* Fila 3: Fuente + Frecuencia */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-xs text-slate-500 mb-1 block" style={{ fontWeight: 500 }}>Fuente</label>
-                            <input
-                              value={met.fuente}
-                              onChange={e => updateMetrica(met.id, { fuente: e.target.value })}
-                              placeholder="Ej. Registros RRHH 2024"
-                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-slate-500 mb-1 block" style={{ fontWeight: 500 }}>Frecuencia</label>
-                            <input
-                              value={met.frecuencia}
-                              onChange={e => updateMetrica(met.id, { frecuencia: e.target.value })}
-                              placeholder="Ej. Por ingreso, mensual"
-                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Fila 4: Señal de mejora + Proxy checkbox */}
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1">
-                            <label className="text-xs text-slate-500 mb-1 block" style={{ fontWeight: 500 }}>
-                              <TrendingUp size={11} className="inline mr-1 text-emerald-500" />
-                              Señal de mejora <span className="text-slate-400">(umbral o dirección)</span>
-                            </label>
-                            <input
-                              value={met.senalMejora}
-                              onChange={e => updateMetrica(met.id, { senalMejora: e.target.value })}
-                              placeholder="Ej. Reducción a menos de 2 días, o NPS > 70"
-                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                            />
-                          </div>
-                          {/* Proxy checkbox */}
-                          <div className="shrink-0 pt-5 relative">
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={met.esProxy}
-                                onChange={e => updateMetrica(met.id, { esProxy: e.target.checked })}
-                                className="w-3.5 h-3.5 rounded accent-slate-600"
-                              />
-                              <span className="text-xs text-slate-500 flex items-center gap-1">
-                                Es proxy
-                                <button
-                                  onMouseEnter={() => setProxyTooltipId(met.id)}
-                                  onMouseLeave={() => setProxyTooltipId(null)}
-                                  className="text-slate-300 hover:text-slate-500 transition-colors"
-                                >
-                                  <HelpCircle size={11} />
-                                </button>
-                              </span>
-                            </label>
-                            {proxyTooltipId === met.id && (
-                              <div className="absolute bottom-full right-0 mb-2 w-52 p-2.5 bg-slate-900 text-white rounded-xl text-xs shadow-lg z-20">
-                                <p style={{ fontWeight: 600 }} className="mb-1">¿Qué es una métrica proxy?</p>
-                                <p className="text-slate-300">Una métrica indirecta que aproxima lo que quieres medir. Ej. NPS como proxy de satisfacción con el onboarding.</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                <div className="p-5 space-y-3">
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    No es lo que vas a <em>hacer</em> — es lo que necesitas <span style={{ fontWeight: 600 }}>entender</span> al final de esta fase. Redáctalo como pregunta: ¿X es causa de Y? ¿X ocurre en Z contexto?
+                  </p>
+                  <textarea
+                    value={bData.objetivoGeneral}
+                    onChange={e => setBData(p => ({ ...p, objetivoGeneral: e.target.value }))}
+                    rows={3}
+                    placeholder="Ej. ¿El retraso en la asignación de accesos TI es una causa sistémica de la baja productividad en el onboarding, y afecta a la mayoría de los empleados nuevos?"
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                  />
+                  {bData.objetivoGeneral.trim() && (
+                    <div className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                      <Target size={12} className="text-indigo-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-indigo-700">
+                        <span style={{ fontWeight: 600 }}>Este es el norte de tu investigación.</span>{' '}
+                        Cada frente que definas abajo debe contribuir, directa o indirectamente, a responderla.
+                      </p>
                     </div>
-                  ))}
+                  )}
                 </div>
-
-                {bData.metricas.length > 0 && bData.metricas.length < 5 && (
-                  <button onClick={addMetrica} className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 py-2 border border-dashed border-slate-200 hover:border-indigo-300 rounded-xl transition-all" style={{ fontWeight: 500 }}>
-                    <Plus size={12} /> Agregar otra métrica <span className="text-slate-400">({bData.metricas.length}/5)</span>
-                  </button>
-                )}
               </div>
 
-              {/* ════════════════════════════════════════
-                  4. PLAN MÍNIMO (condicional)
-              ════════════════════════════════════════ */}
-              {necesitaPlanMinimo() && (
-                <div className="border-2 border-amber-200 rounded-2xl overflow-hidden bg-white">
-                  <div className="px-5 py-4 bg-amber-50 border-b border-amber-100 flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-lg bg-amber-200 flex items-center justify-center shrink-0">
-                      <TrendingUp size={14} className="text-amber-700" />
-                    </div>
+              {/* ═══════════════════════════════════════════════════════
+                  SECCIÓN 2 — FRENTES DE INVESTIGACIÓN
+              ═══════════════════════════════════════════════════════ */}
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs shrink-0 mt-0.5" style={{ fontWeight: 700 }}>2</span>
                     <div>
-                      <p className="text-sm text-amber-800" style={{ fontWeight: 700 }}>Plan mínimo para obtener la línea base</p>
-                      <p className="text-xs text-amber-600 mt-0.5">
-                        {bData.estadoMedicion === 'no'
-                          ? 'No se mide actualmente. Define cómo obtener el primer dato.'
-                          : 'Hay métricas sin dato disponible. Define cómo conseguirlo.'}
+                      <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                        Frentes de investigación <span className="text-slate-400 text-xs ml-1">(mín. 3, máx. 5)</span> <span className="text-red-500">*</span>
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Cada frente es un ángulo específico que debes explorar. Para cada uno, define de dónde vendrá la información.
                       </p>
                     </div>
                   </div>
+                  <button
+                    onClick={sugerirTemasIA}
+                    disabled={iaLoadingB}
+                    className="shrink-0 flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 px-2.5 py-1.5 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-100 transition-colors disabled:opacity-50"
+                    style={{ fontWeight: 500 }}
+                  >
+                    {iaLoadingB ? '⟳ Generando…' : <><Sparkles size={11} /> IA precarga frentes</>}
+                  </button>
+                </div>
 
-                  <div className="p-5 space-y-4">
-                    {/* Qué métrica medir primero */}
-                    <div>
-                      <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>¿Qué métrica medir primero? <span className="text-red-400">*</span></label>
-                      {bData.metricas.filter(m => m.baselineNoDisponible || bData.estadoMedicion === 'no').length > 0 ? (
-                        <div className="space-y-1.5">
-                          {bData.metricas.filter(m => m.baselineNoDisponible || bData.estadoMedicion === 'no').map(m => (
-                            <button
-                              key={m.id}
-                              onClick={() => setBData(p => ({ ...p, planMetrica: m.nombre }))}
-                              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm text-left transition-all ${bData.planMetrica === m.nombre ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
-                              style={{ fontWeight: bData.planMetrica === m.nombre ? 600 : 400 }}
-                            >
-                              <span className={`w-3 h-3 rounded-full border-2 shrink-0 ${bData.planMetrica === m.nombre ? 'border-amber-500 bg-amber-500' : 'border-slate-300'}`} />
-                              {m.nombre || <span className="italic text-slate-400">Métrica sin nombre</span>}
-                              {m.baselineNoDisponible && <span className="ml-auto text-xs text-amber-500 px-1.5 py-0.5 bg-amber-100 rounded-full">Sin dato</span>}
-                            </button>
-                          ))}
-                          {/* Opción manual si no hay métricas sin dato */}
-                          {bData.estadoMedicion === 'no' && bData.metricas.length === 0 && (
+                {/* Lista de frentes / empty state */}
+                {bData.temas.length === 0 ? (
+                  <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center">
+                    <FileText size={20} className="text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-400 mb-3" style={{ fontWeight: 500 }}>Aún no definiste frentes de investigación.</p>
+                    <div className="flex items-center justify-center gap-2">
+                      <button onClick={addTema} className="flex items-center gap-1.5 text-xs text-indigo-600 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors" style={{ fontWeight: 500 }}>
+                        <Plus size={11} /> Agregar primer frente
+                      </button>
+                      <button onClick={sugerirTemasIA} disabled={iaLoadingB} className="flex items-center gap-1.5 text-xs text-violet-600 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-100 transition-colors disabled:opacity-50" style={{ fontWeight: 500 }}>
+                        <Sparkles size={11} /> IA los genera
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {bData.temas.map((tema, tIdx) => {
+                      const isExpanded = expandedTemaId === tema.id;
+                      const hayEntrevistas = tema.via === 'entrevistas' || tema.via === 'ambas';
+                      const hayData = tema.via === 'data' || tema.via === 'ambas';
+                      return (
+                        <div key={tema.id} className={`border rounded-2xl bg-white overflow-hidden transition-all ${isExpanded ? 'border-indigo-200 shadow-sm' : 'border-slate-200'}`}>
+                          {/* Card header — siempre visible, clickeable para expandir */}
+                          <div
+                            className={`px-4 py-3 flex items-center gap-3 cursor-pointer select-none ${isExpanded ? 'bg-indigo-50 border-b border-indigo-100' : 'hover:bg-slate-50'}`}
+                            onClick={() => setExpandedTemaId(isExpanded ? null : tema.id)}
+                          >
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 ${isExpanded ? 'bg-indigo-500 text-white' : 'bg-indigo-100 text-indigo-600'}`} style={{ fontWeight: 700 }}>{tIdx + 1}</span>
                             <input
-                              value={bData.planMetrica}
-                              onChange={e => setBData(p => ({ ...p, planMetrica: e.target.value }))}
-                              placeholder="Escribe el nombre de la métrica a medir primero"
-                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition-all"
+                              value={tema.titulo}
+                              onChange={e => { e.stopPropagation(); updateTema(tema.id, { titulo: e.target.value }); }}
+                              onClick={e => e.stopPropagation()}
+                              placeholder="Nombre del frente · Ej. Magnitud real del problema"
+                              className={`flex-1 text-sm bg-transparent border-0 focus:outline-none placeholder-slate-300 ${isExpanded ? 'text-indigo-900' : 'text-slate-800'}`}
+                              style={{ fontWeight: tema.titulo ? 600 : 400 }}
                             />
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {tema.via ? (
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${tema.via === 'entrevistas' ? 'bg-violet-100 text-violet-600' : tema.via === 'data' ? 'bg-sky-100 text-sky-600' : 'bg-teal-100 text-teal-600'}`} style={{ fontWeight: 500 }}>
+                                  {tema.via === 'entrevistas' ? '🗣 Entrevistas' : tema.via === 'data' ? '📊 Data' : '🔄 Ambas'}
+                                </span>
+                              ) : tema.titulo.trim() ? (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-600" style={{ fontWeight: 500 }}>Sin modalidad</span>
+                              ) : null}
+                              <ChevronDown size={14} className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180 text-indigo-500' : ''}`} />
+                              {bData.temas.length > 1 && (
+                                <button onClick={e => { e.stopPropagation(); removeTema(tema.id); }} className="text-slate-300 hover:text-red-400 transition-colors ml-1">
+                                  <X size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Card body — expandible */}
+                          {isExpanded && (
+                            <div className="p-5 space-y-5">
+                              {/* Pregunta clave */}
+                              <div>
+                                <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>¿Qué necesitas saber específicamente en este frente?</label>
+                                <input
+                                  value={tema.preguntaClave}
+                                  onChange={e => updateTema(tema.id, { preguntaClave: e.target.value })}
+                                  placeholder="Ej. ¿Qué tan frecuente ocurre el problema y cuántos empleados lo experimentan?"
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                                />
+                              </div>
+
+                              {/* Modalidad de captura — 3 opciones */}
+                              <div>
+                                <label className="text-xs text-slate-600 mb-2 block" style={{ fontWeight: 500 }}>¿Cómo obtendrás la información? <span className="text-red-500">*</span></label>
+                                <div className="grid grid-cols-3 gap-2">
+                                  {([
+                                    { v: 'entrevistas', icon: '🗣', label: 'Entrevistas', sub: 'Personas', sel: 'border-violet-400 bg-violet-50' },
+                                    { v: 'data', icon: '📊', label: 'Data / Docs', sub: 'Sistemas', sel: 'border-sky-400 bg-sky-50' },
+                                    { v: 'ambas', icon: '🔄', label: 'Ambas', sub: 'Combinado', sel: 'border-teal-400 bg-teal-50' },
+                                  ] as const).map(opt => (
+                                    <button
+                                      key={opt.v}
+                                      onClick={() => updateTema(tema.id, { via: opt.v })}
+                                      className={`flex flex-col items-center gap-0.5 py-3 px-2 rounded-xl border-2 transition-all ${tema.via === opt.v ? opt.sel : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}
+                                    >
+                                      <span className="text-base">{opt.icon}</span>
+                                      <span className={`text-xs ${tema.via === opt.v ? 'text-slate-800' : 'text-slate-600'}`} style={{ fontWeight: tema.via === opt.v ? 600 : 400 }}>{opt.label}</span>
+                                      <span className="text-xs text-slate-400">{opt.sub}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* ── Condicional: Entrevistas ── */}
+                              {hayEntrevistas && (
+                                <div className="border-l-2 border-violet-200 pl-4 space-y-4">
+                                  {/* Perfiles vinculados */}
+                                  <div>
+                                    <label className="text-xs text-slate-600 mb-2 block" style={{ fontWeight: 500 }}>
+                                      Perfiles que entrevistarás para este frente
+                                      {tema.perfilesIds.length > 0 && <span className="ml-1.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded-full text-xs">{tema.perfilesIds.length}</span>}
+                                    </label>
+                                    {bData.perfiles.length === 0 ? (
+                                      <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+                                        <AlertCircle size={12} className="text-amber-500 shrink-0" />
+                                        <p className="text-xs text-amber-700">Aún no definiste perfiles. Agrégalos en la <span style={{ fontWeight: 600 }}>Sección 3</span> de abajo, luego vincúlalos aquí.</p>
+                                      </div>
+                                    ) : (
+                                      <div className="flex flex-wrap gap-2">
+                                        {bData.perfiles.map(pf => {
+                                          const linked = tema.perfilesIds.includes(pf.id);
+                                          return (
+                                            <button
+                                              key={pf.id}
+                                              onClick={() => togglePerfilEnTema(tema.id, pf.id)}
+                                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs transition-all ${linked ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'}`}
+                                              style={{ fontWeight: linked ? 600 : 400 }}
+                                            >
+                                              {linked ? <CheckCircle2 size={11} /> : <span className="w-3 h-3 rounded-full border border-slate-300 inline-block shrink-0" />}
+                                              {pf.nombre || 'Sin nombre'}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Preguntas del frente */}
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-xs text-slate-600" style={{ fontWeight: 500 }}>
+                                        Preguntas clave{' '}
+                                        <span className={`px-1.5 py-0.5 rounded-full text-xs ${tema.preguntas.length >= 3 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>{tema.preguntas.length}/3</span>
+                                      </label>
+                                      {tema.preguntas.length < 3 && (
+                                        <button onClick={() => addPreguntaTema(tema.id)} className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 transition-colors" style={{ fontWeight: 500 }}>
+                                          <Plus size={10} /> Agregar
+                                        </button>
+                                      )}
+                                    </div>
+                                    {tema.preguntas.map((q, qIdx) => (
+                                      <div key={qIdx} className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-300 w-5 shrink-0 text-center" style={{ fontWeight: 600 }}>P{qIdx + 1}</span>
+                                        <input
+                                          value={q}
+                                          onChange={e => updatePreguntaTema(tema.id, qIdx, e.target.value)}
+                                          placeholder="Ej. ¿Con qué frecuencia enfrentas este problema?"
+                                          className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
+                                        />
+                                        {tema.preguntas.length > 1 && (
+                                          <button onClick={() => removePreguntaTema(tema.id, qIdx)} className="text-slate-300 hover:text-red-400 transition-colors shrink-0">
+                                            <X size={12} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    ))}
+                                    {tema.preguntas.length >= 3 && (
+                                      <p className="text-xs text-amber-600 flex items-center gap-1"><AlertCircle size={10} /> Máx. 3 preguntas por frente. Mantén el foco.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* ── Condicional: Data ── */}
+                              {hayData && (
+                                <div className="border-l-2 border-sky-200 pl-4">
+                                  <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>
+                                    Fuente concreta de datos <span className="text-red-500">*</span>
+                                  </label>
+                                  <input
+                                    value={tema.fuente}
+                                    onChange={e => updateTema(tema.id, { fuente: e.target.value })}
+                                    placeholder="Ej. Registros de solicitudes TI, reportes de RRHH Q4 2024, sistema de tickets"
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all"
+                                  />
+                                  <p className="text-xs text-slate-400 mt-1.5">Sé específico/a: nombra el sistema, documento o reporte exacto donde buscarás los datos.</p>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Agregar frente */}
+                {bData.temas.length > 0 && bData.temas.length < 5 && (
+                  <button onClick={addTema} className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 py-2.5 border border-dashed border-slate-200 hover:border-indigo-300 rounded-xl transition-all" style={{ fontWeight: 500 }}>
+                    <Plus size={12} /> Agregar frente <span className="text-slate-400">({bData.temas.filter(t => t.titulo.trim()).length}/5 definidos)</span>
+                  </button>
+                )}
+
+                {/* Progress feedback */}
+                {bData.temas.length > 0 && bData.temas.filter(t => t.titulo.trim()).length < 3 && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-100 rounded-xl">
+                    <AlertCircle size={12} className="text-amber-500 shrink-0" />
+                    <p className="text-xs text-amber-700">Define al menos 3 frentes para cubrir la investigación desde múltiples ángulos. Llevas {bData.temas.filter(t => t.titulo.trim()).length}.</p>
+                  </div>
+                )}
+                {bData.temas.filter(t => t.titulo.trim()).length >= 3 && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+                    <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                    <p className="text-xs text-emerald-700">
+                      {bData.temas.filter(t => t.titulo.trim()).length} frentes definidos — buena cobertura para validar desde diferentes ángulos.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ═══════════════════════════════════════════════════════
+                  SECCIÓN 3 — PERFILES DE ENTREVISTA (pool global)
+              ═══════════════════════════════════════════════════════ */}
+              {(() => {
+                const hayEntrevistasEnTemas = bData.temas.some(t => t.via === 'entrevistas' || t.via === 'ambas');
+                return (
+                  <div className={`border rounded-2xl overflow-hidden bg-white transition-opacity ${hayEntrevistasEnTemas ? 'border-slate-200' : 'border-slate-100 opacity-40 pointer-events-none'}`}>
+                    <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>3</span>
+                        <div>
+                          <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                            Perfiles de entrevista {hayEntrevistasEnTemas && <span className="text-red-500">*</span>}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {hayEntrevistasEnTemas
+                              ? 'Define las personas que entrevistarás y vincúlalas a los frentes correspondientes arriba.'
+                              : 'Se habilitará cuando al menos un frente use entrevistas como modalidad.'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={sugerirPerfilesIA} disabled={iaLoadingB} className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 px-2.5 py-1.5 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-100 transition-colors disabled:opacity-50" style={{ fontWeight: 500 }}>
+                          {iaLoadingB ? '⟳' : <Sparkles size={11} />} IA sugiere
+                        </button>
+                        <button onClick={addPerfil} disabled={bData.perfiles.length >= 5} className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors disabled:opacity-40" style={{ fontWeight: 500 }}>
+                          <Plus size={11} /> Perfil
+                        </button>
+                      </div>
+                    </div>
+                    <div className="p-5">
+                      {bData.perfiles.length === 0 ? (
+                        <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center">
+                          <Users size={20} className="text-slate-300 mx-auto mb-2" />
+                          <p className="text-sm text-slate-400 mb-3" style={{ fontWeight: 500 }}>Aún no definiste perfiles a entrevistar.</p>
+                          <div className="flex items-center justify-center gap-2">
+                            <button onClick={addPerfil} className="flex items-center gap-1.5 text-xs text-indigo-600 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors" style={{ fontWeight: 500 }}>
+                              <Plus size={11} /> Agregar perfil
+                            </button>
+                            <button onClick={sugerirPerfilesIA} disabled={iaLoadingB} className="flex items-center gap-1.5 text-xs text-violet-600 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-100 transition-colors disabled:opacity-50" style={{ fontWeight: 500 }}>
+                              <Sparkles size={11} /> IA los sugiere
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <input
-                          value={bData.planMetrica}
-                          onChange={e => setBData(p => ({ ...p, planMetrica: e.target.value }))}
-                          placeholder="Nombre de la métrica a medir primero"
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition-all"
-                        />
+                        <div className="space-y-2">
+                          {bData.perfiles.map((perfil, pIdx) => {
+                            const temasVinculados = bData.temas.filter(t => t.perfilesIds.includes(perfil.id));
+                            return (
+                              <div key={perfil.id} className="flex items-start gap-3 p-3.5 border border-slate-200 rounded-xl bg-white hover:border-slate-300 transition-colors">
+                                <span className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs shrink-0 mt-0.5" style={{ fontWeight: 700 }}>{pIdx + 1}</span>
+                                <div className="flex-1 space-y-2 min-w-0">
+                                  <input
+                                    value={perfil.nombre}
+                                    onChange={e => updatePerfil(perfil.id, { nombre: e.target.value })}
+                                    placeholder="Nombre del perfil · Ej. Coordinadora de RRHH"
+                                    className="w-full text-sm text-slate-800 bg-transparent border-0 focus:outline-none placeholder-slate-300"
+                                    style={{ fontWeight: perfil.nombre ? 600 : 400 }}
+                                  />
+                                  <input
+                                    value={perfil.porQue}
+                                    onChange={e => updatePerfil(perfil.id, { porQue: e.target.value })}
+                                    placeholder="¿Por qué esta persona puede aportar a la investigación?"
+                                    className="w-full text-xs text-slate-500 bg-transparent border-0 focus:outline-none placeholder-slate-300"
+                                  />
+                                  {temasVinculados.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 pt-0.5">
+                                      {temasVinculados.map(t => (
+                                        <span key={t.id} className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-full border border-indigo-100" style={{ fontWeight: 500 }}>
+                                          {t.titulo || 'Frente sin título'}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <button onClick={() => removePerfil(perfil.id)} className="text-slate-300 hover:text-red-400 transition-colors mt-1 shrink-0">
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
+                  </div>
+                );
+              })()}
 
-                    {/* Cómo + Quién + Plazo */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2">
-                        <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>¿Cómo la obtendrás? <span className="text-red-400">*</span></label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {(['entrevista', 'sistema', 'observacion', 'documento', 'otro'] as const).map(opt => (
-                            <button
-                              key={opt}
-                              onClick={() => setBData(p => ({ ...p, planComoObtener: opt }))}
-                              className={`text-left px-3 py-2 rounded-xl border text-xs transition-all ${bData.planComoObtener === opt ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}
-                              style={{ fontWeight: bData.planComoObtener === opt ? 600 : 400 }}
-                            >
-                              {PLAN_COMO_LABELS[opt]}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+              {/* ═══════════════════════════════════════════════════════
+                  SECCIÓN 4 — GUÍA DE ENTREVISTA
+              ═══════════════════════════════════════════════════════ */}
+              {bData.temas.some(t => t.via === 'entrevistas' || t.via === 'ambas') && bData.perfiles.length > 0 && (
+                <div className="border-2 border-indigo-200 rounded-2xl overflow-hidden bg-white">
+                  <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-6 h-6 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>4</span>
                       <div>
-                        <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>¿Quién te lo puede dar? <span className="text-slate-400">(rol)</span></label>
-                        <input
-                          value={bData.planQuienDa}
-                          onChange={e => setBData(p => ({ ...p, planQuienDa: e.target.value }))}
-                          placeholder="Ej. Gerente de TI, Finanzas"
-                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 500 }}>Plazo <span className="text-red-400">*</span></label>
-                        <div className="space-y-1.5">
-                          {([
-                            { v: '24_72h',   label: '24–72 horas' },
-                            { v: '1_semana', label: '1 semana' },
-                            { v: '2_semanas',label: '2 semanas' },
-                          ] as const).map(p => (
-                            <button
-                              key={p.v}
-                              onClick={() => setBData(prev => ({ ...prev, planPlazo: p.v }))}
-                              className={`w-full text-left px-3 py-2 rounded-xl border text-xs transition-all ${bData.planPlazo === p.v ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}
-                              style={{ fontWeight: bData.planPlazo === p.v ? 600 : 400 }}
-                            >
-                              {p.label}
-                            </button>
-                          ))}
-                        </div>
+                        <p className="text-sm text-indigo-800" style={{ fontWeight: 700 }}>Guía de entrevista</p>
+                        <p className="text-xs text-indigo-500">Generada por frente y perfil a partir de lo que definiste arriba</p>
                       </div>
                     </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!bData.guiaGenerada ? (
+                        <button
+                          onClick={generarGuiaIA}
+                          disabled={iaLoadingB || bData.perfiles.some(p => !p.nombre.trim())}
+                          className="flex items-center gap-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                          style={{ fontWeight: 600 }}
+                        >
+                          {iaLoadingB ? '⟳ Generando guía…' : <><Sparkles size={11} /> Generar guía con IA</>}
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setGuiaVisible(v => !v)} className="flex items-center gap-1 text-xs text-indigo-600 px-2.5 py-1.5 bg-white hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors" style={{ fontWeight: 500 }}>
+                            <ChevronDown size={11} className={`transition-transform ${guiaVisible ? 'rotate-180' : ''}`} />
+                            {guiaVisible ? 'Ocultar' : 'Ver guía'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const texto = bData.perfiles.map(pf => {
+                                const temasDePerfil = bData.temas.filter(t => (t.via === 'entrevistas' || t.via === 'ambas') && t.perfilesIds.includes(pf.id));
+                                const bloqueTemas = temasDePerfil.map(t => {
+                                  const qs = t.preguntas.filter(q => q.trim()).map((q, i) => `  P${i + 1}. ${q}`).join('\n');
+                                  return `  FRENTE: ${t.titulo}\n${qs}`;
+                                }).join('\n\n');
+                                return `PERFIL: ${pf.nombre}\nPOR QUÉ: ${pf.porQue}\n\n${bloqueTemas}`;
+                              }).join('\n\n---\n\n');
+                              navigator.clipboard.writeText(`GUÍA DE ENTREVISTA — Step 1 / Módulo B\n\nOBJETIVO GENERAL: ${bData.objetivoGeneral || '—'}\n\n${texto}`);
+                            }}
+                            className="flex items-center gap-1 text-xs text-indigo-600 px-2.5 py-1.5 bg-white hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors"
+                            style={{ fontWeight: 500 }}
+                          >
+                            <Copy size={11} /> Copiar
+                          </button>
+                          <button onClick={() => setBData(p => ({ ...p, guiaGenerada: false }))} className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1.5 transition-colors">
+                            Regenerar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Vista de la guía */}
+                  {bData.guiaGenerada && guiaVisible && (
+                    <div className="p-5 space-y-6">
+                      <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                        <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 600 }}>OBJETIVO QUE GUÍA TODAS LAS ENTREVISTAS</p>
+                        <p className="text-xs text-indigo-800">{bData.objetivoGeneral || 'No definido'}</p>
+                      </div>
+
+                      {(() => {
+                        const perfilesConTemas = bData.perfiles.filter(p =>
+                          bData.temas.some(t => (t.via === 'entrevistas' || t.via === 'ambas') && t.perfilesIds.includes(p.id))
+                        );
+                        return perfilesConTemas.map((perfil, pIdx) => {
+                          const temasDelPerfil = bData.temas.filter(t => (t.via === 'entrevistas' || t.via === 'ambas') && t.perfilesIds.includes(perfil.id));
+                          return (
+                            <div key={perfil.id}>
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="w-6 h-6 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>{pIdx + 1}</span>
+                                <div>
+                                  <p className="text-sm text-slate-800" style={{ fontWeight: 700 }}>{perfil.nombre || 'Sin nombre'}</p>
+                                  {perfil.porQue && <p className="text-xs text-slate-400">{perfil.porQue}</p>}
+                                </div>
+                              </div>
+                              <div className="pl-8 mb-3 p-3 bg-violet-50 border border-violet-100 rounded-xl">
+                                <p className="text-xs text-violet-700 mb-1" style={{ fontWeight: 600 }}>✨ Intro sugerida por IA</p>
+                                <p className="text-xs text-violet-600 italic">
+                                  "Hola [nombre], estamos analizando {asisData.casoReal ? asisData.casoReal.split(' ').slice(0, 6).join(' ') + '…' : 'el proceso'} y me gustaría entender mejor tu experiencia. Esta conversación es exploratoria — no hay respuestas correctas ni incorrectas."
+                                </p>
+                              </div>
+                              <div className="pl-8 space-y-3">
+                                {temasDelPerfil.map((tema, tIdx) => (
+                                  <div key={tema.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                                      <span className="text-xs text-slate-400" style={{ fontWeight: 600 }}>Frente {tIdx + 1}</span>
+                                      <span className="text-xs text-slate-700" style={{ fontWeight: 600 }}>{tema.titulo || 'Sin título'}</span>
+                                    </div>
+                                    {tema.preguntaClave && (
+                                      <div className="px-3 pt-2">
+                                        <p className="text-xs text-indigo-500 italic">"{tema.preguntaClave}"</p>
+                                      </div>
+                                    )}
+                                    <div className="p-3 space-y-1.5">
+                                      {tema.preguntas.filter(q => q.trim()).map((q, qIdx) => (
+                                        <div key={qIdx} className="flex items-start gap-2">
+                                          <span className="text-xs text-indigo-400 shrink-0 mt-0.5" style={{ fontWeight: 600 }}>P{qIdx + 1}.</span>
+                                          <p className="text-xs text-slate-700">{q}</p>
+                                        </div>
+                                      ))}
+                                      {tema.preguntas.filter(q => q.trim()).length === 0 && (
+                                        <p className="text-xs text-slate-300 italic">Sin preguntas definidas para este frente.</p>
+                                      )}
+                                      <div className="flex items-start gap-2 mt-2 pt-2 border-t border-slate-100">
+                                        <span className="text-xs text-violet-400 shrink-0 mt-0.5" style={{ fontWeight: 600 }}>✨</span>
+                                        <p className="text-xs text-violet-500 italic">¿Hay algo sobre {tema.titulo ? tema.titulo.toLowerCase() : 'este tema'} que yo debería saber y no te pregunté?</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              {pIdx < perfilesConTemas.length - 1 && <div className="mt-5 border-t border-slate-100" />}
+                            </div>
+                          );
+                        });
+                      })()}
+
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <p className="text-xs text-slate-600 mb-1" style={{ fontWeight: 600 }}>CIERRE SUGERIDO</p>
+                        <p className="text-xs text-slate-500 italic">"Muchas gracias por tu tiempo. Lo que me compartiste es muy valioso. ¿Estarías disponible para una conversación de seguimiento si surge alguna duda?"</p>
+                      </div>
+                      <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                        <AlertCircle size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-700">Esta guía es un punto de partida, no un guión rígido. Adapta el orden y el tono según cómo fluya la conversación. Los hallazgos y evidencias los registras en el <span style={{ fontWeight: 600 }}>Módulo D</span>.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!bData.guiaGenerada && (
+                    <div className="p-5 text-center">
+                      <FileText size={24} className="text-slate-200 mx-auto mb-2" />
+                      <p className="text-sm text-slate-400 mb-1" style={{ fontWeight: 500 }}>La guía se generará a partir de los frentes y perfiles que definiste</p>
+                      <p className="text-xs text-slate-300">Organizada por perfil — verás qué frentes y preguntas abordar con cada persona.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Resumen del plan */}
+              {(bData.objetivoGeneral.trim() || bData.temas.length > 0) && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                  <p className="text-xs text-indigo-700 mb-2.5" style={{ fontWeight: 600 }}>📋 Resumen del plan de investigación — Módulo B</p>
+                  <div className="space-y-1.5 text-xs text-indigo-600">
+                    {bData.objetivoGeneral.trim() && (
+                      <p><span style={{ fontWeight: 600 }}>Objetivo:</span> {bData.objetivoGeneral.slice(0, 90)}{bData.objetivoGeneral.length > 90 ? '…' : ''}</p>
+                    )}
+                    <p>
+                      <span style={{ fontWeight: 600 }}>Frentes:</span>{' '}
+                      {bData.temas.filter(t => t.titulo.trim()).length} definido(s) —{' '}
+                      {[
+                        bData.temas.some(t => t.via === 'entrevistas' || t.via === 'ambas') ? '🗣 entrevistas' : '',
+                        bData.temas.some(t => t.via === 'data' || t.via === 'ambas') ? '📊 data' : '',
+                      ].filter(Boolean).join(' + ') || 'sin modalidad definida'}
+                    </p>
+                    {bData.perfiles.length > 0 && (
+                      <p><span style={{ fontWeight: 600 }}>Perfiles:</span> {bData.perfiles.map(p => p.nombre || 'Sin nombre').join(', ')}</p>
+                    )}
                   </div>
                 </div>
               )}
 
+              {/* Gating */}
+              {(() => {
+                const missing = getModuloBMissing();
+                const listo = missing.length === 0;
+                return (
+                  <div className="space-y-3">
+                    {!listo && (
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertCircle size={14} className="text-amber-500" />
+                          <p className="text-xs text-amber-800" style={{ fontWeight: 600 }}>Para avanzar a Restricciones, completa:</p>
+                        </div>
+                        <ul className="space-y-1">
+                          {missing.map((m, i) => (
+                            <li key={i} className="text-xs text-amber-700 flex items-center gap-2">
+                              <span className="w-1 h-1 rounded-full bg-amber-400 shrink-0" />
+                              {m}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => listo && setActiveModule('C')}
+                      disabled={!listo}
+                      className={`w-full rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors ${listo ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                      style={{ fontWeight: 500 }}
+                    >
+                      {listo
+                        ? <>Módulo B listo → Ir a Restricciones <ChevronRight size={15} /></>
+                        : <><Lock size={14} /> Completa los campos requeridos para avanzar</>}
+                    </button>
+                  </div>
+                );
+              })()}
+
+            </div>
+          )}
+
+
               {/* ════════════════════════════════════════
-                  RESUMEN GENERADO — MÓDULO B
+                  5. GUÍA DE ENTREVISTA (condicional)
               ════════════════════════════════════════ */}
-              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-                <p className="text-xs text-indigo-700 mb-2.5" style={{ fontWeight: 600 }}>📋 Resumen generado — Módulo B</p>
-                <div className="space-y-1.5 text-xs text-indigo-600">
-                  <p>
-                    <span style={{ fontWeight: 600 }}>Cadena de impacto:</span>{' '}
-                    {bData.cadenaImpacto ? bData.cadenaImpacto.slice(0, 80) + (bData.cadenaImpacto.length > 80 ? '…' : '') : <span className="text-indigo-300 italic">Pendiente</span>}
-                  </p>
-                  <p>
-                    <span style={{ fontWeight: 600 }}>Estado de medición:</span>{' '}
-                    {bData.estadoMedicion === 'si' ? '✅ Se mide actualmente' : bData.estadoMedicion === 'parcial' ? '🟡 Medición parcial' : bData.estadoMedicion === 'no' ? '❌ No se mide' : <span className="text-indigo-300 italic">No seleccionado</span>}
-                  </p>
-                  <p>
-                    <span style={{ fontWeight: 600 }}>Métricas definidas:</span>{' '}
-                    {bData.metricas.length > 0 ? `${bData.metricas.length} métrica(s) · ${bData.metricas.map(m => m.nombre || 'Sin nombre').join(', ')}` : <span className="text-indigo-300 italic">Ninguna</span>}
-                  </p>
-                  <p>
-                    <span style={{ fontWeight: 600 }}>Línea base:</span>{' '}
-                    {bData.metricas.length === 0
-                      ? <span className="text-indigo-300 italic">Sin métricas</span>
-                      : bData.metricas.every(m => m.baseline && !m.baselineNoDisponible)
-                        ? '✅ Completa en todas las métricas'
-                        : bData.metricas.some(m => m.baseline && !m.baselineNoDisponible)
-                          ? '🟡 Parcial — algunas métricas sin dato'
-                          : '⏳ Pendiente — se requiere Plan mínimo'}
-                  </p>
-                  {necesitaPlanMinimo() && (
-                    <p>
-                      <span style={{ fontWeight: 600 }}>Plan mínimo:</span>{' '}
-                      {bData.planMetrica && bData.planComoObtener && bData.planPlazo
-                        ? `Medir "${bData.planMetrica}" vía ${PLAN_COMO_LABELS[bData.planComoObtener]} · Plazo: ${bData.planPlazo === '24_72h' ? '24–72h' : bData.planPlazo === '1_semana' ? '1 semana' : '2 semanas'}`
-                        : <span className="text-amber-600">Incompleto — falta completar el plan</span>}
-                    </p>
+              {(bData.modalidad === 'entrevistas' || bData.modalidad === 'ambas') && bData.perfiles.length > 0 && (
+                <div className="border-2 border-indigo-200 rounded-2xl overflow-hidden bg-white">
+                  <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-200 flex items-center justify-center shrink-0">
+                        <FileText size={14} className="text-indigo-700" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-indigo-800" style={{ fontWeight: 700 }}>Guía de entrevista</p>
+                        <p className="text-xs text-indigo-500">Generada a partir de los perfiles y temas definidos</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!bData.guiaGenerada ? (
+                        <button
+                          onClick={generarGuiaIA}
+                          disabled={iaLoadingB || bData.perfiles.some(p => !p.nombre.trim())}
+                          className="flex items-center gap-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ fontWeight: 600 }}
+                        >
+                          {iaLoadingB ? '⟳ Generando guía…' : <><Sparkles size={11} /> Generar guía con IA</>}
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setGuiaVisible(v => !v)}
+                            className="flex items-center gap-1 text-xs text-indigo-600 px-2.5 py-1.5 bg-white hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors"
+                            style={{ fontWeight: 500 }}
+                          >
+                            <ChevronDown size={11} className={`transition-transform ${guiaVisible ? 'rotate-180' : ''}`} />
+                            {guiaVisible ? 'Ocultar' : 'Ver guía'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const guia = bData.perfiles.map(p => {
+                                const temas = p.temas.map(t => {
+                                  const qs = t.preguntas.filter(q => q.trim()).map((q, i) => `  ${i + 1}. ${q}`).join('\n');
+                                  return `  TEMA: ${t.texto}\n${qs}`;
+                                }).join('\n\n');
+                                return `PERFIL: ${p.nombre}\nPOR QUÉ: ${p.porQue}\n\n${temas}`;
+                              }).join('\n\n---\n\n');
+                              navigator.clipboard.writeText(`GUÍA DE ENTREVISTA — Step 1 / Módulo B\n\nOBJETIVO PRIORITARIO: ${bData.objetivos.find(o => o.priorizado)?.texto || '—'}\n\n${guia}`);
+                            }}
+                            className="flex items-center gap-1 text-xs text-indigo-600 px-2.5 py-1.5 bg-white hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors"
+                            style={{ fontWeight: 500 }}
+                          >
+                            <Copy size={11} /> Copiar
+                          </button>
+                          <button
+                            onClick={() => setBData(p => ({ ...p, guiaGenerada: false }))}
+                            className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1.5 transition-colors"
+                            style={{ fontWeight: 400 }}
+                          >
+                            Regenerar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Vista previa de la guía */}
+                  {bData.guiaGenerada && guiaVisible && (
+                    <div className="p-5 space-y-5">
+                      <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                        <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 600 }}>OBJETIVO PRIORITARIO DE ESTA ENTREVISTA</p>
+                        <p className="text-xs text-indigo-800">{bData.objetivos.find(o => o.priorizado)?.texto || 'No definido'}</p>
+                      </div>
+
+                      {bData.perfiles.map((perfil, pIdx) => (
+                        <div key={perfil.id}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>{pIdx + 1}</span>
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 700 }}>Perfil: {perfil.nombre || 'Sin nombre'}</p>
+                          </div>
+                          {perfil.porQue && (
+                            <p className="text-xs text-slate-500 mb-3 pl-7">
+                              <span style={{ fontWeight: 600 }}>Por qué entrevistarlo/a:</span> {perfil.porQue}
+                            </p>
+                          )}
+
+                          {/* Contexto sugerido por IA */}
+                          <div className="pl-7 mb-3 p-3 bg-violet-50 border border-violet-100 rounded-xl">
+                            <p className="text-xs text-violet-700 mb-1" style={{ fontWeight: 600 }}>✨ Intro sugerida por IA</p>
+                            <p className="text-xs text-violet-600 italic">
+                              "Hola {perfil.nombre ? `[nombre]` : '[nombre]'}, estamos analizando el proceso de {asisData.casoReal ? asisData.casoReal.split(' ').slice(0, 5).join(' ') + '…' : 'la operación'} y quiero entender mejor tu experiencia. Esta conversación es de exploración — no hay respuestas correctas o incorrectas."
+                            </p>
+                          </div>
+
+                          <div className="pl-7 space-y-3">
+                            {perfil.temas.map((tema, tIdx) => (
+                              <div key={tema.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                                <div className="px-3 py-2 bg-slate-50 border-b border-slate-100">
+                                  <p className="text-xs text-slate-700" style={{ fontWeight: 600 }}>Tema {tIdx + 1}: {tema.texto || 'Sin título'}</p>
+                                </div>
+                                <div className="p-3 space-y-1.5">
+                                  {tema.preguntas.filter(q => q.trim()).map((q, qIdx) => (
+                                    <div key={qIdx} className="flex items-start gap-2">
+                                      <span className="text-xs text-indigo-400 shrink-0 mt-0.5" style={{ fontWeight: 600 }}>P{qIdx + 1}.</span>
+                                      <p className="text-xs text-slate-700">{q}</p>
+                                    </div>
+                                  ))}
+                                  {tema.preguntas.filter(q => q.trim()).length === 0 && (
+                                    <p className="text-xs text-slate-300 italic">Sin preguntas definidas para este tema.</p>
+                                  )}
+                                  {/* Pregunta de cierre IA */}
+                                  <div className="flex items-start gap-2 mt-2 pt-2 border-t border-slate-100">
+                                    <span className="text-xs text-violet-400 shrink-0 mt-0.5" style={{ fontWeight: 600 }}>✨</span>
+                                    <p className="text-xs text-violet-500 italic">¿Hay algo sobre {tema.texto ? tema.texto.toLowerCase() : 'este tema'} que yo debería saber y no te pregunté?</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {perfil.temas.length === 0 && (
+                              <p className="text-xs text-slate-300 italic">Este perfil no tiene temas definidos.</p>
+                            )}
+                          </div>
+
+                          {pIdx < bData.perfiles.length - 1 && <div className="mt-4 border-t border-slate-100" />}
+                        </div>
+                      ))}
+
+                      {/* Cierre de la entrevista */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <p className="text-xs text-slate-600 mb-1" style={{ fontWeight: 600 }}>CIERRE SUGERIDO</p>
+                        <p className="text-xs text-slate-500 italic">"Muchas gracias por tu tiempo. Lo que me compartiste es muy valioso para el análisis. ¿Estarías dispuesto/a a una conversación de seguimiento si surge alguna duda puntual?"</p>
+                      </div>
+
+                      <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                        <AlertCircle size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-700">Esta guía es un punto de partida, no un guión rígido. Adapta el orden y el tono según cómo fluya la conversación. Los resultados y evidencias los registras en el <span style={{ fontWeight: 600 }}>Módulo D</span>.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Estado: no generada */}
+                  {!bData.guiaGenerada && (
+                    <div className="p-5 text-center">
+                      <FileText size={24} className="text-slate-200 mx-auto mb-2" />
+                      <p className="text-sm text-slate-400 mb-1" style={{ fontWeight: 500 }}>La guía se generará a partir de tus perfiles y temas</p>
+                      <p className="text-xs text-slate-300">Completa al menos 1 perfil con nombre y 1 tema para habilitarla.</p>
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
+
+              {/* ════════════════════════════════════════
+                  OUTPUT FINAL — RESUMEN MÓDULO B
+              ════════════════════════════════════════ */}
+              {bData.modalidad && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                  <p className="text-xs text-indigo-700 mb-2.5" style={{ fontWeight: 600 }}>📋 Resumen del plan de investigación — Módulo B</p>
+                  <div className="space-y-1.5 text-xs text-indigo-600">
+                    <p>
+                      <span style={{ fontWeight: 600 }}>Objetivo prioritario:</span>{' '}
+                      {bData.objetivos.find(o => o.priorizado && o.texto.trim())?.texto || <span className="text-indigo-300 italic">Sin priorizar</span>}
+                    </p>
+                    <p>
+                      <span style={{ fontWeight: 600 }}>Modalidad:</span>{' '}
+                      {bData.modalidad === 'desk' ? '📊 Desk research (cuantitativo)' : bData.modalidad === 'entrevistas' ? '🗣 Entrevistas (cualitativo)' : '🔄 Ambas modalidades'}
+                    </p>
+                    {(bData.modalidad === 'desk' || bData.modalidad === 'ambas') && bData.deskTemas.trim() && (
+                      <p>
+                        <span style={{ fontWeight: 600 }}>Temas desk:</span>{' '}{bData.deskTemas.slice(0, 80)}{bData.deskTemas.length > 80 ? '…' : ''}
+                      </p>
+                    )}
+                    {(bData.modalidad === 'entrevistas' || bData.modalidad === 'ambas') && (
+                      <p>
+                        <span style={{ fontWeight: 600 }}>Perfiles definidos:</span>{' '}
+                        {bData.perfiles.length > 0 ? bData.perfiles.map(p => p.nombre || 'Sin nombre').join(', ') : <span className="text-indigo-300 italic">Ninguno</span>}
+                      </p>
+                    )}
+                    <p>
+                      <span style={{ fontWeight: 600 }}>Objetivos totales:</span>{' '}
+                      {bData.objetivos.filter(o => o.texto.trim()).length} definido(s) · {bData.objetivos.some(o => o.priorizado && o.texto.trim()) ? '1 priorizado ✅' : <span className="text-amber-600">Ninguno priorizado ⚠️</span>}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Gating + botón */}
               {(() => {
@@ -2115,7 +2568,7 @@ export function Step1Page() {
 
               {/* ════════════════════════════════════════
                   BOTÓN DE AVANCE
-              ════════════════════════════════════════ */}
+              ══════════════════════════════════════��═ */}
               <button
                 onClick={() => semaforo !== 'rojo' && setActiveModule('D')}
                 disabled={semaforo === 'rojo'}
@@ -2173,7 +2626,7 @@ export function Step1Page() {
               </div>
 
               {/* ── Mini-card: Reto actual (Solo lectura) ── */}
-              {cardReto.retoFrase ? (
+              {fichaConfirmada ? (
                 <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -2185,7 +2638,7 @@ export function Step1Page() {
                       <ExternalLink size={10} /> Ver Módulo A
                     </button>
                   </div>
-                  <p className="text-xs text-indigo-800 mb-3" style={{ fontWeight: 500 }}>"{cardReto.retoFrase}"</p>
+                  <p className="text-xs text-indigo-800 mb-3" style={{ fontWeight: 500 }}>{lecturaConsolidada}</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                     {asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex] && (
                       <div>
@@ -2723,8 +3176,8 @@ export function Step1Page() {
                       <p className="text-xs text-slate-700" style={{ fontWeight: 500 }}>
                         {(dData.decisionReto === 'ajusta' || dData.decisionReto === 'cambia') && dData.nuevaVersionReto.trim()
                           ? `"${dData.nuevaVersionReto}"`
-                          : cardReto.retoFrase
-                            ? `"${cardReto.retoFrase}"`
+                          : asisData.casoReal.trim()
+                            ? `"${asisData.casoReal}"`
                             : <span className="italic text-slate-400">Sin definir todavía.</span>
                         }
                       </p>
@@ -2793,7 +3246,7 @@ export function Step1Page() {
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-xs text-indigo-700 space-y-1">
                 <p style={{ fontWeight: 600 }}>Ancla del desafío (de tus módulos anteriores):</p>
                 <p><span style={{ fontWeight: 500 }}>Quiebre:</span> {asisData.quiebre || '—'}</p>
-                <p><span style={{ fontWeight: 500 }}>Métrica principal:</span> {bData.metricas[0]?.nombre || '—'} · {bData.metricas[0]?.baseline || '—'}</p>
+                <p><span style={{ fontWeight: 500 }}>Obj. investigación:</span> {bData.objetivos.find(o => o.priorizado)?.texto?.slice(0, 70) || '—'}</p>
                 <p><span style={{ fontWeight: 500 }}>Visto bueno:</span> {cData.vistoBueno || '—'} · Semáforo: {semaforo}</p>
               </div>
 
