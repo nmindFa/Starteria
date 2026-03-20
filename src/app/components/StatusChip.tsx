@@ -22,6 +22,10 @@ type StatusType =
   | 'Verificada'
   | 'Rechazada'
   | 'Pendiente'
+  | 'Pendiente de convocatoria'
+  | 'Revisión solicitada'
+  | 'Sesión agendada'
+  | 'Comentario enviado'
   | 'Activo'
   | 'Bajo'
   | 'Medio'
@@ -50,6 +54,10 @@ const CONFIG: Record<string, { bg: string; text: string; dot: string; label?: st
   'Verificada':               { bg: 'bg-emerald-50',text: 'text-emerald-700',dot: 'bg-emerald-500' },
   'Rechazada':                { bg: 'bg-red-50',    text: 'text-red-700',   dot: 'bg-red-500' },
   'Pendiente':                { bg: 'bg-amber-50',  text: 'text-amber-700', dot: 'bg-amber-400' },
+  'Pendiente de convocatoria': { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-400' },
+  'Revisión solicitada':      { bg: 'bg-blue-50',   text: 'text-blue-700',  dot: 'bg-blue-500' },
+  'Sesión agendada':          { bg: 'bg-violet-50', text: 'text-violet-700',dot: 'bg-violet-500' },
+  'Comentario enviado':      { bg: 'bg-emerald-50',text: 'text-emerald-700',dot: 'bg-emerald-500' },
   'Activo':                   { bg: 'bg-emerald-50',text: 'text-emerald-700',dot: 'bg-emerald-500' },
   'Bajo':                     { bg: 'bg-emerald-50',text: 'text-emerald-700',dot: 'bg-emerald-500' },
   'Medio':                    { bg: 'bg-amber-50',  text: 'text-amber-700', dot: 'bg-amber-500' },

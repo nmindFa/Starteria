@@ -30,6 +30,32 @@ interface MallaItem {
   id: string; tipo: 'idea' | 'critica' | 'pregunta' | 'hipotesis';
   descripcion: string; evidencia: string; severidad: 'bajo' | 'medio' | 'alto' | '';
 }
+interface EvidenciaItem {
+  id: string; tipo: 'Archivo' | 'Link' | 'Nota'; descripcion: string; fecha: string;
+}
+type CycleDecision = 'mantener' | 'iterar' | 'pivotear' | 'detener' | '';
+interface TestCycle {
+  id: string;
+  nombre: string;
+  estado: string;
+  queValidamos: string;
+  metricaPrincipal: string;
+  criterioDecision: string;
+  contextoPrueba: string;
+  versionProbada: string;
+  evidencias: EvidenciaItem[];
+  bitacora: EventoBitacora[];
+  hallazgos: MallaItem[];
+  resultadoEsperado: string;
+  resultadoObservado: string;
+  aprendizaje: string;
+  decision: CycleDecision;
+  decisionJustificacion: string;
+  siguientePaso: string;
+  siguienteCambio: string;
+  siguienteMetodo: string;
+  siguienteCuando: string;
+}
 interface DeckSlide { titulo: string; bullets: string[] }
 
 // ── Mock / seed data ──────────────────────────────────────────────────────────
@@ -42,7 +68,7 @@ const MOCK_FEEDBACK_S3 = {
   questions: ['¿El perfil de los participantes es representativo del total de casos?'],
   timestamp: '2025-03-01T11:00:00Z',
 };
-const MOCK_EVIDENCIAS = [
+const MOCK_EVIDENCIAS: EvidenciaItem[] = [
   { id: 'e1', tipo: 'Archivo', descripcion: 'Capturas de pantalla del formulario completo', fecha: '2025-02-24' },
   { id: 'e2', tipo: 'Link', descripcion: 'Hoja de seguimiento en Google Sheets', fecha: '2025-02-25' },
   { id: 'e3', tipo: 'Nota', descripcion: 'Observaciones del facilitador durante el piloto', fecha: '2025-02-26' },
@@ -94,6 +120,29 @@ const MOCK_DECK_SLIDES: DeckSlide[] = [
 ];
 
 // ── Helper components ─────────────────────────────────────────────────────────
+const createInitialTestCycle = (): TestCycle => ({
+  id: 'testeo-1',
+  nombre: 'Testeo 1',
+  estado: 'En analisis',
+  queValidamos: MOCK_TESTCARD.hipotesis,
+  metricaPrincipal: 'Tiempo formulario -> accesos activos',
+  criterioDecision: '<=24h en >=80% de los casos procesados',
+  contextoPrueba: '5 empleados nuevos, perfiles estandar y 1 caso con accesos especiales, durante la semana del 24 de febrero.',
+  versionProbada: 'Version base del experimento: formulario unificado en Google Forms con coordinacion manual con TI.',
+  evidencias: MOCK_EVIDENCIAS,
+  bitacora: MOCK_BITACORA,
+  hallazgos: MOCK_MALLA,
+  resultadoEsperado: 'Resolver al menos 4 de 5 casos en menos de 24 horas.',
+  resultadoObservado: '4/5 casos resueltos en menos de 24 horas (80%).',
+  aprendizaje: 'El formulario funciona bien para perfiles estandar, pero los accesos especiales siguen necesitando un camino aparte.',
+  decision: 'iterar',
+  decisionJustificacion: 'Conviene mantener el nucleo del experimento y ajustar el flujo para accesos especiales antes de escalar.',
+  siguientePaso: 'Validar si un flujo especifico para accesos especiales reduce el tiempo de respuesta sin romper la experiencia actual.',
+  siguienteCambio: 'Agregar un campo para accesos especiales y un escalado directo a TI Senior.',
+  siguienteMetodo: 'Repetir el piloto con la misma base, comparando casos estandar versus especiales.',
+  siguienteCuando: 'Proxima semana, con 3 nuevos ingresos que incluyan al menos 1 caso especial.',
+});
+
 function SectionCard({ title, icon: Icon, children, className = '' }: {
   title: string; icon: React.ElementType; children: React.ReactNode; className?: string;
 }) {
@@ -163,42 +212,168 @@ export function Step3Page() {
   // ══════════════════════════════════════════════════════════════════════════
   // MODULE B STATE
   // ══════════════════════════════════════════════════════════════════════════
-  const [evidencias, setEvidencias] = useState(MOCK_EVIDENCIAS);
+  const [testCycles, setTestCycles] = useState<TestCycle[]>([createInitialTestCycle()]);
+  const [activeCycleId, setActiveCycleId] = useState('testeo-1');
+  const [cycleAbiertoId, setCycleAbiertoId] = useState<string | null>('testeo-1');
   const [showAdjuntarOverlay, setShowAdjuntarOverlay] = useState(false);
   const [adjuntarTipo, setAdjuntarTipo] = useState<'archivo' | 'link' | null>(null);
   const [adjuntarDesc, setAdjuntarDesc] = useState('');
-  const [valorMedido, setValorMedido] = useState('(Placeholder) 4/5 casos resueltos en menos de 24 horas (80%)');
   const [observaciones, setObservaciones] = useState('(Placeholder) El formulario funcionó bien para perfiles estándar. Los accesos especiales tardaron más de lo esperado.');
   const [incidencias, setIncidencias] = useState('(Placeholder) 1 caso con accesos especiales — resuelto en 36 horas tras escalar con el líder de TI.');
 
   // S3B_Bitacora
-  const [bitacora, setBitacora] = useState<EventoBitacora[]>(MOCK_BITACORA);
   const [showBitacoraModal, setShowBitacoraModal] = useState(false);
   const [nuevoBit, setNuevoBit] = useState({ fecha: '', hora: '', accion: '', responsable: '', nota: '' });
 
   // S3B_MallaReceptora
-  const [malla, setMalla] = useState<MallaItem[]>(MOCK_MALLA);
   const [showMallaModal, setShowMallaModal] = useState(false);
   const [nuevoMalla, setNuevoMalla] = useState<Omit<MallaItem, 'id'>>({ tipo: 'idea', descripcion: '', evidencia: '', severidad: '' });
-  const [mallaSeccionAbierta, setMallaSeccionAbierta] = useState<string | null>('idea');
+  const [mallaSeccionAbierta, setMallaSeccionAbierta] = useState<string | null>('testeo-1:idea');
 
   // S3B_SiguienteIteracion
-  const [sigIter, setSigIter] = useState({ quePunto: '', queCambia: '', comoPrueba: '', cuando: '' });
   const [showIANextOverlay, setShowIANextOverlay] = useState(false);
   const [iaNextLoading, setIaNextLoading] = useState(false);
   const [iaNextListo, setIaNextListo] = useState(false);
   const [iaNextSelected, setIaNextSelected] = useState<number | null>(null);
 
+  const activeCycle = testCycles.find(cycle => cycle.id === activeCycleId) ?? testCycles[0];
+  const allEvidencias = testCycles.flatMap(cycle => cycle.evidencias);
+  const isCycleComplete = (cycle: TestCycle) =>
+    cycle.evidencias.length >= 1 &&
+    cycle.resultadoObservado.trim().length > 10 &&
+    cycle.aprendizaje.trim().length > 10 &&
+    cycle.decision !== '';
+  const completedCyclesCount = testCycles.filter(isCycleComplete).length;
+  const needsSecondCycle = completedCyclesCount < 2;
+  const moduleBReady = completedCyclesCount >= 2;
+  const evidencias = allEvidencias;
+  const valorMedido = activeCycle?.resultadoObservado ?? '';
+  const bitacora = activeCycle?.bitacora ?? [];
+  const malla = activeCycle?.hallazgos ?? [];
+  const sigIter = {
+    quePunto: activeCycle?.siguientePaso ?? '',
+    queCambia: activeCycle?.siguienteCambio ?? '',
+    comoPrueba: activeCycle?.siguienteMetodo ?? '',
+    cuando: activeCycle?.siguienteCuando ?? '',
+  };
+
+  const updateCycle = (cycleId: string, updater: (cycle: TestCycle) => TestCycle) => {
+    setTestCycles(prev => prev.map(cycle => (cycle.id === cycleId ? updater(cycle) : cycle)));
+  };
+
+  const updateActiveCycle = (updater: (cycle: TestCycle) => TestCycle) => {
+    if (!activeCycle) return;
+    updateCycle(activeCycle.id, updater);
+  };
+
+  const addTestCycle = () => {
+    const nextNumber = testCycles.length + 1;
+    const previousCycle = testCycles[testCycles.length - 1];
+    const newCycle: TestCycle = {
+      id: `testeo-${nextNumber}`,
+      nombre: `Testeo ${nextNumber}`,
+      estado: 'Nuevo',
+      queValidamos: previousCycle?.siguientePaso || previousCycle?.queValidamos || MOCK_TESTCARD.hipotesis,
+      metricaPrincipal: previousCycle?.metricaPrincipal || 'Define la metrica principal de este ciclo',
+      criterioDecision: previousCycle?.criterioDecision || 'Define el umbral para decidir si mantienes, iteras o pivoteas',
+      contextoPrueba: previousCycle?.siguienteCuando || '',
+      versionProbada: previousCycle?.siguienteCambio || 'Describe aqui el ajuste principal respecto al testeo anterior.',
+      evidencias: [],
+      bitacora: [],
+      hallazgos: [],
+      resultadoEsperado: previousCycle?.criterioDecision || '',
+      resultadoObservado: '',
+      aprendizaje: '',
+      decision: '',
+      decisionJustificacion: '',
+      siguientePaso: '',
+      siguienteCambio: '',
+      siguienteMetodo: '',
+      siguienteCuando: '',
+    };
+
+    setTestCycles(prev => [...prev, newCycle]);
+    setActiveCycleId(newCycle.id);
+    setCycleAbiertoId(newCycle.id);
+    setMallaSeccionAbierta(`${newCycle.id}:idea`);
+    toast.success(`${newCycle.nombre} agregado`);
+  };
+
+  const setValorMedido = (value: string) => {
+    updateActiveCycle(cycle => ({ ...cycle, resultadoObservado: value, estado: 'Actualizado' }));
+  };
+
+  const setEvidencias = (updater: EvidenciaItem[] | ((prev: EvidenciaItem[]) => EvidenciaItem[])) => {
+    updateActiveCycle(cycle => ({
+      ...cycle,
+      evidencias: typeof updater === 'function' ? updater(cycle.evidencias) : updater,
+      estado: 'Actualizado',
+    }));
+  };
+
+  const setBitacora = (updater: EventoBitacora[] | ((prev: EventoBitacora[]) => EventoBitacora[])) => {
+    updateActiveCycle(cycle => ({
+      ...cycle,
+      bitacora: typeof updater === 'function' ? updater(cycle.bitacora) : updater,
+      estado: 'Actualizado',
+    }));
+  };
+
+  const setMalla = (updater: MallaItem[] | ((prev: MallaItem[]) => MallaItem[])) => {
+    updateActiveCycle(cycle => ({
+      ...cycle,
+      hallazgos: typeof updater === 'function' ? updater(cycle.hallazgos) : updater,
+      estado: 'Actualizado',
+    }));
+  };
+
+  const setSigIter = (
+    updater:
+      | { quePunto: string; queCambia: string; comoPrueba: string; cuando: string }
+      | ((prev: { quePunto: string; queCambia: string; comoPrueba: string; cuando: string }) => { quePunto: string; queCambia: string; comoPrueba: string; cuando: string })
+  ) => {
+    updateActiveCycle(cycle => {
+      const next = typeof updater === 'function'
+        ? updater({
+            quePunto: cycle.siguientePaso,
+            queCambia: cycle.siguienteCambio,
+            comoPrueba: cycle.siguienteMetodo,
+            cuando: cycle.siguienteCuando,
+          })
+        : updater;
+      return {
+        ...cycle,
+        siguientePaso: next.quePunto,
+        siguienteCambio: next.queCambia,
+        siguienteMetodo: next.comoPrueba,
+        siguienteCuando: next.cuando,
+        estado: 'Actualizado',
+      };
+    });
+  };
+
   // ══════════════════════════════════════════════════════════════════════════
   // MODULE C STATE
   // ══════════════════════════════════════════════════════════════════════════
+  const [comparisonPlan, setComparisonPlan] = useState([
+    { label: 'Hipótesis', value: 'Trae aquí lo que esperabas validar para compararlo con el resultado real.' },
+    { label: 'Señal esperada', value: 'Define qué señal debía aparecer para pensar que el experimento iba bien.' },
+    { label: 'Muestra esperada', value: 'Aclara con quién o con cuántos casos pensabas probar.' },
+    { label: 'Mecanismo de prueba', value: 'Resume el mecanismo o canal que planeabas poner en campo.' },
+  ]);
+  const [comparisonReality, setComparisonReality] = useState([
+    { label: 'Resultado observado', value: 'Trae aquí lo que realmente pasó durante los testeos.' },
+    { label: 'Lectura de la señal', value: 'Resume si la señal esperada apareció, quedó corta o fue mixta.' },
+    { label: 'Muestra real', value: 'Aterriza qué casos, perfiles o usuarios sí participaron.' },
+    { label: 'Observación clave', value: 'Escribe el cambio o fricción más importante que apareció en campo.' },
+  ]);
   const [umbral] = useState('≤24h en ≥80% de casos');
   const [resultado] = useState('24h promedio · 80% (4/5 casos)');
   const [goNoGo, setGoNoGo] = useState<GoNoGoDecision>(null);
   const [aprendizajes, setAprendizajes] = useState([
-    '(Placeholder) El formulario resuelve el 80% de los casos estándar sin intervención manual.',
-    '(Placeholder) Los accesos especiales siguen siendo el cuello de botella — necesitan un proceso separado.',
-    '(Placeholder) El equipo de TI está dispuesto a adoptar el proceso si se automatiza la notificación.',
+    'Resume aquí el principal aprendizaje que dejó el contraste entre lo esperado y lo observado.',
+    'Aclara qué parte del experimento funcionó bien y qué parte sigue necesitando ajuste.',
+    'Escribe la señal más importante que te ayuda a tomar una decisión para el siguiente paso.',
   ]);
   const [hasFeedback, setHasFeedback] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
@@ -211,16 +386,16 @@ export function Step3Page() {
   const [editandoDiag, setEditandoDiag] = useState(false);
   const [diagnostico, setDiagnostico] = useState({
     senales: [
-      '(Placeholder) El 80% de los casos estándar se resuelven en el tiempo esperado.',
-      '(Placeholder) NPS de 82 indica alta aceptación del proceso por parte de los empleados nuevos.',
+      'Escribe aquí las señales favorables que aparecen al comparar el plan con lo que pasó en campo.',
+      'Incluye solo señales que realmente estén sustentadas por la evidencia recogida.',
     ],
     riesgos: [
-      '(Placeholder) Los casos con accesos especiales duplican el tiempo — 20% del volumen total.',
-      '(Placeholder) La dependencia de respuesta manual de TI es un punto de falla.',
+      'Registra aquí las fricciones, riesgos o límites que hoy frenan el experimento.',
+      'Incluye los puntos que podrían hacerte iterar, pivotear o detener la iniciativa.',
     ],
     queFalta: [
-      '(Placeholder) Validar con una muestra mayor (≥10 casos) para confirmar la consistencia.',
-      '(Placeholder) Definir un proceso específico para accesos especiales fuera del catálogo.',
+      'Aclara qué falta validar antes de escalar o cerrar la decisión con más confianza.',
+      'Escribe qué información adicional necesitarías si la evidencia todavía no es suficiente.',
     ],
   });
 
@@ -239,7 +414,7 @@ export function Step3Page() {
   const [showFinalizarDemo, setShowFinalizarDemo] = useState(false);
 
   // Autosave
-  const saveState = useAutosave({ prepChecks, formatoExp, componentes, logistica, instrumentacion, bitacora, malla, sigIter, evidencias, valorMedido, observaciones, goNoGo, aprendizajes, diagnostico });
+  const saveState = useAutosave({ prepChecks, formatoExp, componentes, logistica, instrumentacion, testCycles, activeCycleId, goNoGo, aprendizajes, diagnostico });
 
   // ── Gate ─────────────────────────────────────────────────────────────────────
   if (!project) return <div className="p-6"><p className="text-slate-500">Proyecto no encontrado.</p></div>;
@@ -257,13 +432,25 @@ export function Step3Page() {
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const modules: { id: ModuleId; label: string; completed: boolean }[] = [
     { id: 'A', label: 'A · Plan del experimento', completed: moduloACompleto },
-    { id: 'B', label: 'B · Ejecutar y capturar', completed: evidencias.length >= 1 && valorMedido.trim().length > 10 },
+    { id: 'B', label: 'B · Ejecutar y capturar', completed: moduleBReady },
     { id: 'C', label: 'C · Resultados y decisión', completed: !!goNoGo && hasFeedback },
   ];
 
   const addEvidencia = () => {
-    if (!adjuntarDesc.trim() || !adjuntarTipo) return;
-    setEvidencias(p => [...p, { id: Date.now().toString(), tipo: adjuntarTipo === 'archivo' ? 'Archivo' : 'Link', descripcion: adjuntarDesc.trim(), fecha: new Date().toISOString().split('T')[0] }]);
+    if (!adjuntarDesc.trim() || !adjuntarTipo || !activeCycle) return;
+    updateActiveCycle(cycle => ({
+      ...cycle,
+      evidencias: [
+        ...cycle.evidencias,
+        {
+          id: Date.now().toString(),
+          tipo: adjuntarTipo === 'archivo' ? 'Archivo' : 'Link',
+          descripcion: adjuntarDesc.trim(),
+          fecha: new Date().toISOString().split('T')[0],
+        },
+      ],
+      estado: 'Actualizado',
+    }));
     setAdjuntarDesc(''); setAdjuntarTipo(null); setShowAdjuntarOverlay(false);
     toast.success('Evidencia adjuntada');
   };
@@ -277,19 +464,27 @@ export function Step3Page() {
   };
 
   const addEventoBitacora = () => {
-    if (!nuevoBit.accion.trim()) return;
-    setBitacora(p => [...p, { ...nuevoBit, id: Date.now().toString() }]);
+    if (!nuevoBit.accion.trim() || !activeCycle) return;
+    updateActiveCycle(cycle => ({
+      ...cycle,
+      bitacora: [...cycle.bitacora, { ...nuevoBit, id: Date.now().toString() }],
+      estado: 'Actualizado',
+    }));
     setNuevoBit({ fecha: '', hora: '', accion: '', responsable: '', nota: '' });
     setShowBitacoraModal(false);
     toast.success('Evento registrado');
   };
 
   const addMallaItem = () => {
-    if (!nuevoMalla.descripcion.trim()) return;
-    setMalla(p => [...p, { ...nuevoMalla, id: Date.now().toString() }]);
+    if (!nuevoMalla.descripcion.trim() || !activeCycle) return;
+    updateActiveCycle(cycle => ({
+      ...cycle,
+      hallazgos: [...cycle.hallazgos, { ...nuevoMalla, id: Date.now().toString() }],
+      estado: 'Actualizado',
+    }));
     setNuevoMalla({ tipo: 'idea', descripcion: '', evidencia: '', severidad: '' });
     setShowMallaModal(false);
-    toast.success('Aprendizaje registrado');
+    toast.success('Hallazgo registrado');
   };
 
   // ── Aprobar Step 3 en contexto (muta AppContext para desbloquear Step 4) ────
@@ -305,13 +500,83 @@ export function Step3Page() {
 
   const applyIASugerencia = (idx: number) => {
     const s = IA_SUGERENCIAS_NEXT[idx];
-    setSigIter({ quePunto: s.objetivo, queCambia: s.cambio, comoPrueba: s.evidencia, cuando: `(Placeholder) ${s.duracion}` });
+    if (!activeCycle) return;
+    updateActiveCycle(cycle => ({
+      ...cycle,
+      siguientePaso: s.objetivo,
+      siguienteCambio: s.cambio,
+      siguienteMetodo: s.evidencia,
+      siguienteCuando: s.duracion,
+      estado: 'Actualizado',
+    }));
     setIaNextSelected(idx);
     setShowIANextOverlay(false);
     toast.success('Sugerencia aplicada a los campos');
   };
 
-  const mallaByTipo = (tipo: string) => malla.filter(m => m.tipo === tipo);
+  const mallaByTipo = (cycleOrTipo: TestCycle | string, maybeTipo?: string) => {
+    if (typeof cycleOrTipo === 'string') {
+      return malla.filter(item => item.tipo === cycleOrTipo);
+    }
+    return cycleOrTipo.hallazgos.filter(item => item.tipo === maybeTipo);
+  };
+  const decisionOptions: { value: CycleDecision; label: string }[] = [
+    { value: 'mantener', label: 'Mantener' },
+    { value: 'iterar', label: 'Iterar' },
+    { value: 'pivotear', label: 'Pivotear' },
+    { value: 'detener', label: 'Detener' },
+  ];
+  const cycleStatusLabel = (cycle: TestCycle) => {
+    if (cycle.decision) return `Decision: ${decisionOptions.find(option => option.value === cycle.decision)?.label ?? cycle.decision}`;
+    if (cycle.evidencias.length > 0 || cycle.hallazgos.length > 0) return 'En curso';
+    return cycle.estado || 'Pendiente';
+  };
+  const cleanVisibleText = (text: string) => text.replace(/\(Placeholder\)\s*/g, '').replace(/\s+/g, ' ').trim();
+  const buildResultsFromTests = () => {
+    const completedCycles = testCycles.filter(isCycleComplete);
+    const baseCycle = completedCycles[0] ?? testCycles[0];
+    const latestCycle = completedCycles[completedCycles.length - 1] ?? testCycles[testCycles.length - 1];
+    const totalEvidence = testCycles.reduce((sum, cycle) => sum + cycle.evidencias.length, 0);
+    const totalFindings = testCycles.reduce((sum, cycle) => sum + cycle.hallazgos.length, 0);
+    const decisionsSeen = completedCycles.map(cycle => cycle.decision).filter(Boolean).join(' → ');
+
+    setComparisonPlan([
+      { label: 'Hipótesis', value: cleanVisibleText(baseCycle?.queValidamos || MOCK_TESTCARD.hipotesis) || 'Aún no hay una hipótesis clara registrada en los testeos.' },
+      { label: 'Señal esperada', value: cleanVisibleText(baseCycle?.criterioDecision || umbral) || 'Aún no definiste la señal esperada para leer el resultado.' },
+      { label: 'Muestra esperada', value: cleanVisibleText(baseCycle?.contextoPrueba || 'Revisa la muestra planeada desde el testeo inicial.') },
+      { label: 'Mecanismo de prueba', value: cleanVisibleText(baseCycle?.versionProbada || MOCK_TESTCARD.experimento) || 'Aún no queda claro qué mecanismo pusiste a prueba.' },
+    ]);
+
+    setComparisonReality([
+      { label: 'Resultado observado', value: cleanVisibleText(latestCycle?.resultadoObservado || 'Todavía no hay un resultado observado consolidado.') },
+      { label: 'Lectura de la señal', value: cleanVisibleText(latestCycle?.decisionJustificacion || 'Todavía falta interpretar si la señal observada fue suficiente.') },
+      { label: 'Muestra real', value: cleanVisibleText(latestCycle?.contextoPrueba || 'Todavía no queda clara la muestra real utilizada.') },
+      { label: 'Observación clave', value: cleanVisibleText(latestCycle?.aprendizaje || 'Todavía falta sintetizar la observación más importante.') },
+    ]);
+
+    setDiagnostico({
+      senales: [
+        cleanVisibleText(latestCycle?.resultadoObservado || ''),
+        totalEvidence > 0 ? `Ya reuniste ${totalEvidence} evidencias y ${totalFindings} hallazgos de campo para sustentar la lectura.` : 'Todavía falta reunir evidencia visible desde los testeos.',
+      ].filter(Boolean),
+      riesgos: [
+        cleanVisibleText(latestCycle?.hallazgos.find(item => item.tipo === 'critica')?.descripcion || ''),
+        completedCycles.length < 2 ? 'Todavía falta contraste entre al menos dos testeos completos.' : '',
+      ].filter(Boolean),
+      queFalta: [
+        completedCycles.length < 2 ? 'Completa al menos dos testeos sólidos antes de cerrar conclusiones.' : '',
+        latestCycle?.decision ? '' : 'Aún falta una decisión clara basada en la evidencia más reciente.',
+      ].filter(Boolean),
+    });
+
+    setAprendizajes([
+      cleanVisibleText(baseCycle?.aprendizaje || ''),
+      cleanVisibleText(latestCycle?.aprendizaje || ''),
+      decisionsSeen ? `La secuencia de decisiones observada hasta ahora fue: ${decisionsSeen}.` : 'Todavía falta definir una decisión clara basada en los resultados.',
+    ].filter(Boolean));
+
+    toast.success('Resultados del testeo traídos al módulo C');
+  };
 
   const MALLA_SECCIONES = [
     { key: 'idea', label: 'Ideas interesantes observadas', color: 'emerald', icon: Sparkles },
@@ -583,6 +848,433 @@ export function Step3Page() {
               <div>
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>B · Ejecutar y capturar evidencia</h1>
+                  <StatusChip status={moduleBReady ? 'Completado' : 'En progreso'} size="sm" />
+                </div>
+                <p className="text-sm text-slate-500">Aquí ejecutas el acercamiento en campo, recoges evidencia, lees la señal y decides qué mejorar en el siguiente testeo.</p>
+              </div>
+
+              <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-5">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm text-indigo-900" style={{ fontWeight: 700 }}>Bitácora de aprendizaje en campo</p>
+                    <p className="text-sm text-slate-600 mt-1 max-w-2xl">Usa este espacio para registrar cada testeo como un ciclo corto de aprendizaje: qué quisiste validar, con quién lo probaste, qué señal viste, qué aprendiste y qué harás después.</p>
+                  </div>
+                  <button
+                    onClick={addTestCycle}
+                    className="flex items-center gap-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 rounded-xl border border-indigo-600 transition-colors shadow-sm"
+                    style={{ fontWeight: 600 }}
+                  >
+                    <Plus size={15} /> Agregar testeo
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {[
+                    '1. Qué vas a validar',
+                    '2. Con quién lo probarás',
+                    '3. Qué señal observarás',
+                    '4. Qué hallazgos aparecieron',
+                    '5. Qué aprendiste',
+                    '6. Qué cambiarás después',
+                  ].map(step => (
+                    <span key={step} className="text-xs px-3 py-1.5 rounded-full bg-white border border-indigo-100 text-slate-600" style={{ fontWeight: 500 }}>
+                      {step}
+                    </span>
+                  ))}
+                </div>
+                <div className={`mt-4 rounded-xl border px-4 py-3 ${needsSecondCycle ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <p className={`text-xs ${needsSecondCycle ? 'text-amber-800' : 'text-emerald-800'}`} style={{ fontWeight: 600 }}>
+                    {needsSecondCycle
+                      ? 'Necesitas al menos 2 testeos completos para contrastar resultados antes de analizar conclusiones.'
+                      : 'Ya tienes 2 o más testeos completos. Puedes seguir iterando o pasar a analizar resultados.'}
+                  </p>
+                </div>
+              </div>
+
+              {testCycles.map((cycle, cycleIndex) => {
+                const open = cycleAbiertoId === cycle.id;
+                const cycleReady = isCycleComplete(cycle);
+                return (
+                  <div key={cycle.id} className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                    <button
+                      onClick={() => {
+                        setActiveCycleId(cycle.id);
+                        setCycleAbiertoId(open ? null : cycle.id);
+                      }}
+                      className="w-full px-4 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-3 text-left"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm text-slate-900" style={{ fontWeight: 600 }}>{cycle.nombre}</p>
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full ${cycleReady ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`} style={{ fontWeight: 600 }}>
+                            {cycleStatusLabel(cycle)}
+                          </span>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-500" style={{ fontWeight: 600 }}>
+                            {cycleIndex === 0 ? 'Primer acercamiento' : 'Iteración'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">{cycle.queValidamos || 'Define aquí el foco de este ciclo.'}</p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          <span className="text-[11px] px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500">
+                            Muestra: {cycle.contextoPrueba || 'Define con quién y en qué alcance se probó'}
+                          </span>
+                          <span className="text-[11px] px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500">
+                            Métrica: {cycle.metricaPrincipal || 'Define qué observarás'}
+                          </span>
+                        </div>
+                      </div>
+                      {open ? <ChevronUp size={16} className="text-slate-400 shrink-0" /> : <ChevronDown size={16} className="text-slate-400 shrink-0" />}
+                    </button>
+
+                    {open && (
+                      <div className="p-4 space-y-4">
+                        <SectionCard title="Qué quisimos validar" icon={Target}>
+                          <p className="text-xs text-slate-400 mb-3">Escribe en simple qué querías comprobar, con quién lo probaste y qué señal esperabas ver para pensar que iba bien.</p>
+                          <div className="grid gap-3">
+                            {[
+                              { field: 'queValidamos', label: '¿Qué quisimos validar en este acercamiento?', value: cycle.queValidamos, rows: 2, placeholder: 'Ej. Queríamos ver si el nuevo flujo reducía tiempos en casos especiales.' },
+                              { field: 'contextoPrueba', label: '¿A quién y en qué alcance lo probamos?', value: cycle.contextoPrueba, rows: 2, placeholder: 'Ej. 3 ingresos nuevos, 1 caso especial, durante la primera semana.' },
+                              { field: 'metricaPrincipal', label: '¿Qué observamos para saber si funcionó?', value: cycle.metricaPrincipal, rows: 2, placeholder: 'Ej. Tiempo desde la solicitud hasta accesos activos.' },
+                              { field: 'criterioDecision', label: '¿Qué resultado esperábamos ver?', value: cycle.criterioDecision, rows: 2, placeholder: 'Ej. Resolver al menos 80% de los casos en menos de 24 horas.' },
+                            ].map(item => (
+                              <div key={item.field}>
+                                <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>{item.label}</label>
+                                <textarea
+                                  value={item.value}
+                                  onChange={e => updateCycle(cycle.id, current => ({ ...current, [item.field]: e.target.value, estado: 'Actualizado' } as TestCycle))}
+                                  rows={item.rows}
+                                  placeholder={item.placeholder}
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </SectionCard>
+
+                        <SectionCard title={cycleIndex === 0 ? 'Qué mecanismo pusimos a prueba' : 'Qué cambió respecto al testeo anterior'} icon={Edit2}>
+                          <p className="text-xs text-slate-400 mb-3">
+                            {cycleIndex === 0
+                              ? 'Describe de forma breve qué pusiste en campo por primera vez.'
+                              : 'Resume qué ajustaste en este acercamiento para que se entienda la iteración.'}
+                          </p>
+                          <textarea
+                            value={cycle.versionProbada}
+                            onChange={e => updateCycle(cycle.id, current => ({ ...current, versionProbada: e.target.value, estado: 'Actualizado' }))}
+                            rows={2}
+                            placeholder={cycleIndex === 0 ? 'Ej. Probamos un formulario unificado conectado al equipo de TI.' : 'Ej. Agregamos un flujo especial para accesos fuera del catálogo.'}
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+
+                          <div className="mt-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-sm text-slate-700" style={{ fontWeight: 500 }}>Registro rápido del ciclo</p>
+                              <button
+                                onClick={() => {
+                                  setActiveCycleId(cycle.id);
+                                  setShowBitacoraModal(true);
+                                }}
+                                className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
+                                style={{ fontWeight: 500 }}
+                              >
+                                <Plus size={12} /> Registrar evento
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              {cycle.bitacora.length === 0 && <p className="text-xs text-slate-400">Todavía no registras acciones dentro de este testeo.</p>}
+                              {cycle.bitacora.map((event, eventIndex) => (
+                                <div key={event.id} className="flex gap-3 rounded-xl border border-slate-200 p-3 group">
+                                  <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] shrink-0" style={{ fontWeight: 700 }}>{eventIndex + 1}</div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <p className="text-sm text-slate-800" style={{ fontWeight: 500 }}>{event.accion}</p>
+                                      <button
+                                        onClick={() => updateCycle(cycle.id, current => ({ ...current, bitacora: current.bitacora.filter(item => item.id !== event.id), estado: 'Actualizado' }))}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                      >
+                                        <X size={12} className="text-slate-300 hover:text-red-400" />
+                                      </button>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1">{event.fecha}{event.hora ? ` · ${event.hora}` : ''}{event.responsable ? ` · ${event.responsable}` : ''}</p>
+                                    {event.nota && <p className="text-xs text-slate-500 mt-1 italic">{event.nota}</p>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </SectionCard>
+
+                        <SectionCard title="Evidencia y hallazgos de campo" icon={Paperclip}>
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-xs text-slate-500">Adjunta solo la evidencia de este acercamiento y registra lo que viste en campo.</p>
+                            <button
+                              onClick={() => {
+                                setActiveCycleId(cycle.id);
+                                setShowAdjuntarOverlay(true);
+                              }}
+                              className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
+                              style={{ fontWeight: 500 }}
+                            >
+                              <Paperclip size={12} /> Adjuntar evidencia
+                            </button>
+                          </div>
+                          <div className="border border-slate-200 rounded-xl overflow-hidden">
+                            <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100 text-xs text-slate-400" style={{ fontWeight: 600 }}>
+                              <span className="col-span-2">Tipo</span><span className="col-span-7">Descripcion</span><span className="col-span-3">Fecha</span>
+                            </div>
+                            {cycle.evidencias.map(ev => (
+                              <div key={ev.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors group">
+                                <div className="col-span-2 flex items-start">
+                                  <span className={`text-xs px-1.5 py-0.5 rounded ${ev.tipo === 'Archivo' ? 'bg-slate-100 text-slate-600' : ev.tipo === 'Link' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-700'}`} style={{ fontWeight: 500 }}>{ev.tipo}</span>
+                                </div>
+                                <p className="col-span-7 text-xs text-slate-700 self-center">{ev.descripcion}</p>
+                                <div className="col-span-3 flex items-center justify-between">
+                                  <p className="text-xs text-slate-400">{ev.fecha}</p>
+                                  <button
+                                    onClick={() => updateCycle(cycle.id, current => ({ ...current, evidencias: current.evidencias.filter(item => item.id !== ev.id), estado: 'Actualizado' }))}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                  >
+                                    <X size={12} className="text-slate-300 hover:text-red-400" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            {cycle.evidencias.length === 0 && <div className="px-4 py-8 text-center text-xs text-slate-400">Todavía no hay evidencias. Adjunta archivos, links o notas de este testeo.</div>}
+                          </div>
+                        </SectionCard>
+
+                        <div className="border border-slate-200 rounded-xl overflow-hidden">
+                          <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Sparkles size={14} className="text-violet-500" />
+                              <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Hallazgos de campo</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setActiveCycleId(cycle.id);
+                                setShowMallaModal(true);
+                              }}
+                              className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 px-2 py-1 bg-violet-50 rounded-lg border border-violet-200 transition-colors"
+                              style={{ fontWeight: 500 }}
+                            >
+                              <Plus size={11} /> Agregar hallazgo
+                            </button>
+                          </div>
+                          <div className="px-4 py-3 border-b border-slate-100 bg-white">
+                            <p className="text-xs text-slate-500">Aquí separas lo observado en campo: ideas, fricciones, preguntas nuevas y mejoras sugeridas.</p>
+                          </div>
+                          <div className="divide-y divide-slate-50">
+                            {MALLA_SECCIONES.map(({ key, label, color, icon: Icon }) => {
+                              const items = mallaByTipo(cycle, key);
+                              const sectionId = `${cycle.id}:${key}`;
+                              const openSection = mallaSeccionAbierta === sectionId;
+                              return (
+                                <div key={sectionId}>
+                                  <button
+                                    onClick={() => setMallaSeccionAbierta(openSection ? null : sectionId)}
+                                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${colorMap[color].split(' ')[0]}`}>
+                                        <Icon size={12} className={colorMap[color].split(' ')[2]} />
+                                      </div>
+                                      <span className="text-sm text-slate-700" style={{ fontWeight: 500 }}>{label}</span>
+                                      <span className={`text-xs px-1.5 py-0.5 rounded-full ml-1 ${colorMap[color]}`} style={{ fontWeight: 600 }}>{items.length}</span>
+                                    </div>
+                                    {openSection ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+                                  </button>
+                                  {openSection && (
+                                    <div className="px-4 pb-3 space-y-2">
+                                      {items.length === 0 && <p className="text-xs text-slate-400 italic">Sin registros aún. Agrega lo que observaste en este testeo.</p>}
+                                      {items.map(item => (
+                                        <div key={item.id} className={`flex items-start gap-2 p-2.5 rounded-xl border ${colorMap[color]} group`}>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-slate-700">{item.descripcion}</p>
+                                            {item.severidad && (
+                                              <span className={`text-xs px-1.5 py-0.5 rounded mt-1 inline-block ${severidadMap[item.severidad]}`} style={{ fontWeight: 500 }}>
+                                                Impacto {item.severidad}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <button
+                                            onClick={() => updateCycle(cycle.id, current => ({ ...current, hallazgos: current.hallazgos.filter(entry => entry.id !== item.id), estado: 'Actualizado' }))}
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                          >
+                                            <X size={11} className="text-slate-300 hover:text-red-400" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <SectionCard title="Lectura del resultado" icon={TrendingUp}>
+                          <div className="grid gap-3">
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>Señal esperada</label>
+                              <textarea
+                                value={cycle.resultadoEsperado}
+                                onChange={e => updateCycle(cycle.id, current => ({ ...current, resultadoEsperado: e.target.value, estado: 'Actualizado' }))}
+                                rows={2}
+                                placeholder="Ej. Esperábamos resolver 4 de 5 casos en menos de 24 horas."
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>¿Qué pasó realmente?</label>
+                              <textarea
+                                value={cycle.resultadoObservado}
+                                onChange={e => updateCycle(cycle.id, current => ({ ...current, resultadoObservado: e.target.value, estado: 'Actualizado' }))}
+                                rows={2}
+                                placeholder="Ej. Observamos 4 de 5 casos resueltos en menos de 24 horas."
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                              />
+                            </div>
+                          </div>
+                        </SectionCard>
+
+                        <SectionCard title="Aprendizaje del testeo" icon={BookOpen}>
+                          <p className="text-xs text-slate-400 mb-3">No repitas solo lo que viste. Escribe la interpretación útil que te ayuda a decidir qué sostener, qué ajustar o qué descartar.</p>
+                          <textarea
+                            value={cycle.aprendizaje}
+                            onChange={e => updateCycle(cycle.id, current => ({ ...current, aprendizaje: e.target.value, estado: 'Actualizado' }))}
+                            rows={3}
+                            placeholder="Ej. El flujo base funciona, pero sigue fallando cuando la solicitud depende de una aprobacion especial."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </SectionCard>
+
+                        <SectionCard title="Decisión y siguiente paso" icon={Zap}>
+                          <p className="text-xs text-slate-400 mb-3">Cierra este acercamiento con una decisión clara y deja escrito qué necesitas validar o mejorar en el siguiente testeo.</p>
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {decisionOptions.map(option => (
+                              <button
+                                key={option.value}
+                                onClick={() => updateCycle(cycle.id, current => ({ ...current, decision: option.value, estado: 'Actualizado' }))}
+                                className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${cycle.decision === option.value ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+                                style={{ fontWeight: cycle.decision === option.value ? 600 : 400 }}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                          <textarea
+                            value={cycle.decisionJustificacion}
+                            onChange={e => updateCycle(cycle.id, current => ({ ...current, decisionJustificacion: e.target.value, estado: 'Actualizado' }))}
+                            rows={2}
+                            placeholder="Explica por que mantienes, iteras, pivoteas o detienes este acercamiento."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </SectionCard>
+
+                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 space-y-4">
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Siguiente paso</p>
+                              <p className="text-xs text-slate-400 mt-0.5 max-w-sm">Conecta este aprendizaje con el próximo acercamiento: qué vas a volver a validar, qué ajustarás y cómo lo probarás mejor.</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setActiveCycleId(cycle.id);
+                                setShowIANextOverlay(true);
+                                if (!iaNextListo) { setIaNextLoading(true); setTimeout(() => { setIaNextLoading(false); setIaNextListo(true); }, 1800); }
+                              }}
+                              className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 transition-colors shrink-0"
+                              style={{ fontWeight: 500 }}
+                            >
+                              <Sparkles size={12} /> Definir que sigue con IA
+                            </button>
+                          </div>
+                          {iaNextSelected !== null && activeCycleId === cycle.id && (
+                            <div className="flex items-center gap-2 p-2 bg-violet-50 border border-violet-100 rounded-xl text-xs text-violet-700">
+                              <CheckCircle2 size={12} className="shrink-0 text-violet-500" />
+                              Sugerencia IA aplicada: <span style={{ fontWeight: 600 }}>{IA_SUGERENCIAS_NEXT[iaNextSelected].titulo}</span>
+                            </div>
+                          )}
+                          <div className="space-y-3">
+                            {[
+                              { field: 'siguientePaso', label: '¿Qué conviene validar ahora?', placeholder: 'Ej. Confirmar si el nuevo flujo reduce tiempos en casos especiales.' },
+                              { field: 'siguienteCambio', label: '¿Qué cambiaremos para el siguiente acercamiento?', placeholder: 'Ej. Agregar campo y escalado específico para accesos especiales.' },
+                              { field: 'siguienteMetodo', label: '¿Cómo lo volveremos a probar?', placeholder: 'Ej. Misma base, nueva muestra y comparación separada por tipo de caso.' },
+                              { field: 'siguienteCuando', label: '¿Cuándo o en qué ventana lo probaremos?', placeholder: 'Ej. Semana del 10 de marzo con 3 nuevos ingresos.' },
+                            ].map(item => (
+                              <div key={item.field}>
+                                <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>{item.label}</label>
+                                <textarea
+                                  value={(cycle as unknown as Record<string, string>)[item.field] ?? ''}
+                                  onChange={e => updateCycle(cycle.id, current => ({ ...current, [item.field]: e.target.value, estado: 'Actualizado' } as TestCycle))}
+                                  rows={2}
+                                  placeholder={item.placeholder}
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className={`rounded-2xl border px-4 py-4 ${testCycles.length === cycleIndex + 1 ? 'border-indigo-200 bg-indigo-50' : 'border-slate-200 bg-slate-50'}`}>
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div className="max-w-xl">
+                              <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                                {testCycles.length === cycleIndex + 1
+                                  ? `Continúa con ${`Testeo ${cycleIndex + 2}`}`
+                                  : 'Ya tienes un siguiente testeo creado'}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {testCycles.length === cycleIndex + 1
+                                  ? 'Ya cerraste este acercamiento. Ahora crea el siguiente testeo para probar el ajuste y comparar lo aprendido.'
+                                  : 'Este ciclo ya tiene continuidad. Usa el siguiente testeo para contrastar si el cambio mejora la señal observada.'}
+                              </p>
+                              {completedCyclesCount < 2 && cycleIndex === 0 && (
+                                <p className="text-xs text-amber-700 mt-2" style={{ fontWeight: 600 }}>
+                                  Necesitas al menos 2 testeos completos para poder analizar resultados con mayor claridad.
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (testCycles.length === cycleIndex + 1) {
+                                  addTestCycle();
+                                } else {
+                                  const nextCycle = testCycles[cycleIndex + 1];
+                                  if (!nextCycle) return;
+                                  setActiveCycleId(nextCycle.id);
+                                  setCycleAbiertoId(nextCycle.id);
+                                }
+                              }}
+                              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-colors ${testCycles.length === cycleIndex + 1 ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'}`}
+                              style={{ fontWeight: 600 }}
+                            >
+                              <Plus size={14} />
+                              {testCycles.length === cycleIndex + 1 ? `Crear Testeo ${cycleIndex + 2}` : `Ir a Testeo ${cycleIndex + 2}`}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              <button
+                onClick={() => { toast.success('Ciclos guardados'); setActiveModule('C'); }}
+                disabled={!moduleBReady}
+                className={`w-full rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors ${moduleBReady ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                style={{ fontWeight: 500 }}>
+                {moduleBReady
+                  ? <>Modulo B listo para analizar resultados <ChevronRight size={15} /></>
+                  : <><AlertCircle size={14} /> Completa al menos 2 testeos con evidencia, resultado, aprendizaje y decision</>}
+              </button>
+            </div>
+          )}
+
+          {false && activeModule === 'B' && (
+            <div className="space-y-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>B · Ejecutar y capturar evidencia</h1>
                   <StatusChip status={evidencias.length >= 1 && valorMedido.trim().length > 10 ? 'Completado' : 'En progreso'} size="sm" />
                 </div>
                 <p className="text-sm text-slate-500">Bitácora operativa, evidencias, malla de aprendizajes y siguiente iteración.</p>
@@ -791,22 +1483,32 @@ export function Step3Page() {
                   <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>C · Resultados y decisión</h1>
                   <StatusChip status={goNoGo && hasFeedback ? 'Completado' : 'En progreso'} size="sm" />
                 </div>
-                <p className="text-sm text-slate-500">Compara plan vs realidad, revisa el diagnóstico IA, toma una decisión y prepara el relato para Step 4.</p>
+                <p className="text-sm text-slate-500">Compara lo que planeabas con lo que pasó en campo, interpreta la evidencia y cierra con una decisión clara para pasar al Step 4.</p>
               </div>
 
               {/* S3C_Comparativo ─────────────────────────────────────────────── */}
-              <SectionCard title="Comparativo: Plan (Step 2) vs Real (campo)" icon={TrendingUp}>
-                <p className="text-xs text-slate-400 mb-3">Los datos de "Lo que esperábamos" vienen pre-cargados del Test Card del Step 2 (solo visual).</p>
+              <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-5">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="max-w-2xl">
+                    <p className="text-sm text-violet-900" style={{ fontWeight: 700 }}>Compara, interpreta y decide</p>
+                    <p className="text-sm text-slate-600 mt-1">Primero trae los resultados desde los testeos, luego interpreta qué significan y cierra con una decisión que deje listo el relato final.</p>
+                  </div>
+                  <button
+                    onClick={buildResultsFromTests}
+                    className="flex items-center gap-2 text-sm text-white bg-violet-600 hover:bg-violet-700 px-4 py-2.5 rounded-xl border border-violet-600 transition-colors shadow-sm"
+                    style={{ fontWeight: 600 }}>
+                    <Sparkles size={15} /> Traer resultados del testeo
+                  </button>
+                </div>
+              </div>
+
+              <SectionCard title="Plan vs realidad" icon={TrendingUp}>
+                <p className="text-xs text-slate-400 mb-3">Mira lado a lado lo que esperabas ver y lo que realmente ocurrió. Si ya corriste testeos, puedes traer esa base con el botón superior.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>LO QUE ESPERÁBAMOS</p>
                     <div className="space-y-2">
-                      {[
-                        { label: 'Hipótesis', value: 'Reducir tiempo de alta TI de 7 días a ≤24h en 80% de casos.' },
-                        { label: 'Umbral de éxito', value: '≤24h en ≥80% de casos procesados.' },
-                        { label: 'Muestra', value: '5 empleados nuevos — perfiles estándar.' },
-                        { label: 'Método', value: 'Google Forms + notificación a TI.' },
-                      ].map(({ label, value }) => (
+                      {comparisonPlan.map(({ label, value }) => (
                         <div key={label} className="p-2.5 bg-blue-50 border border-blue-100 rounded-xl">
                           <p className="text-xs text-blue-400 mb-0.5" style={{ fontWeight: 600 }}>{label}</p>
                           <p className="text-xs text-blue-800">{value}</p>
@@ -817,12 +1519,7 @@ export function Step3Page() {
                   <div>
                     <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>LO QUE PASÓ</p>
                     <div className="space-y-2">
-                      {[
-                        { label: 'Resultado real', value: '4/5 casos en ≤24h (80% — umbral alcanzado). 1 caso especial: 36h.' },
-                        { label: 'Umbral real', value: '80% alcanzado (justo en el límite).' },
-                        { label: 'Muestra real', value: '5 empleados — 4 estándar, 1 con accesos especiales.' },
-                        { label: 'Observación clave', value: 'Casos especiales duplican el tiempo — 20% del volumen.' },
-                      ].map(({ label, value }) => (
+                      {comparisonReality.map(({ label, value }) => (
                         <div key={label} className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
                           <p className="text-xs text-emerald-500 mb-0.5" style={{ fontWeight: 600 }}>{label}</p>
                           <p className="text-xs text-emerald-800">{value}</p>
@@ -834,12 +1531,12 @@ export function Step3Page() {
               </SectionCard>
 
               {/* Comparación vs umbral (existente) ─────────────────────────────── */}
-              <SectionCard title="Comparación vs umbral" icon={Target}>
+              <SectionCard title="Lectura rápida del resultado" icon={Target}>
                 <div className="grid grid-cols-3 gap-4">
                   {[
-                    { label: 'Umbral go/no-go', value: umbral },
-                    { label: 'Resultado obtenido', value: resultado },
-                    { label: 'Estado', value: 'Go', chip: true, chipColor: 'bg-emerald-100 text-emerald-700' },
+                    { label: 'Señal esperada', value: comparisonPlan[1]?.value || umbral },
+                    { label: 'Resultado observado', value: comparisonReality[0]?.value || resultado },
+                    { label: 'Lectura actual', value: goNoGo ?? 'Aún sin decidir', chip: true, chipColor: goNoGo === 'Go' ? 'bg-emerald-100 text-emerald-700' : goNoGo === 'Iterar' ? 'bg-amber-100 text-amber-700' : goNoGo === 'No-Go' ? 'bg-red-100 text-red-700' : goNoGo === 'Pivote' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600' },
                   ].map(({ label, value, chip, chipColor }) => (
                     <div key={label} className="text-center">
                       <p className="text-xs text-slate-400 mb-1" style={{ fontWeight: 500 }}>{label}</p>
@@ -858,20 +1555,20 @@ export function Step3Page() {
                 <div className="px-4 py-3 border-b border-violet-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Sparkles size={14} className="text-violet-500" />
-                    <p className="text-sm text-violet-800" style={{ fontWeight: 600 }}>Diagnóstico preliminar IA</p>
+                    <p className="text-sm text-violet-800" style={{ fontWeight: 600 }}>Interpretación inicial de resultados</p>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-violet-200 text-violet-700" style={{ fontWeight: 600 }}>Editable</span>
                   </div>
                   <button onClick={() => setEditandoDiag(p => !p)}
                     className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-800 px-2 py-1 bg-white border border-violet-200 rounded-lg transition-colors"
                     style={{ fontWeight: 500 }}>
-                    <Edit2 size={11} /> {editandoDiag ? 'Guardar' : 'Editar diagnóstico'}
+                    <Edit2 size={11} /> {editandoDiag ? 'Guardar' : 'Editar interpretación'}
                   </button>
                 </div>
                 <div className="px-4 py-4 space-y-3">
                   {([
-                    { key: 'senales' as const, label: '✅ Señales positivas', color: 'text-emerald-700' },
-                    { key: 'riesgos' as const, label: '⚠️ Riesgos / fricciones', color: 'text-amber-700' },
-                    { key: 'queFalta' as const, label: '🔍 Qué falta validar', color: 'text-blue-700' },
+                    { key: 'senales' as const, label: 'Qué señales favorables aparecen', color: 'text-emerald-700' },
+                    { key: 'riesgos' as const, label: 'Qué riesgos o fricciones aparecen', color: 'text-amber-700' },
+                    { key: 'queFalta' as const, label: 'Qué falta validar todavía', color: 'text-blue-700' },
                   ]).map(({ key, label, color }) => (
                     <div key={key}>
                       <p className={`text-xs mb-1.5 ${color}`} style={{ fontWeight: 600 }}>{label}</p>
@@ -907,6 +1604,7 @@ export function Step3Page() {
               {/* Aprendizajes clave (existente) ──────────────────────────────── */}
               <div>
                 <p className="text-sm text-slate-700 mb-2" style={{ fontWeight: 500 }}>Aprendizajes clave</p>
+                <p className="text-xs text-slate-400 mb-3">No repitas solo hallazgos de campo. Resume qué aprendiste de verdad al comparar lo esperado con lo observado.</p>
                 <div className="space-y-2">
                   {aprendizajes.map((a, i) => (
                     <div key={i} className="flex items-start gap-3">
@@ -924,8 +1622,12 @@ export function Step3Page() {
 
               {/* Decisión (existente + Pivote) ───────────────────────────────── */}
               <div>
-                <p className="text-sm text-slate-700 mb-2" style={{ fontWeight: 500 }}>Decisión</p>
-                <p className="text-xs text-slate-400 mb-3">Con base en los resultados y aprendizajes, ¿qué hacemos?</p>
+                <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                  <div>
+                    <p className="text-sm text-slate-700 mb-1" style={{ fontWeight: 600 }}>Decisión final del experimento</p>
+                    <p className="text-xs text-slate-400">Este es el output principal del módulo. La decisión que tomes aquí será la base para construir el relato del Step 4.</p>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {([
                     { key: 'Go' as const, label: '🚀 Go', desc: 'Escalamos', active: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
@@ -964,7 +1666,7 @@ export function Step3Page() {
                         <ul className="space-y-1">
                           {items.map((item, i) => (
                             <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                              <span className="text-slate-300 mt-0.5 shrink-0">·</span>{item}
+                              <span className="text-slate-300 mt-0.5 shrink-0">·</span>{cleanVisibleText(item)}
                             </li>
                           ))}
                         </ul>
@@ -1027,7 +1729,7 @@ export function Step3Page() {
                       </div>
                     </div>
                     <div>
-                      <p className="text-xs text-indigo-600 mb-2" style={{ fontWeight: 600 }}>Bullets para slides (placeholder)</p>
+                      <p className="text-xs text-indigo-600 mb-2" style={{ fontWeight: 600 }}>Bullets sugeridos para slides</p>
                       <ul className="space-y-1">
                         {['(Placeholder) El proceso tardaba 7–21 días · ahora ≤24h en 80% de casos.',
                           '(Placeholder) NPS de 82 — alta aceptación del proceso simplificado.',
@@ -1035,7 +1737,7 @@ export function Step3Page() {
                           '(Placeholder) TI adoptó el proceso — SLA informal establecido.',
                           '(Placeholder) Próximo ciclo: automatización de accesos especiales.'].map((b, i) => (
                           <li key={i} className="flex items-start gap-2 text-xs text-indigo-700">
-                            <span className="text-indigo-300 mt-0.5 shrink-0">·</span>{b}
+                            <span className="text-indigo-300 mt-0.5 shrink-0">·</span>{cleanVisibleText(b)}
                           </li>
                         ))}
                       </ul>
@@ -1448,7 +2150,7 @@ export function Step3Page() {
                           Usar esta
                         </button>
                       </div>
-                      <p className="text-xs text-slate-500">{v.desc}</p>
+                      <p className="text-xs text-slate-500">{cleanVisibleText(v.desc)}</p>
                     </div>
                   ))}
                 </div>
@@ -1484,7 +2186,7 @@ export function Step3Page() {
                 <div className="space-y-3">
                   <div className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 mb-3">
                     <span>ℹ️</span>
-                    <span>Estructura de <span style={{ fontWeight: 600 }}>{MOCK_DECK_SLIDES.length} láminas</span> generada en base a tu experimento. Todos los contenidos son placeholder — edita antes de presentar.</span>
+                    <span>Estructura de <span style={{ fontWeight: 600 }}>{MOCK_DECK_SLIDES.length} láminas</span> generada en base a tu experimento. Revísala y ajústala antes de presentar.</span>
                   </div>
                   {MOCK_DECK_SLIDES.map((slide, i) => (
                     <div key={i} className="border border-slate-200 rounded-xl p-3">
@@ -1546,7 +2248,7 @@ export function Step3Page() {
               <div className="border border-slate-200 rounded-xl p-4 space-y-2">
                 <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>RESUMEN DEL STEP 3 PARA LA SESIÓN</p>
                 {[
-                  { label: 'Decisión tomada', value: goNoGo ?? '(Placeholder) Sin seleccionar aún' },
+                  { label: 'Decisión tomada', value: goNoGo ?? 'Aún sin seleccionar' },
                   { label: 'Evidencias adjuntas', value: `${evidencias.length} evidencias registradas` },
                   { label: 'Aprendizajes', value: `${aprendizajes.length} aprendizajes documentados` },
                 ].map(({ label, value }) => (

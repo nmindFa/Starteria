@@ -49,7 +49,7 @@ export function AuthPage() {
     { label: 'Participante', email: 'participante@starteria.io' },
     { label: 'Mentor', email: 'mentor@starteria.io' },
     { label: 'Admin', email: 'admin@starteria.io' },
-    { label: 'Líder', email: 'lider@starteria.io' },
+    { label: 'Sponsor', email: 'sponsor@starteria.io' },
   ];
 
   return (

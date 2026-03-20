@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-export type Role = 'owner' | 'mentor' | 'admin' | 'leader';
+export type Role = 'owner' | 'mentor' | 'admin' | 'sponsor';
 
 export type Step0Status = 'No iniciado' | 'En progreso' | 'Completado';
 
@@ -49,12 +49,15 @@ export interface Step0Data {
   siMinimo: string[];
 }
 
+export type TeamMemberRole = 'Owner' | 'Editor' | 'Viewer' | 'Sponsor';
+export type TeamMemberStatus = 'Pendiente' | 'Enviado' | 'Activo';
+
 export interface TeamMember {
   id: string;
   name: string;
   email: string;
-  role: 'Owner' | 'Editor' | 'Viewer';
-  status: 'Activo' | 'Pendiente';
+  role: TeamMemberRole;
+  status: TeamMemberStatus;
   initials: string;
 }
 
@@ -105,10 +108,37 @@ export interface FeedbackIA {
 export interface MentorSession {
   id: string;
   mentor: string;
+  mode?: 'meeting' | 'async_review';
   date?: string;
-  status: 'Pendiente agendar' | 'Agendada' | 'Realizada';
+  status: 'Pendiente agendar' | 'Agendada' | 'Pendiente revisión' | 'Realizada';
   result?: 'Aprobado' | 'Iterar' | 'Bloqueado';
   comments?: string;
+}
+
+export type SponsorTouchpointId = 'step0' | 'step2' | 'step4';
+export type SponsorTouchpointStatus =
+  | 'Pendiente de convocatoria'
+  | 'Revisión solicitada'
+  | 'Sesión agendada'
+  | 'Comentario enviado'
+  | 'Cerrado';
+
+export interface SponsorTouchpoint {
+  id: SponsorTouchpointId;
+  title: string;
+  stageLabel: string;
+  status: SponsorTouchpointStatus;
+  date?: string;
+  actionLabel: string;
+}
+
+export interface SponsorComment {
+  id: string;
+  touchpointId: SponsorTouchpointId;
+  authorName: string;
+  authorRole: 'Sponsor';
+  message: string;
+  createdAt: string;
 }
 
 export interface Project {
@@ -122,6 +152,8 @@ export interface Project {
   mentorCredits: number; // POR DEFINIR: cantidad, recarga y qué consume crédito
   steps: Step[];
   team: TeamMember[];
+  sponsorTouchpoints?: SponsorTouchpoint[];
+  sponsorComments?: SponsorComment[];
   evidence: Evidence[];
   createdAt: string;
   lastModified: string;
@@ -148,9 +180,19 @@ interface AppContextType {
   logout: () => void;
   setCurrentProject: (project: Project | null) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
-  createProject: (name: string, description?: string) => Project;
+  createProject: (name: string, description?: string, teamMembers?: TeamMember[]) => Project;
   setUserRole: (role: Role) => void;
   updateStep0: (projectId: string, data: Partial<Step0Data>, status: Step0Status) => void;
+  getProjectMember: (projectId: string, email?: string) => TeamMember | null;
+  canAccessProject: (projectId: string, accessLevel?: 'overview' | 'step' | 'evidence') => boolean;
+  markSponsorInvitationSent: (projectId: string, sponsorEmail: string) => void;
+  acceptSponsorInvitation: (projectId: string) => void;
+  updateSponsorTouchpoint: (
+    projectId: string,
+    touchpointId: SponsorTouchpointId,
+    updates: Partial<SponsorTouchpoint>
+  ) => void;
+  addSponsorComment: (projectId: string, touchpointId: SponsorTouchpointId, message: string) => void;
 }
 
 const MOCK_USERS: Record<string, { user: User; password: string }> = {
@@ -188,18 +230,80 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
       skills: ['Gestión de programas', 'Coaching', 'Facilitación'],
     },
   },
-  'lider@starteria.io': {
+  'sponsor@starteria.io': {
     password: 'demo123',
     user: {
       id: 'u4',
       name: 'Roberto Jiménez',
-      email: 'lider@starteria.io',
-      role: 'leader',
+      email: 'sponsor@starteria.io',
+      role: 'sponsor',
       initials: 'RJ',
       skills: ['Liderazgo', 'Transformación digital'],
     },
   },
 };
+
+const getKnownUserByEmail = (email: string) =>
+  Object.values(MOCK_USERS).find(entry => entry.user.email.toLowerCase() === email.toLowerCase())?.user;
+
+const inferNameFromEmail = (email: string) =>
+  email
+    .split('@')[0]
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map(chunk => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(' ');
+
+const inferInitials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('');
+
+export function createTeamMember(
+  email: string,
+  role: TeamMemberRole,
+  statusOverride?: TeamMemberStatus
+): TeamMember {
+  const normalizedEmail = email.trim().toLowerCase();
+  const knownUser = getKnownUserByEmail(normalizedEmail);
+  const fallbackName = inferNameFromEmail(normalizedEmail);
+
+  return {
+    id: `m${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: knownUser?.name ?? fallbackName,
+    email: normalizedEmail,
+    role,
+    status: statusOverride ?? (knownUser ? 'Activo' : 'Pendiente'),
+    initials: knownUser?.initials ?? inferInitials(fallbackName || normalizedEmail),
+  };
+}
+
+export const DEFAULT_SPONSOR_TOUCHPOINTS: SponsorTouchpoint[] = [
+  {
+    id: 'step0',
+    title: 'Alineamiento inicial',
+    stageLabel: 'Step 0',
+    status: 'Pendiente de convocatoria',
+    actionLabel: 'Confirmar contexto inicial',
+  },
+  {
+    id: 'step2',
+    title: 'Revisión estratégica',
+    stageLabel: 'Cierre Step 2',
+    status: 'Pendiente de convocatoria',
+    actionLabel: 'Revisar definición del problema',
+  },
+  {
+    id: 'step4',
+    title: 'Presentación final',
+    stageLabel: 'Step 4',
+    status: 'Pendiente de convocatoria',
+    actionLabel: 'Preparar decisión final',
+  },
+];
 
 const MOCK_PROJECTS: Project[] = [
   {
@@ -212,6 +316,40 @@ const MOCK_PROJECTS: Project[] = [
     riskLevel: 'Medio',
     mentorCredits: 3,
     step0Status: 'Completado',
+    sponsorTouchpoints: [
+      {
+        id: 'step0',
+        title: 'Alineamiento inicial',
+        stageLabel: 'Step 0',
+        status: 'Cerrado',
+        date: '2025-02-03',
+        actionLabel: 'Validar contexto inicial',
+      },
+      {
+        id: 'step2',
+        title: 'Revisión estratégica',
+        stageLabel: 'Cierre Step 2',
+        status: 'Pendiente de convocatoria',
+        actionLabel: 'Revisar definición del problema',
+      },
+      {
+        id: 'step4',
+        title: 'Presentación final',
+        stageLabel: 'Step 4',
+        status: 'Pendiente de convocatoria',
+        actionLabel: 'Preparar decisión final',
+      },
+    ],
+    sponsorComments: [
+      {
+        id: 'sc-1',
+        touchpointId: 'step0',
+        authorName: 'Roberto Jiménez',
+        authorRole: 'Sponsor',
+        message: 'El problema se entiende. Quiero ver una versión más acotada antes de pasar a solución.',
+        createdAt: '2025-02-03',
+      },
+    ],
     step0Data: {
       nombreParticipante: 'Ana Rodríguez',
       rolArea: 'Gerente de Recursos Humanos · Talento',
@@ -233,9 +371,7 @@ const MOCK_PROJECTS: Project[] = [
         modules: [
           { id: 'A', name: 'Proceso actual', status: 'Completado' },
           { id: 'B', name: 'Medición e impacto', status: 'Completado' },
-          { id: 'C', name: 'Restricciones', status: 'En progreso' },
-          { id: 'D', name: 'Actores y entrevistas', status: 'Bloqueado' },
-          { id: 'S', name: 'Síntesis y revisión de rumbo', status: 'Bloqueado' },
+          { id: 'C', name: 'Captura de informacion y sintesis', status: 'En progreso' },
         ],
         feedbackIA: null,
         mentorSession: null,
@@ -279,6 +415,8 @@ const MOCK_PROJECTS: Project[] = [
       { id: 'm1', name: 'Ana Rodríguez', email: 'participante@starteria.io', role: 'Owner', status: 'Activo', initials: 'AR' },
       { id: 'm2', name: 'Miguel Torres', email: 'miguel@empresa.com', role: 'Editor', status: 'Activo', initials: 'MT' },
       { id: 'm3', name: 'Sofía Vargas', email: 'sofia@empresa.com', role: 'Editor', status: 'Pendiente', initials: 'SV' },
+      { id: 'm3s', name: 'Roberto Jiménez', email: 'sponsor@starteria.io', role: 'Sponsor', status: 'Activo', initials: 'RJ' },
+      { id: 'm3sp', name: 'Sponsor Finanzas', email: 'sponsor-finanzas@empresa.com', role: 'Sponsor', status: 'Pendiente', initials: 'SF' },
     ],
     evidence: [
       { id: 'e1', name: 'Mapa_proceso_actual.pdf', type: 'PDF', size: '2.4 MB', stepRef: 1, moduleRef: 'A', owner: 'Ana Rodríguez', date: '2025-02-15', status: 'Verificada' },
@@ -298,6 +436,32 @@ const MOCK_PROJECTS: Project[] = [
     riskLevel: 'Bajo',
     mentorCredits: 2,
     step0Status: 'Completado',
+    sponsorTouchpoints: [
+      {
+        id: 'step0',
+        title: 'Alineamiento inicial',
+        stageLabel: 'Step 0',
+        status: 'Cerrado',
+        date: '2025-01-18',
+        actionLabel: 'Validar contexto inicial',
+      },
+      {
+        id: 'step2',
+        title: 'Revisión estratégica',
+        stageLabel: 'Cierre Step 2',
+        status: 'Sesión agendada',
+        date: '2025-02-20',
+        actionLabel: 'Dar señal estratégica',
+      },
+      {
+        id: 'step4',
+        title: 'Presentación final',
+        stageLabel: 'Step 4',
+        status: 'Pendiente de convocatoria',
+        actionLabel: 'Preparar decisión final',
+      },
+    ],
+    sponsorComments: [],
     step0Data: {
       nombreParticipante: 'Pedro Alvarado',
       rolArea: 'Jefe de Análisis · Finanzas',
@@ -319,14 +483,12 @@ const MOCK_PROJECTS: Project[] = [
         modules: [
           { id: 'A', name: 'Proceso actual', status: 'Aprobado' },
           { id: 'B', name: 'Medición e impacto', status: 'Aprobado' },
-          { id: 'C', name: 'Restricciones', status: 'Aprobado' },
-          { id: 'D', name: 'Actores y entrevistas', status: 'Aprobado' },
-          { id: 'S', name: 'Síntesis y revisión de rumbo', status: 'Aprobado' },
+          { id: 'C', name: 'Captura de informacion y sintesis', status: 'Aprobado' },
         ],
         feedbackIA: {
           status: 'Aprobado',
           summary: 'El análisis del proceso actual está bien documentado. Las métricas son sólidas y tienen contexto real.',
-          goodPoints: ['Caso real bien contextualizado con recorrido completo', 'Métrica operativa con línea base definida (8 horas semanales)', 'Restricciones identificadas con claridad'],
+          goodPoints: ['Caso real bien contextualizado con recorrido completo', 'Métrica operativa con línea base definida (8 horas semanales)', 'Hallazgos del campo consolidados con claridad'],
           missing: [],
           actions: [],
           questions: [],
@@ -382,6 +544,7 @@ const MOCK_PROJECTS: Project[] = [
     team: [
       { id: 'm4', name: 'Pedro Alvarado', email: 'pedro@empresa.com', role: 'Owner', status: 'Activo', initials: 'PA' },
       { id: 'm5', name: 'Claudia Ruiz', email: 'claudia@empresa.com', role: 'Editor', status: 'Activo', initials: 'CR' },
+      { id: 'm5s', name: 'Roberto Jiménez', email: 'sponsor@starteria.io', role: 'Sponsor', status: 'Activo', initials: 'RJ' },
     ],
     evidence: [],
     createdAt: '2025-01-15',
@@ -397,6 +560,8 @@ const MOCK_PROJECTS: Project[] = [
     riskLevel: 'Alto',
     mentorCredits: 3,
     step0Status: 'No iniciado',
+    sponsorTouchpoints: DEFAULT_SPONSOR_TOUCHPOINTS,
+    sponsorComments: [],
     steps: [
       {
         number: 1,
@@ -406,9 +571,7 @@ const MOCK_PROJECTS: Project[] = [
         modules: [
           { id: 'A', name: 'Proceso actual', status: 'Draft' },
           { id: 'B', name: 'Medición e impacto', status: 'Bloqueado' },
-          { id: 'C', name: 'Restricciones', status: 'Bloqueado' },
-          { id: 'D', name: 'Actores y entrevistas', status: 'Bloqueado' },
-          { id: 'S', name: 'Síntesis y revisión de rumbo', status: 'Bloqueado' },
+          { id: 'C', name: 'Captura de informacion y sintesis', status: 'Bloqueado' },
         ],
       },
       {
@@ -485,11 +648,100 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const getProjectMember = (projectId: string, email = user?.email ?? ''): TeamMember | null => {
+    const project = projects.find(item => item.id === projectId);
+    if (!project || !email) return null;
+    return project.team.find(member => member.email.toLowerCase() === email.toLowerCase()) ?? null;
+  };
+
+  const canAccessProject = (
+    projectId: string,
+    accessLevel: 'overview' | 'step' | 'evidence' = 'overview'
+  ) => {
+    if (!user) return false;
+    if (user.role === 'admin' || user.role === 'mentor') return true;
+
+    const member = getProjectMember(projectId, user.email);
+    if (!member) return false;
+
+    if (user.role === 'sponsor') {
+      if (member.role !== 'Sponsor') return false;
+      if (accessLevel === 'overview') return member.status === 'Enviado' || member.status === 'Activo';
+      return false;
+    }
+
+    return member.status === 'Activo';
+  };
+
   const updateStep0 = (projectId: string, data: Partial<Step0Data>, status: Step0Status) => {
     updateProject(projectId, { step0Data: data, step0Status: status });
   };
 
-  const createProject = (name: string, description?: string): Project => {
+  const markSponsorInvitationSent = (projectId: string, sponsorEmail: string) => {
+    const project = projects.find(item => item.id === projectId);
+    if (!project) return;
+
+    updateProject(projectId, {
+      team: project.team.map(member =>
+        member.role === 'Sponsor' && member.email.toLowerCase() === sponsorEmail.toLowerCase()
+          ? { ...member, status: member.status === 'Activo' ? member.status : 'Enviado' }
+          : member
+      ),
+    });
+  };
+
+  const acceptSponsorInvitation = (projectId: string) => {
+    if (!user || user.role !== 'sponsor') return;
+    const project = projects.find(item => item.id === projectId);
+    if (!project) return;
+
+    updateProject(projectId, {
+      team: project.team.map(member =>
+        member.role === 'Sponsor' && member.email.toLowerCase() === user.email.toLowerCase()
+          ? { ...member, status: 'Activo' }
+          : member
+      ),
+    });
+  };
+
+  const updateSponsorTouchpoint = (
+    projectId: string,
+    touchpointId: SponsorTouchpointId,
+    updates: Partial<SponsorTouchpoint>
+  ) => {
+    const project = projects.find(item => item.id === projectId);
+    if (!project) return;
+
+    updateProject(projectId, {
+      sponsorTouchpoints: (project.sponsorTouchpoints ?? DEFAULT_SPONSOR_TOUCHPOINTS).map(item =>
+        item.id === touchpointId ? { ...item, ...updates } : item
+      ),
+    });
+  };
+
+  const addSponsorComment = (projectId: string, touchpointId: SponsorTouchpointId, message: string) => {
+    if (!user || user.role !== 'sponsor' || !message.trim()) return;
+    const project = projects.find(item => item.id === projectId);
+    if (!project) return;
+
+    const newComment: SponsorComment = {
+      id: `sc-${Date.now()}`,
+      touchpointId,
+      authorName: user.name,
+      authorRole: 'Sponsor',
+      message: message.trim(),
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    updateProject(projectId, {
+      sponsorComments: [...(project.sponsorComments ?? []), newComment],
+      sponsorTouchpoints: (project.sponsorTouchpoints ?? DEFAULT_SPONSOR_TOUCHPOINTS).map(item =>
+        item.id === touchpointId ? { ...item, status: 'Comentario enviado' } : item
+      ),
+    });
+  };
+
+  const createProject = (name: string, description?: string, teamMembers: TeamMember[] = []): Project => {
     const newProject: Project = {
       id: `p${Date.now()}`,
       name,
@@ -500,14 +752,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       mentorCredits: 3,
       cohort: user?.cohort,
       riskLevel: 'Bajo',
+      sponsorTouchpoints: DEFAULT_SPONSOR_TOUCHPOINTS,
+      sponsorComments: [],
       steps: [
         {
           number: 1, name: 'Claridad en el desafío', status: 'No iniciado', progress: 0, modules: [
             { id: 'A', name: 'Proceso actual', status: 'Draft' },
             { id: 'B', name: 'Medición e impacto', status: 'Bloqueado' },
-            { id: 'C', name: 'Restricciones', status: 'Bloqueado' },
-            { id: 'D', name: 'Actores y entrevistas', status: 'Bloqueado' },
-            { id: 'S', name: 'Síntesis y revisión de rumbo', status: 'Bloqueado' },
+            { id: 'C', name: 'Captura de informacion y sintesis', status: 'Bloqueado' },
           ]
         },
         {
@@ -532,7 +784,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ]
         },
       ],
-      team: user ? [{ id: user.id, name: user.name, email: user.email, role: 'Owner', status: 'Activo', initials: user.initials }] : [],
+      team: user
+        ? [
+            { id: user.id, name: user.name, email: user.email, role: 'Owner', status: 'Activo', initials: user.initials },
+            ...teamMembers,
+          ]
+        : teamMembers,
       evidence: [],
       createdAt: new Date().toISOString().split('T')[0],
       lastModified: new Date().toISOString(),
@@ -542,11 +799,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const setUserRole = (role: Role) => {
-    if (user) setUser({ ...user, role });
+    if (!user) return;
+    const matchedDemoUser = Object.values(MOCK_USERS).find(entry => entry.user.role === role)?.user;
+    if (matchedDemoUser) {
+      setUser(matchedDemoUser);
+      return;
+    }
+    setUser({ ...user, role });
   };
 
   return (
-    <AppContext.Provider value={{ user, isAuthenticated, projects, currentProject, login, logout, setCurrentProject, updateProject, createProject, setUserRole, updateStep0 }}>
+    <AppContext.Provider value={{ user, isAuthenticated, projects, currentProject, login, logout, setCurrentProject, updateProject, createProject, setUserRole, updateStep0, getProjectMember, canAccessProject, markSponsorInvitationSent, acceptSponsorInvitation, updateSponsorTouchpoint, addSponsorComment }}>
       {children}
     </AppContext.Provider>
   );

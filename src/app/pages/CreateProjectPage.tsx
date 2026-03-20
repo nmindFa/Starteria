@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Plus, X, AlertCircle, CheckCircle2, Users, ChevronDown } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { createTeamMember, useApp } from '../context/AppContext';
 
 interface Invite { id: string; email: string; role: 'Editor' | 'Viewer'; status: 'Pendiente' | 'Enviado' }
+interface SponsorInvite { id: string; email: string; status: 'Pendiente' | 'Enviado' }
 
 export function CreateProjectPage() {
   const { createProject, setCurrentProject } = useApp();
@@ -13,7 +14,10 @@ export function CreateProjectPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'Editor' | 'Viewer'>('Editor');
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [sponsorEmail, setSponsorEmail] = useState('');
+  const [sponsorInvites, setSponsorInvites] = useState<SponsorInvite[]>([]);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [sponsorError, setSponsorError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
@@ -22,7 +26,7 @@ export function CreateProjectPage() {
   const addInvite = () => {
     if (!inviteEmail.trim()) return;
     if (!validateEmail(inviteEmail)) { setEmailError('El correo no es válido. Verifica que tenga @empresa.com'); return; }
-    if (invites.some(i => i.email === inviteEmail)) { setEmailError('Este correo ya fue invitado.'); return; }
+    if (invites.some(i => i.email === inviteEmail) || sponsorInvites.some(i => i.email === inviteEmail)) { setEmailError('Este correo ya fue invitado.'); return; }
     setInvites(prev => [...prev, { id: Date.now().toString(), email: inviteEmail, role: inviteRole, status: 'Pendiente' }]);
     setInviteEmail('');
     setEmailError(null);
@@ -30,11 +34,30 @@ export function CreateProjectPage() {
 
   const removeInvite = (id: string) => setInvites(prev => prev.filter(i => i.id !== id));
 
+  const addSponsorInvite = () => {
+    if (!sponsorEmail.trim()) return;
+    if (!validateEmail(sponsorEmail)) { setSponsorError('El correo del sponsor no es válido.'); return; }
+    if (sponsorInvites.length >= 2) { setSponsorError('Solo puedes asignar hasta 2 sponsors por iniciativa.'); return; }
+    if (sponsorInvites.some(i => i.email === sponsorEmail) || invites.some(i => i.email === sponsorEmail)) { setSponsorError('Este correo ya fue agregado al proyecto.'); return; }
+    setSponsorInvites(prev => [...prev, { id: `${Date.now()}-s`, email: sponsorEmail, status: 'Pendiente' }]);
+    setSponsorEmail('');
+    setSponsorError(null);
+  };
+
+  const removeSponsorInvite = (id: string) => setSponsorInvites(prev => prev.filter(i => i.id !== id));
+
   const handleCreate = async () => {
     if (!name.trim()) return;
     setSaving(true);
     await new Promise(r => setTimeout(r, 600));
-    const project = createProject(name.trim(), description.trim() || undefined);
+    const project = createProject(
+      name.trim(),
+      description.trim() || undefined,
+      [
+        ...invites.map(invite => createTeamMember(invite.email, invite.role)),
+        ...sponsorInvites.map(invite => createTeamMember(invite.email, 'Sponsor', 'Pendiente')),
+      ]
+    );
     setCurrentProject(project);
     navigate(`/projects/${project.id}`);
   };
@@ -164,6 +187,38 @@ export function CreateProjectPage() {
               </div>
             </div>
 
+            <div className="border border-indigo-100 bg-indigo-50 rounded-2xl p-4">
+              <div className="mb-3">
+                <p className="text-sm text-indigo-900" style={{ fontWeight: 600 }}>Asignar sponsor</p>
+                <p className="text-xs text-indigo-700 mt-1">
+                  El sponsor acompaÃ±a tres hitos: alineamiento inicial, revisiÃ³n estratÃ©gica al cierre del Step 2 y presentaciÃ³n final. Puedes dejarlo pendiente y definirlo despuÃ©s.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={sponsorEmail}
+                  onChange={e => { setSponsorEmail(e.target.value); setSponsorError(null); }}
+                  onKeyDown={e => e.key === 'Enter' && addSponsorInvite()}
+                  placeholder="sponsor@empresa.com"
+                  className={`flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${sponsorError ? 'border-red-300 bg-red-50' : 'border-indigo-200 bg-white'}`}
+                />
+                <button
+                  onClick={addSponsorInvite}
+                  disabled={sponsorInvites.length >= 2}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl px-3 py-2.5 transition-colors"
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+              {sponsorError && (
+                <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5">
+                  <AlertCircle size={11} /> {sponsorError}
+                </p>
+              )}
+              <p className="text-xs text-indigo-700 mt-2">MÃ¡ximo 2 sponsors por iniciativa.</p>
+            </div>
+
             {invites.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs text-slate-500" style={{ fontWeight: 600 }}>INVITACIONES PENDIENTES</p>
@@ -177,6 +232,26 @@ export function CreateProjectPage() {
                       <p className="text-xs text-amber-600">{inv.role} · Invitación pendiente</p>
                     </div>
                     <button onClick={() => removeInvite(inv.id)} className="p-1 hover:bg-slate-200 rounded-lg transition-colors">
+                      <X size={13} className="text-slate-400" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {sponsorInvites.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-500" style={{ fontWeight: 600 }}>SPONSORS ASIGNADOS</p>
+                {sponsorInvites.map(inv => (
+                  <div key={inv.id} className="flex items-center gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                    <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs text-indigo-600" style={{ fontWeight: 700 }}>
+                      {inv.email[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-slate-700 truncate">{inv.email}</p>
+                      <p className="text-xs text-indigo-600">Sponsor Â· InvitaciÃ³n pendiente o por activar</p>
+                    </div>
+                    <button onClick={() => removeSponsorInvite(inv.id)} className="p-1 hover:bg-indigo-100 rounded-lg transition-colors">
                       <X size={13} className="text-slate-400" />
                     </button>
                   </div>

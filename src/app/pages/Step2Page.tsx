@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -30,6 +30,13 @@ interface Finalista {
   checks: { hmw: boolean; pronto: boolean; diferente: boolean };
 }
 
+interface HmwOption {
+  id: string;
+  text: string;
+  why: string;
+  source: 'ai' | 'custom';
+}
+
 const MOCK_FEEDBACK_S2 = {
   status: 'Aprobado' as const,
   summary: 'Excelente trabajo de divergencia y convergencia. El HMW está bien alineado con el reto identificado en Step 1 y la Matriz DVF es sólida.',
@@ -39,6 +46,15 @@ const MOCK_FEEDBACK_S2 = {
   questions: ['¿Cómo validarán la hipótesis de valor antes del experimento piloto?'],
   timestamp: '2025-02-19T11:00:00Z',
 };
+
+const cleanSentence = (value?: string, fallback = 'Sin definir') => {
+  const text = value?.trim();
+  if (!text) return fallback;
+  return text;
+};
+
+const trimForCard = (value: string, limit = 140) =>
+  value.length <= limit ? value : `${value.slice(0, limit).trim()}...`;
 
 export function Step2Page() {
   const { projectId } = useParams();
@@ -62,6 +78,10 @@ export function Step2Page() {
   const [hmwIAFeedback, setHmwIAFeedback] = useState<null | { ok: boolean; msg: string; tips: string[] }>(null);
   const [hmwIALoading, setHmwIALoading] = useState(false);
   const [showMentorHMW, setShowMentorHMW] = useState(false);
+  const [selectedHmwOptionId, setSelectedHmwOptionId] = useState('custom');
+  const [customHmwDraft, setCustomHmwDraft] = useState('¿Cómo podríamos reducir el tiempo de alta en sistemas de TI para nuevos empleados, sin comprometer la seguridad de accesos?');
+  const [expertCommentDraft, setExpertCommentDraft] = useState('');
+  const [experimentExpertComment, setExperimentExpertComment] = useState('');
 
   // Module B helpers
   const [showReglas, setShowReglas] = useState(false);
@@ -74,6 +94,15 @@ export function Step2Page() {
   const [showGroupView, setShowGroupView] = useState(false);
   const [editingIdeaCluster, setEditingIdeaCluster] = useState<string | null>(null);
   const [showIdeasCreativas, setShowIdeasCreativas] = useState(false);
+  const [activeVoterId, setActiveVoterId] = useState<string>('self');
+  const [ideaSelections, setIdeaSelections] = useState<Record<string, string[]>>({ self: [] });
+  const [tieDecisionMode, setTieDecisionMode] = useState<'single' | 'combine'>('single');
+  const [landedIdeaText, setLandedIdeaText] = useState('');
+  const [ideaLandingChecks, setIdeaLandingChecks] = useState({
+    recursosMinimos: false,
+    pruebaLigera: false,
+    versionSimple: false,
+  });
 
   // Module C helpers
   const [cPaso, setCPaso] = useState<1 | 2>(2);
@@ -126,7 +155,23 @@ export function Step2Page() {
     evidencia: 'Timestamps de solicitud y activación, encuesta de 3 preguntas al empleado nuevo al día 3.',
   });
 
-  const saveState = useAutosave([hmw, ideas, shortlist, solutionCard, testCard]);
+  const [experimentCard, setExperimentCard] = useState({
+    name: 'MVP formulario unificado de accesos',
+    problem: 'El alta de accesos sigue siendo lenta, informal y poco trazable para nuevos ingresos.',
+    hypothesis: 'Si RRHH activa un formulario unificado antes del primer dia, entonces el nuevo ingreso recibira accesos mas rapido y con menos errores, porque la solicitud llegara completa y trazable a TI.',
+    decision: 'Decidir si esta logica vale la pena escalar, iterar o reformular antes de invertir en una implementacion mayor.',
+    expectedOutcome: 'Menor tiempo de respuesta, menos omisiones y mejor trazabilidad del onboarding.',
+    minimumMechanism: 'Un formulario unico con datos minimos del ingreso y tipo de acceso requerido.',
+    tool: 'Google Forms + seguimiento manual en Sheets',
+    context: 'Piloto interno con 3 nuevos ingresos del area de Tecnologia durante el proximo ciclo de onboarding.',
+    actors: 'Usuario principal: nuevo ingreso. Actores: RRHH, TI y lider del area. Facilitador: coordinadora de RRHH. Posible bloqueo: capacidad de TI.',
+    metric: '80% de solicitudes completas y activadas en menos de 24 horas.',
+    evidenceQuant: 'Tiempo de activacion, numero de reprocesos y porcentaje de solicitudes completas.',
+    evidenceQual: 'Notas de RRHH y TI, comentarios del nuevo ingreso y fricciones observadas durante el proceso.',
+  });
+  const [experimentAiLoading, setExperimentAiLoading] = useState(false);
+
+  const saveState = useAutosave([hmw, ideas, shortlist, solutionCard, testCard, experimentCard]);
 
   if (!project || !step) return <div className="p-6"><p className="text-slate-500">Proyecto no encontrado.</p></div>;
 
@@ -143,6 +188,71 @@ export function Step2Page() {
       </div>
     );
   }
+
+  const teamParticipants = project.team.length > 1
+    ? project.team.map(member => ({ id: member.id, name: member.name }))
+    : [{ id: 'self', name: 'Tú' }];
+  const selectionMap = teamParticipants.reduce<Record<string, string[]>>((acc, participant) => {
+    acc[participant.id] = ideaSelections[participant.id] || [];
+    return acc;
+  }, {});
+  const individualMode = teamParticipants.length === 1;
+  const currentVoterId = teamParticipants.some(participant => participant.id === activeVoterId)
+    ? activeVoterId
+    : teamParticipants[0]?.id || 'self';
+
+  const toggleIdeaVote = (participantId: string, ideaId: string) => {
+    setIdeaSelections(prev => {
+      const current = prev[participantId] || [];
+      const exists = current.includes(ideaId);
+      if (exists) {
+        return { ...prev, [participantId]: current.filter(id => id !== ideaId) };
+      }
+      if (current.length >= 3) return prev;
+      return { ...prev, [participantId]: [...current, ideaId] };
+    });
+  };
+
+  const challengeAnchor = {
+    title: cleanSentence(project.step0Data?.quePasaQueQuieres?.split('.').shift(), 'Problema validado del Step 1'),
+    summary: cleanSentence(project.step0Data?.quePasaQueQuieres, 'Todavia falta una descripcion breve del problema validado.'),
+    impact: cleanSentence(project.step0Data?.impacto3meses?.replace(/_/g, ' '), 'Impacto principal pendiente de precisar'),
+    affected: project.step0Data?.impacta?.length ? project.step0Data.impacta.join(', ') : 'Personas o equipos afectados por confirmar',
+    area: cleanSentence(project.step0Data?.rolArea, 'Area o equipo por confirmar'),
+    redLine: project.step0Data?.respaldo === 'datos'
+      ? 'No comprometer datos sensibles ni accesos.'
+      : 'Respetar la linea roja principal definida en Step 1.',
+  };
+  const hmwRestriction = challengeAnchor.redLine.toLowerCase().replace(/^no\s+/, '').replace(/\.$/, '');
+
+  const hmwOptions = useMemo<HmwOption[]>(() => [
+    {
+      id: 'ai-1',
+      text: `¿Cómo podríamos reducir ${challengeAnchor.summary.toLowerCase()}, para ${challengeAnchor.affected.toLowerCase()}, sin ${hmwRestriction}?`,
+      why: 'Sirve si quieres enfocar el HMW en la mejora principal sin perder la restriccion clave.',
+      source: 'ai',
+    },
+    {
+      id: 'ai-2',
+      text: `¿Cómo podríamos mejorar la experiencia de ${challengeAnchor.affected.toLowerCase()} frente a ${challengeAnchor.title.toLowerCase()}, sin ${hmwRestriction}?`,
+      why: 'Sirve si quieres abrir ideas centradas en quien vive el problema directamente.',
+      source: 'ai',
+    },
+    {
+      id: 'ai-3',
+      text: `¿Cómo podríamos abordar ${challengeAnchor.title.toLowerCase()} en ${challengeAnchor.area.toLowerCase()}, para lograr un impacto en ${challengeAnchor.impact.toLowerCase()}, sin ${hmwRestriction}?`,
+      why: 'Sirve si quieres que el HMW conecte con el area afectada y el impacto esperado.',
+      source: 'ai',
+    },
+    {
+      id: 'custom',
+      text: customHmwDraft.trim(),
+      why: 'Tu propio HMW puede quedar activo si se conecta bien con el problema validado.',
+      source: 'custom',
+    },
+  ], [challengeAnchor.affected, challengeAnchor.area, challengeAnchor.impact, challengeAnchor.summary, challengeAnchor.title, customHmwDraft, hmwRestriction]);
+
+  const selectedHmwOption = hmwOptions.find(option => option.id === selectedHmwOptionId) || hmwOptions[0];
 
   // ── HMW live checks ──────────────────────────────────────────────────────────
   const hmwChecks = {
@@ -168,17 +278,38 @@ export function Step2Page() {
   const handleHmwIA = () => {
     setHmwIALoading(true);
     setTimeout(() => {
+      const currentHmw = selectedHmwOptionId === 'custom' ? customHmwDraft : hmw;
       const issues: string[] = [];
       if (!hmwChecks.starts) issues.push('Empieza con "¿Cómo podríamos…?" para que sea una pregunta de ideas, no una tarea.');
-      if (!hmwChecks.noSolucion) issues.push('Quita la solución de la pregunta (ej. "crear app", "automatizar"). Describe el resultado que buscas.');
+      if (!hmwChecks.noSolucion) issues.push('Quita la solución de la pregunta. Describe el resultado que buscas, no el medio.');
       if (!hmwChecks.tieneRestriccion) issues.push('Considera agregar una restricción con "sin [línea roja]" para acotar el espacio.');
       setHmwIAFeedback(
         issues.length === 0
-          ? { ok: true, msg: 'Tu pregunta tiene buena estructura. Asegúrate de que mencione a quién le pasa el problema y que abra espacio para ideas variadas.', tips: ['Revisa que el rol o persona afectada esté nombrado.', 'Verifica que la pregunta no tenga una sola respuesta obvia.'] }
-          : { ok: false, msg: 'Hay puntos a revisar antes de usar esta pregunta para generar ideas:', tips: issues }
+          ? { ok: true, msg: 'Tu HMW tiene buena forma para pasar al módulo de ideas.', tips: ['Revisa que nombre a quien afecta y que no cierre demasiado pronto el espacio de solución.', 'Si quieres, puedes tomar otra sugerencia IA o refinar esta misma redacción.'] }
+          : { ok: false, msg: `Este HMW todavía puede mejorar antes de pasar a ideación: "${trimForCard(currentHmw, 90)}"`, tips: issues }
       );
       setHmwIALoading(false);
     }, 1600);
+  };
+
+  const selectHmwOption = (option: HmwOption) => {
+    setSelectedHmwOptionId(option.id);
+    setHmw(option.text);
+    setHmwIAFeedback(null);
+  };
+
+  const applyGeneratedSuggestions = () => {
+    const nextOption = hmwOptions.find(option => option.id === 'ai-1');
+    if (!nextOption) return;
+    selectHmwOption(nextOption);
+    setHmwIAFeedback({
+      ok: true,
+      msg: 'La IA te propone tres HMW para elegir o usar como base.',
+      tips: [
+        'Selecciona el que mejor conecte con el problema validado.',
+        'Si ninguno te convence, crea tu propio HMW y dejalo como activo.',
+      ],
+    });
   };
 
   // ── Module C handlers ────────────────────────────────────────────────────────
@@ -259,13 +390,50 @@ export function Step2Page() {
 
   // ── Module B computed ─────────────────────────────────────────────────────────
   const uniqueClusters = [...new Set(ideas.filter(i => i.cluster).map(i => i.cluster as string))];
-  const moduloBListo = ideas.length >= 10 && uniqueClusters.length >= 3;
+  const ideaVoteSummary = ideas.map(idea => ({
+    ...idea,
+    votes: teamParticipants.reduce((total, participant) => total + ((selectionMap[participant.id] || []).includes(idea.id) ? 1 : 0), 0),
+  })).sort((left, right) => right.votes - left.votes);
+  const topIdeas = ideaVoteSummary.filter(item => item.votes > 0).slice(0, 3);
+  const highestVoteCount = topIdeas[0]?.votes || 0;
+  const tiedIdeas = highestVoteCount > 0 ? topIdeas.filter(item => item.votes === highestVoteCount) : [];
+  const hasTie = tiedIdeas.length > 1;
+  const selectedIdeaText = ideas.find(idea => idea.id === selectedIdea)?.text || '';
+  const landingChecksComplete = Object.values(ideaLandingChecks).filter(Boolean).length >= 2;
+  const ideaNeedsLanding = /robot|ia\b|app\b|plataforma|automatiz|integraci|sistema/i.test(selectedIdeaText);
+  const landedIdeaReady = Boolean(
+    selectedIdea &&
+    (ideaNeedsLanding || !landingChecksComplete ? landedIdeaText.trim().length > 0 : true),
+  );
+  const moduloBListo = ideas.length >= 10
+    && teamParticipants.every(participant => (selectionMap[participant.id] || []).length === 3)
+    && Boolean(selectedIdea)
+    && landedIdeaReady;
   const ideasProgressMsg =
     ideas.length === 0 ? 'Escribe tu primera idea para arrancar.' :
     ideas.length < 5   ? `Vas bien — te faltan ${10 - ideas.length} ideas para el mínimo.` :
     ideas.length < 10  ? `¡Buen ritmo! Te faltan ${10 - ideas.length} para el mínimo de 10.` :
     ideas.length < 15  ? '¡Mínimo cumplido! ¿Puedes llegar a 15?' :
-                         '¡Excelente variedad! Listo para agrupar.';
+                         '¡Excelente variedad! Ya puedes pasar a elegir tus mejores ideas.';
+
+  const completedExperimentSteps = testCard.pasos.filter(step => step.trim().length > 0).length;
+  const moduleCReady = Boolean(
+    selectedIdea
+    && experimentCard.name.trim()
+    && experimentCard.problem.trim()
+    && experimentCard.hypothesis.trim()
+    && experimentCard.decision.trim()
+    && experimentCard.expectedOutcome.trim()
+    && experimentCard.minimumMechanism.trim()
+    && experimentCard.tool.trim()
+    && experimentCard.context.trim()
+    && experimentCard.actors.trim()
+    && experimentCard.metric.trim()
+    && experimentCard.evidenceQuant.trim()
+    && experimentCard.evidenceQual.trim()
+    && completedExperimentSteps >= 5
+    && completedExperimentSteps <= 8
+  );
 
   const handleIaB = () => {
     setIaBLoading(true);
@@ -286,11 +454,25 @@ export function Step2Page() {
     }, 1800);
   };
 
+  const handleIaExperimentGuide = () => {
+    setExperimentAiLoading(true);
+    setTimeout(() => {
+      const ideaBase = selectedIdeaText || 'la idea elegida';
+      setExperimentCard(prev => ({
+        ...prev,
+        minimumMechanism: prev.minimumMechanism.trim() || `Una version minima de ${ideaBase.toLowerCase()} que pueda activarse con pocos pasos y sin desarrollo pesado.`,
+        tool: prev.tool.trim() || 'Formulario simple + seguimiento manual en Sheets',
+        context: prev.context.trim() || 'Prueba piloto con pocos casos reales durante una semana, en un momento controlado del proceso.',
+        metric: prev.metric.trim() || 'Senal clara de adopcion o reduccion de friccion en al menos 3 casos iniciales.',
+      }));
+      setExperimentAiLoading(false);
+    }, 1400);
+  };
+
   const modules = [
     { id: 'A' as ModuleId, label: 'A · HMW', completed: hmwListo },
     { id: 'B' as ModuleId, label: 'B · Ideas', completed: moduloBListo },
-    { id: 'C' as ModuleId, label: 'C · Elegir idea', completed: !!selectedIdea && !!cRazonGana.trim() && !!cQueProbamos.trim() },
-    { id: 'D' as ModuleId, label: 'D · Cards', completed: !!solutionCard.hipotesis && !!testCard.hipotesis },
+    { id: 'C' as ModuleId, label: 'C · Cards de experimentación', completed: moduleCReady },
   ];
 
   return (
@@ -320,8 +502,9 @@ export function Step2Page() {
           {/* Ancla del reto (permanent) */}
           <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-5 text-xs text-indigo-700">
             <p style={{ fontWeight: 600 }}>🎯 Ancla del reto (Step 1)</p>
-            <p className="mt-1">Quiebre en alta de sistemas TI → empleado sin accesos 7-10 días → costo operativo + experiencia negativa</p>
-            <p className="mt-0.5 text-indigo-500">Líneas rojas: No comprometer datos · Decisor: Director de TI</p>
+            <p className="mt-1">{trimForCard(challengeAnchor.summary, 150)}</p>
+            <p className="mt-0.5 text-indigo-500">Impacto: {challengeAnchor.impact} · Afecta a: {challengeAnchor.affected}</p>
+            <p className="mt-0.5 text-indigo-500">Línea roja: {challengeAnchor.redLine} · Área: {challengeAnchor.area}</p>
           </div>
 
           {/* Module A: HMW */}
@@ -335,13 +518,45 @@ export function Step2Page() {
                     <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo A · HMW — ¿Cómo podríamos?</h1>
                     <StatusChip status={hmwListo ? 'Completado' : 'En progreso'} size="sm" />
                   </div>
-                  <p className="text-sm text-slate-500 max-w-lg">
-                    Una pregunta guía para generar ideas variadas sobre el reto. Antes de inventar soluciones, necesitamos saber qué queremos mejorar y para quién.
+                  <p className="text-sm text-slate-500 max-w-2xl">
+                    Un HMW traduce el problema validado en una pregunta útil para idear con foco. Primero definimos bien esa pregunta y después abrimos soluciones.
+                    Formula simple: <span className="text-slate-600">“¿Cómo podríamos [mejorar algo] para [quién], sin [restricción o línea roja]?”</span>
                   </p>
                 </div>
               </div>
 
-              {/* ── Acordeón: ¿Qué tengo que hacer aquí? ── */}
+              <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Target size={16} className="text-indigo-500" />
+                  <p className="text-sm text-indigo-900" style={{ fontWeight: 700 }}>Problema validado que guia este HMW</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-xl bg-white border border-indigo-100 p-4">
+                    <p className="text-xs text-indigo-500 mb-1" style={{ fontWeight: 700 }}>Nombre corto del problema</p>
+                    <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>{challengeAnchor.title}</p>
+                    <p className="text-xs text-slate-500 mt-2">{trimForCard(challengeAnchor.summary, 180)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white border border-indigo-100 p-4 space-y-2">
+                    <div>
+                      <p className="text-xs text-indigo-500" style={{ fontWeight: 700 }}>Impacto principal</p>
+                      <p className="text-sm text-slate-700">{challengeAnchor.impact}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-indigo-500" style={{ fontWeight: 700 }}>Afecta directamente a</p>
+                      <p className="text-sm text-slate-700">{challengeAnchor.affected}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-indigo-500" style={{ fontWeight: 700 }}>Área o equipo afectado</p>
+                      <p className="text-sm text-slate-700">{challengeAnchor.area}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-indigo-500" style={{ fontWeight: 700 }}>Línea roja o restricción clave</p>
+                      <p className="text-sm text-slate-700">{challengeAnchor.redLine}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <button
                   onClick={() => setShowHelpA(v => !v)}
@@ -349,20 +564,19 @@ export function Step2Page() {
                 >
                   <span className="flex items-center gap-2 text-sm text-slate-700" style={{ fontWeight: 500 }}>
                     <HelpCircle size={14} className="text-slate-400" />
-                    ¿Qué tengo que hacer aquí?
+                    Antes de elegir tu HMW, considera esto
                   </span>
                   <ChevronDown size={14} className={`text-slate-400 transition-transform ${showHelpA ? 'rotate-180' : ''}`} />
                 </button>
                 {showHelpA && (
-                  <div className="px-4 py-4 bg-white border-t border-slate-100 space-y-4">
+                  <div className="px-4 py-4 bg-white border-t border-slate-100">
                     <ul className="space-y-2">
                       {[
-                        'Mira el reto que trajiste del Paso 1 (está arriba, en el recuadro azul).',
-                        'Escribe una pregunta que empiece con "¿Cómo podríamos…?".',
-                        'Menciona a quién le pasa el problema: el rol, el área o la persona afectada.',
-                        'Describe qué quieres mejorar como resultado, no la solución en sí.',
-                        'Respeta al menos una línea roja que ya definiste (ej. "sin comprometer X").',
-                        'No pongas la solución dentro de la pregunta. Eso viene en el módulo siguiente.',
+                        'No metas la solución dentro de la pregunta.',
+                        'Nombra con claridad qué problema o mejora quieres abordar.',
+                        'Deja claro a quién afecta directamente.',
+                        'Considera la línea roja principal o restricción clave.',
+                        'Busca una pregunta que abra posibilidades, no una sola respuesta obvia.',
                       ].map((item, i) => (
                         <li key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
                           <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs shrink-0 mt-0.5" style={{ fontWeight: 700 }}>{i + 1}</span>
@@ -370,40 +584,108 @@ export function Step2Page() {
                         </li>
                       ))}
                     </ul>
-                    <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                      <p className="text-xs text-indigo-700">
-                        <span style={{ fontWeight: 600 }}>¿Para qué sirve esta pregunta?</span>{' '}
-                        Para enfocar las ideas que vas a generar. Una buena pregunta permite sacar muchas ideas distintas, no una sola respuesta obvia.
-                      </p>
-                    </div>
                   </div>
                 )}
               </div>
 
-              {/* ── Campo HMW ── */}
-              <div>
-                <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
-                  Tu pregunta guía <span className="text-red-500">*</span>
-                </label>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Opciones sugeridas de HMW</p>
+                    <p className="text-xs text-slate-500 mt-1">Elige una de estas 3 sugerencias IA o crea tu propio HMW y déjalo como activo.</p>
+                  </div>
+                  <button
+                    onClick={applyGeneratedSuggestions}
+                    disabled={hmwIALoading}
+                    className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 transition-colors disabled:opacity-50"
+                    style={{ fontWeight: 500 }}
+                  >
+                    <Sparkles size={11} /> Generar sugerencias con IA
+                  </button>
+                </div>
+
+                <div className="grid gap-3">
+                  {hmwOptions.filter(option => option.source === 'ai').map(option => {
+                    const isActive = selectedHmwOptionId === option.id || hmw === option.text;
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => selectHmwOption(option)}
+                        className={`text-left rounded-2xl border p-4 transition-colors ${isActive ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className={`text-sm ${isActive ? 'text-indigo-900' : 'text-slate-800'}`} style={{ fontWeight: 700 }}>{option.text}</p>
+                            <p className={`text-xs mt-2 ${isActive ? 'text-indigo-700' : 'text-slate-500'}`}>{option.why}</p>
+                          </div>
+                          <span className={`text-xs px-2.5 py-1 rounded-full ${isActive ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`} style={{ fontWeight: 700 }}>
+                            {isActive ? 'HMW activo' : 'Seleccionar'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Crear mi propio HMW</p>
+                    <p className="text-xs text-slate-500 mt-1">Si prefieres otra redacción, escríbela aquí y también podrá quedar como HMW activo.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedHmwOptionId('custom');
+                      setHmw(customHmwDraft);
+                      setHmwIAFeedback(null);
+                    }}
+                    disabled={!customHmwDraft.trim()}
+                    className="text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    style={{ fontWeight: 600 }}
+                  >
+                    Dejar como HMW activo
+                  </button>
+                </div>
                 <textarea
-                  value={hmw}
-                  onChange={e => { setHmw(e.target.value); setHmwIAFeedback(null); }}
+                  value={customHmwDraft}
+                  onChange={e => {
+                    const value = e.target.value;
+                    setCustomHmwDraft(value);
+                    if (selectedHmwOptionId === 'custom') setHmw(value);
+                    setHmwIAFeedback(null);
+                  }}
                   rows={3}
                   placeholder="Ej. ¿Cómo podríamos reducir el tiempo que espera un empleado nuevo para tener sus accesos, sin comprometer la seguridad del sistema?"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none focus:bg-white transition-all"
                 />
-                <p className="text-xs text-slate-400 mt-1.5">
-                  Arma tu pregunta con: <span className="text-slate-600">quién tiene el problema</span> + <span className="text-slate-600">qué quieres mejorar</span> + <span className="text-slate-600">qué no se puede romper.</span>
-                  <br />
-                  <span className="text-slate-400">Plantilla: "¿Cómo podríamos [mejorar algo] para [quién], sin [línea roja]?"</span>
+                <p className="text-xs text-slate-400">
+                  Plantilla simple: <span className="text-slate-600">“¿Cómo podríamos [mejorar algo] para [quién], sin [restricción o línea roja]?”</span>
                 </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>HMW seleccionado</p>
+                    <p className="text-xs text-slate-500 mt-1">Este es el output del módulo: una sola pregunta guía, clara y conectada al problema validado.</p>
+                  </div>
+                  <span className={`text-xs px-2.5 py-1 rounded-full ${hmwListo ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`} style={{ fontWeight: 700 }}>
+                    {hmwListo ? 'Listo para pasar a ideación' : 'Todavía necesita ajuste'}
+                  </span>
+                </div>
+                <div className="rounded-xl border border-white bg-white p-4">
+                  <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                    {hmw || 'Selecciona una sugerencia o escribe tu propio HMW para dejarlo activo.'}
+                  </p>
+                </div>
               </div>
 
               {/* ── Checklist live ── */}
               {hmw.trim().length > 0 && (
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
                   <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-                    <p className="text-xs text-slate-600" style={{ fontWeight: 600 }}>Tu pregunta está lista si…</p>
+                    <p className="text-xs text-slate-600" style={{ fontWeight: 600 }}>Recomendaciones para cerrar un buen HMW</p>
                   </div>
                   <div className="p-4 space-y-2.5">
                     {/* Auto-checks */}
@@ -506,8 +788,8 @@ export function Step2Page() {
                   style={{ fontWeight: 500 }}
                 >
                   {hmwIALoading
-                    ? <><span className="animate-spin inline-block">⟳</span> Revisando…</>
-                    : <><Sparkles size={11} /> Pedir ayuda a la IA</>}
+                    ? <><span className="animate-spin inline-block">⟳</span> Refinando…</>
+                    : <><Sparkles size={11} /> Mejorar este HMW con IA</>}
                 </button>
                 <button
                   onClick={() => setShowMentorHMW(true)}
@@ -518,8 +800,27 @@ export function Step2Page() {
                 </button>
               </div>
               <div className="flex gap-4">
-                <p className="text-xs text-slate-400">✨ La IA revisa tu pregunta y te dice qué está bien o qué ajustar.</p>
-                <p className="text-xs text-slate-400">🧑‍🏫 Comparte con el mentor antes de generar ideas.</p>
+                <p className="text-xs text-slate-400">✨ La IA puede sugerir opciones o ayudarte a refinar la redacción del HMW activo.</p>
+                <p className="text-xs text-slate-400">🧑‍🏫 Pide feedback experto para validar si el HMW realmente enfoca bien el reto.</p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Comentarios del experto sobre el HMW</p>
+                    <p className="text-xs text-slate-500 mt-1">Si ya pediste feedback, aquí puede quedar visible la observación del experto sobre el HMW seleccionado.</p>
+                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600" style={{ fontWeight: 600 }}>
+                    {expertCommentDraft.trim() ? 'Comentario registrado' : 'Espacio disponible'}
+                  </span>
+                </div>
+                <textarea
+                  value={expertCommentDraft}
+                  onChange={e => setExpertCommentDraft(e.target.value)}
+                  rows={3}
+                  placeholder="Ej. El HMW conecta bien con el problema, pero conviene explicitar mejor a quién afecta."
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                />
               </div>
 
               {/* ── CTA ── */}
@@ -538,7 +839,7 @@ export function Step2Page() {
                 style={{ fontWeight: 500 }}
               >
                 {hmwListo
-                  ? <>Módulo A listo → Generar ideas <ChevronRight size={15} /></>
+                  ? <>HMW seleccionado → Pasar a generar ideas <ChevronRight size={15} /></>
                   : <><Lock size={14} /> Completa los criterios para avanzar</>}
               </button>
             </div>
@@ -546,6 +847,552 @@ export function Step2Page() {
 
           {/* Module B: Generación de ideas */}
           {activeModule === 'B' && (
+            <div className="space-y-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Modulo B · Ideas</h1>
+                  <StatusChip status={moduloBListo ? 'Completado' : 'En progreso'} size="sm" />
+                </div>
+                <p className="text-sm text-slate-500">
+                  Genera ideas a partir del HMW activo, elige las mas prometedoras y aterriza una sola propuesta para pasar al siguiente modulo.
+                </p>
+              </div>
+              <div className="border-2 border-indigo-300 bg-indigo-50 rounded-2xl p-4">
+                <p className="text-xs text-indigo-500 mb-2" style={{ fontWeight: 600 }}>HMW ACTIVO</p>
+                <p className="text-base text-indigo-900" style={{ fontWeight: 600, lineHeight: '1.5' }}>
+                  {hmw || '(Completa el Modulo A para ver aqui la pregunta activa.)'}
+                </p>
+                <p className="text-xs text-indigo-700 mt-2">
+                  Esta pregunta sigue guiando la generacion y la seleccion de ideas dentro del modulo.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Agrega una idea</label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    value={newIdea}
+                    onChange={e => setNewIdea(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newIdea.trim()) {
+                        setIdeas(p => [...p, { id: Date.now().toString(), text: newIdea.trim() }]);
+                        setNewIdea('');
+                      }
+                    }}
+                    placeholder="Ej. Formulario unico para pedir accesos antes del primer dia"
+                    className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    onClick={() => {
+                      if (newIdea.trim()) {
+                        setIdeas(p => [...p, { id: Date.now().toString(), text: newIdea.trim() }]);
+                        setNewIdea('');
+                      }
+                    }}
+                    className="bg-indigo-600 text-white rounded-xl px-3 py-2.5 hover:bg-indigo-700 transition-colors"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">Primero busca cantidad y variedad. Luego elige las ideas con mas potencial.</p>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button onClick={() => setShowReglas(v => !v)} className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 text-left transition-colors">
+                  <span className="text-sm text-slate-700" style={{ fontWeight: 500 }}>Antes de elegir tus ideas, considera esto</span>
+                  <ChevronDown size={14} className={`text-slate-400 transition-transform ${showReglas ? 'rotate-180' : ''}`} />
+                </button>
+                {showReglas && (
+                  <div className="px-4 py-4 bg-white border-t border-slate-100">
+                    <ul className="space-y-2">
+                      {[
+                        'No te quedes con la primera idea obvia; busca rutas distintas.',
+                        'Redacta cada idea de forma concreta para compararla mejor.',
+                        'Prioriza ideas que respondan al HMW sin depender de una implementacion gigante.',
+                        'Si una idea suena ambiciosa, piensa tambien su version mas simple.',
+                      ].map((rule, index) => (
+                        <li key={index} className="flex items-start gap-2 text-xs text-slate-600">
+                          <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
+                          <span>{rule}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setShowIdeasCreativas(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 text-left transition-colors"
+                >
+                  <span className="text-sm text-slate-700" style={{ fontWeight: 500 }}>
+                    Ideas mas creativas
+                    <span className="text-xs text-slate-400 ml-2" style={{ fontWeight: 400 }}>(opcional para destrabar)</span>
+                  </span>
+                  <ChevronDown size={14} className={`text-slate-400 transition-transform ${showIdeasCreativas ? 'rotate-180' : ''}`} />
+                </button>
+                {showIdeasCreativas && (
+                  <div className="px-4 py-4 bg-white border-t border-slate-100 space-y-3">
+                    <p className="text-xs text-slate-500">Si ya ves ideas repetidas, usa uno de estos empujes para abrir mas posibilidades.</p>
+                    {[
+                      { prompt: 'Que podrias resolver manana con lo que ya tienes?', example: 'Usar un formulario simple y una alerta automatica.' },
+                      { prompt: 'Que parte del proceso actual podrias quitar o unir?', example: 'Dejar una sola solicitud y una sola aprobacion.' },
+                      { prompt: 'Como se veria una version manual o no-code de esta idea?', example: 'Probarlo sin desarrollo grande antes de invertir mas.' },
+                    ].map((item, index) => (
+                      <div key={index} className="p-3 rounded-xl border bg-slate-50 border-slate-100">
+                        <p className="text-xs text-slate-700 mb-1" style={{ fontWeight: 600 }}>{item.prompt}</p>
+                        <p className="text-xs text-slate-500">Ej. {item.example}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <button
+                  onClick={handleIaB}
+                  disabled={iaBLoading}
+                  className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 transition-colors disabled:opacity-50"
+                  style={{ fontWeight: 500 }}
+                >
+                  {iaBLoading
+                    ? <><span className="animate-spin inline-block">...</span> Buscando enfoques...</>
+                    : <><Sparkles size={11} /> IA: destrabarme con enfoques</>}
+                </button>
+                <p className="text-xs text-slate-400 mt-1">La IA te propone caminos para ampliar opciones. La decision sigue siendo del equipo.</p>
+              </div>
+
+              {iaBDisparadores && (
+                <div className="border border-violet-200 bg-violet-50 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={13} className="text-violet-500" />
+                      <p className="text-xs text-violet-800" style={{ fontWeight: 600 }}>Enfoques sugeridos por IA</p>
+                    </div>
+                    <button onClick={() => setIaBDisparadores(null)}>
+                      <X size={13} className="text-violet-400 hover:text-violet-600" />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {iaBDisparadores.slice(0, 5).map((item, index) => (
+                      <div key={index} className="flex items-start gap-2 p-2.5 bg-white border border-violet-100 rounded-xl">
+                        <span className="w-4 h-4 rounded-full bg-violet-100 text-violet-500 text-xs flex items-center justify-center shrink-0 mt-0.5" style={{ fontWeight: 700 }}>{index + 1}</span>
+                        <p className="text-xs text-slate-700">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className={`flex items-center gap-3 p-3 rounded-xl border ${
+                ideas.length >= 10 ? 'bg-emerald-50 border-emerald-100' :
+                ideas.length >= 5 ? 'bg-amber-50 border-amber-100' :
+                'bg-slate-50 border-slate-200'
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 ${
+                  ideas.length >= 10 ? 'bg-emerald-100 text-emerald-700' :
+                  ideas.length >= 5 ? 'bg-amber-100 text-amber-700' :
+                  'bg-slate-200 text-slate-500'
+                }`} style={{ fontWeight: 700 }}>
+                  {ideas.length}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs ${ideas.length >= 10 ? 'text-emerald-700' : ideas.length >= 5 ? 'text-amber-700' : 'text-slate-500'}`} style={{ fontWeight: 600 }}>
+                    {ideasProgressMsg}
+                  </p>
+                  <div className="flex gap-0.5 mt-1.5">
+                    {Array.from({ length: 15 }).map((_, index) => (
+                      <div key={index} className={`h-1.5 rounded-full flex-1 transition-colors ${
+                        index < ideas.length
+                          ? ideas.length >= 10 ? 'bg-emerald-400' : 'bg-amber-400'
+                          : 'bg-slate-200'
+                      }`} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid lg:grid-cols-[1.35fr_0.95fr] gap-4 items-start">
+                <div className="space-y-4">
+                  <div className="border border-slate-200 rounded-2xl p-4 bg-white">
+                    <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+                      <div>
+                        <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Ideas registradas</p>
+                        <p className="text-xs text-slate-500">Registra opciones, comparalas y marca las que realmente merece la pena seguir evaluando.</p>
+                      </div>
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600" style={{ fontWeight: 600 }}>
+                        {ideas.length} idea{ideas.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    {!individualMode && (
+                      <div className="space-y-2 mb-4">
+                        <p className="text-xs text-slate-500">Cada integrante elige sus 3 ideas favoritas.</p>
+                        <div className="flex gap-2 flex-wrap">
+                          {teamParticipants.map(participant => {
+                            const selectedCount = (selectionMap[participant.id] || []).length;
+                            const isActive = currentVoterId === participant.id;
+                            return (
+                              <button
+                                key={participant.id}
+                                onClick={() => setActiveVoterId(participant.id)}
+                                className={`px-3 py-2 rounded-xl text-xs border transition-colors ${
+                                  isActive
+                                    ? 'bg-indigo-600 border-indigo-600 text-white'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                                style={{ fontWeight: isActive ? 600 : 500 }}
+                              >
+                                {participant.name} · {selectedCount}/3
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      {ideas.map((idea, index) => {
+                        const selectedByCurrent = (selectionMap[currentVoterId] || []).includes(idea.id);
+                        const voteCount = ideaVoteSummary.find(item => item.id === idea.id)?.votes || 0;
+                        const isSelectedIdea = selectedIdea === idea.id;
+                        return (
+                          <div key={idea.id} className={`border rounded-xl p-3 transition-colors ${
+                            isSelectedIdea ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'
+                          }`}>
+                            <div className="flex items-start gap-3">
+                              <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 text-xs flex items-center justify-center shrink-0 mt-0.5" style={{ fontWeight: 700 }}>
+                                {index + 1}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-slate-800">{idea.text}</p>
+                                <div className="flex items-center gap-2 flex-wrap mt-2">
+                                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${voteCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`} style={{ fontWeight: 600 }}>
+                                    {voteCount} voto{voteCount !== 1 ? 's' : ''}
+                                  </span>
+                                  {topIdeas.some(item => item.id === idea.id) && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700" style={{ fontWeight: 600 }}>
+                                      Entre las mas votadas
+                                    </span>
+                                  )}
+                                  {isSelectedIdea && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700" style={{ fontWeight: 600 }}>
+                                      Idea elegida
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => setIdeas(prev => prev.filter(item => item.id !== idea.id))}
+                                className="text-slate-300 hover:text-red-400 transition-colors"
+                              >
+                                <X size={13} />
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap mt-3">
+                              <button
+                                onClick={() => toggleIdeaVote(currentVoterId, idea.id)}
+                                className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                                  selectedByCurrent
+                                    ? 'bg-indigo-600 border-indigo-600 text-white'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                                style={{ fontWeight: 600 }}
+                              >
+                                {selectedByCurrent ? 'Ya esta en el top 3' : 'Marcar en el top 3'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (selectedIdea !== idea.id) setLandedIdeaText('');
+                                  setSelectedIdea(idea.id);
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                                  isSelectedIdea
+                                    ? 'bg-emerald-600 border-emerald-600 text-white'
+                                    : 'bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                                }`}
+                                style={{ fontWeight: 600 }}
+                              >
+                                {isSelectedIdea ? 'Idea final activa' : 'Elegir como idea final'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {ideas.length === 0 && (
+                      <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl mt-3">
+                        Tus ideas apareceran aqui. Empieza con una primera propuesta y sigue ampliando opciones.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setShowInspiración(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 text-left transition-colors"
+                    >
+                      <span className="text-sm text-slate-700" style={{ fontWeight: 500 }}>
+                        Inspiracion de otros sectores
+                        <span className="text-xs text-slate-400 ml-2" style={{ fontWeight: 400 }}>(opcional)</span>
+                      </span>
+                      <ChevronDown size={14} className={`text-slate-400 transition-transform ${showInspiración ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showInspiración && (
+                      <div className="px-4 py-4 bg-white border-t border-slate-100 space-y-3">
+                        <p className="text-xs text-slate-500">Usalo solo si necesitas otro referente para enriquecer una idea. No bloquea el avance.</p>
+                        <div>
+                          <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>Sector</label>
+                          <select value={inspiracion.sector} onChange={e => setInspiracion(p => ({ ...p, sector: e.target.value }))} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="">Elige un sector...</option>
+                            {['Delivery / Logistica', 'Salud / Hospitales', 'Banca / Finanzas', 'Aeropuertos / Transporte', 'Retail / Supermercados', 'Educacion', 'Otro'].map(option => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>Link de ejemplo</label>
+                          <input value={inspiracion.link} onChange={e => setInspiracion(p => ({ ...p, link: e.target.value }))} placeholder="https://..." className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>Que podrias adaptar</label>
+                          <textarea value={inspiracion.queCopias} onChange={e => setInspiracion(p => ({ ...p, queCopias: e.target.value }))} rows={2} placeholder="La idea que vale la pena traer a este reto es..." className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="border border-slate-200 rounded-2xl p-4 bg-white">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                          {individualMode ? 'Tus 3 ideas favoritas' : 'Votos y coincidencias del equipo'}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {individualMode
+                            ? 'Elige las 3 opciones con mas potencial antes de decidir una idea final.'
+                            : 'Revisa que eligio cada integrante y detecta la idea con mayor preferencia.'}
+                        </p>
+                      </div>
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600" style={{ fontWeight: 600 }}>
+                        {(selectionMap[currentVoterId] || []).length}/3
+                      </span>
+                    </div>
+
+                    {!individualMode && (
+                      <div className="space-y-2 mb-4">
+                        {teamParticipants.map(participant => (
+                          <div key={participant.id} className="flex items-center justify-between text-xs border border-slate-100 rounded-xl px-3 py-2 bg-slate-50">
+                            <span className="text-slate-600" style={{ fontWeight: 500 }}>{participant.name}</span>
+                            <span className={`${(selectionMap[participant.id] || []).length === 3 ? 'text-emerald-600' : 'text-amber-600'}`} style={{ fontWeight: 600 }}>
+                              {(selectionMap[participant.id] || []).length}/3 elegidas
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      {topIdeas.length > 0 ? topIdeas.map((idea, index) => (
+                        <div key={idea.id} className={`border rounded-xl p-3 ${
+                          index === 0 ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'
+                        }`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>
+                                {index === 0 ? 'Mayor preferencia' : `Top ${index + 1}`}
+                              </p>
+                              <p className="text-sm text-slate-800">{idea.text}</p>
+                            </div>
+                            <span className="text-xs px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-700" style={{ fontWeight: 700 }}>
+                              {idea.votes} voto{idea.votes !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="text-center py-6 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                          Cuando empiecen a marcar sus top 3, aqui veras la idea con mayor preferencia.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {hasTie && (
+                    <div className="border border-amber-200 bg-amber-50 rounded-2xl p-4 space-y-3">
+                      <div>
+                        <p className="text-sm text-amber-800" style={{ fontWeight: 600 }}>Hay empate entre ideas compatibles</p>
+                        <p className="text-xs text-amber-700 mt-1">Elijan si conviene quedarse con una sola idea o combinar elementos que realmente funcionen juntas.</p>
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        {([
+                          { value: 'single', label: 'Elegir una sola idea' },
+                          { value: 'combine', label: 'Combinar ideas compatibles' },
+                        ] as const).map(option => (
+                          <button
+                            key={option.value}
+                            onClick={() => setTieDecisionMode(option.value)}
+                            className={`px-3 py-2 rounded-xl text-xs border transition-colors ${
+                              tieDecisionMode === option.value
+                                ? 'bg-amber-500 border-amber-500 text-white'
+                                : 'bg-white border-amber-200 text-amber-700 hover:bg-amber-100'
+                            }`}
+                            style={{ fontWeight: 600 }}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="space-y-2">
+                        {tiedIdeas.map(idea => (
+                          <button
+                            key={idea.id}
+                            onClick={() => {
+                              if (selectedIdea !== idea.id) setLandedIdeaText('');
+                              setSelectedIdea(idea.id);
+                            }}
+                            className={`w-full text-left border rounded-xl px-3 py-2 transition-colors ${
+                              selectedIdea === idea.id ? 'border-indigo-300 bg-white' : 'border-amber-200 bg-amber-50 hover:bg-white'
+                            }`}
+                          >
+                            <p className="text-sm text-slate-800">{idea.text}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-3">
+                    <div>
+                      <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Idea final elegida</p>
+                      <p className="text-xs text-slate-500 mt-1">El output de este modulo es una sola propuesta mas aterrizada y lista para definir la hipotesis a validar.</p>
+                    </div>
+
+                    {selectedIdea ? (
+                      <>
+                        <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-3">
+                          <p className="text-xs text-indigo-500 mb-1" style={{ fontWeight: 600 }}>IDEA BASE</p>
+                          <p className="text-sm text-indigo-900" style={{ fontWeight: 600 }}>{selectedIdeaText}</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-xs text-slate-600" style={{ fontWeight: 600 }}>Filtro simple de viabilidad y factibilidad</p>
+                          {([
+                            { key: 'recursosMinimos' as const, label: 'Se puede ejecutar con recursos minimos o apoyo liviano.' },
+                            { key: 'pruebaLigera' as const, label: 'Se puede probar sin depender de una implementacion grande.' },
+                            { key: 'versionSimple' as const, label: 'Se puede aterrizar a una version simple, manual o no-code.' },
+                          ]).map(item => (
+                            <label key={item.key} className="flex items-start gap-2 border border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={ideaLandingChecks[item.key]}
+                                onChange={e => setIdeaLandingChecks(prev => ({ ...prev, [item.key]: e.target.checked }))}
+                                className="mt-0.5 w-4 h-4 accent-indigo-600"
+                              />
+                              <span className="text-xs text-slate-700">{item.label}</span>
+                            </label>
+                          ))}
+                        </div>
+
+                        {(ideaNeedsLanding || !landingChecksComplete || tieDecisionMode === 'combine') && (
+                          <div>
+                            <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>
+                              Version aterrizada de la idea
+                            </label>
+                            <textarea
+                              value={landedIdeaText}
+                              onChange={e => setLandedIdeaText(e.target.value)}
+                              rows={4}
+                              placeholder={tieDecisionMode === 'combine'
+                                ? 'Escribe una sola propuesta que combine lo mejor de las ideas empatadas en una version ejecutable.'
+                                : 'Reescribe la idea en una version mas viable, simple y facil de probar.'}
+                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                            />
+                            <p className="text-xs text-slate-400 mt-1">
+                              Si la idea ya esta aterrizada, usa este espacio para dejar clara la version que pasara al siguiente modulo.
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50">
+                          <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 600 }}>Output del modulo</p>
+                          <p className="text-sm text-emerald-900" style={{ fontWeight: 600 }}>
+                            {landedIdeaText.trim() || selectedIdeaText}
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-6 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                        Primero elige una idea final desde la lista o desde el resumen de votos.
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>
+                      Evidencias del proceso <span className="text-slate-400 text-xs" style={{ fontWeight: 400 }}>(opcional)</span>
+                    </p>
+                    <p className="text-xs text-slate-400 mb-3">
+                      Si quieres dejar trazabilidad del ejercicio, sube una foto o comparte un link con el trabajo del equipo.
+                    </p>
+                    <EvidenceUploader />
+                  </div>
+                </div>
+              </div>
+
+              {!moduloBListo && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <p className="text-xs text-slate-600" style={{ fontWeight: 600 }}>Para avanzar necesitas:</p>
+                  {[
+                    { ok: ideas.length >= 10, label: ideas.length >= 10 ? '10+ ideas registradas.' : `${ideas.length}/10 ideas. Sigue ampliando opciones.` },
+                    {
+                      ok: teamParticipants.every(participant => (selectionMap[participant.id] || []).length === 3),
+                      label: teamParticipants.every(participant => (selectionMap[participant.id] || []).length === 3)
+                        ? (individualMode ? 'Ya elegiste tus 3 favoritas.' : 'Todo el equipo ya eligio sus 3 favoritas.')
+                        : (individualMode ? `Te faltan ${3 - (selectionMap[currentVoterId] || []).length} seleccion${3 - (selectionMap[currentVoterId] || []).length === 1 ? '' : 'es'} para tu top 3.` : 'Todavia falta que el equipo complete sus selecciones.')
+                    },
+                    { ok: Boolean(selectedIdea), label: selectedIdea ? 'Ya hay una idea final elegida.' : 'Elige una idea final para cerrar el modulo.' },
+                    {
+                      ok: landedIdeaReady,
+                      label: landedIdeaReady
+                        ? 'La idea final ya quedo aterrizada.'
+                        : 'Aterriza la idea final con una version mas viable y facil de probar.'
+                    },
+                  ].map((item, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${item.ok ? 'bg-emerald-100' : 'bg-slate-100'}`}>
+                        {item.ok ? <CheckCircle2 size={10} className="text-emerald-600" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-300 block" />}
+                      </div>
+                      <p className={`text-xs ${item.ok ? 'text-emerald-700' : 'text-slate-400'}`}>{item.label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  if (selectedIdea && landedIdeaText.trim()) {
+                    setIdeas(prev => prev.map(idea => (
+                      idea.id === selectedIdea
+                        ? { ...idea, text: landedIdeaText.trim() }
+                        : idea
+                    )));
+                  }
+                  setActiveModule('C');
+                }}
+                disabled={!moduloBListo}
+                className={`w-full rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors ${moduloBListo ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                style={{ fontWeight: 500 }}
+              >
+                {moduloBListo
+                  ? <>Idea aterrizada lista para pasar al siguiente modulo <ChevronRight size={15} /></>
+                  : <><Lock size={14} /> Completa la seleccion y aterriza una idea para avanzar</>}
+              </button>
+            </div>
+          )}
+          {false && activeModule === 'B' && (
             <div className="space-y-5">
 
               {/* Header */}
@@ -951,6 +1798,412 @@ export function Step2Page() {
 
           {/* Module C: Elegir la idea a experimentar */}
           {activeModule === 'C' && (
+            <div className="space-y-6">
+              <div>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo C · Cards de experimentación</h1>
+                  <StatusChip status={moduleCReady ? 'Completado' : 'En progreso'} size="sm" />
+                </div>
+                <p className="text-sm text-slate-500">
+                  Convierte la idea elegida en un experimento pequeño, claro y medible. Aquí defines qué validar primero, cómo probarlo y qué evidencia vas a guardar.
+                </p>
+              </div>
+
+              {selectedIdea ? (
+                <div className="border-2 border-indigo-200 bg-indigo-50 rounded-2xl p-4 space-y-3">
+                  <div>
+                    <p className="text-xs text-indigo-500 mb-1" style={{ fontWeight: 700 }}>IDEA SELECCIONADA</p>
+                    <p className="text-base text-indigo-900" style={{ fontWeight: 600 }}>{selectedIdeaText}</p>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="bg-white/70 border border-indigo-100 rounded-xl p-3">
+                      <p className="text-xs text-indigo-500 mb-1" style={{ fontWeight: 700 }}>Por qué fue elegida</p>
+                      <p className="text-sm text-slate-700">{cRazonGana.trim() || 'Todavía falta justificar por qué esta idea merece pasar a experimento.'}</p>
+                    </div>
+                    <div className="bg-white/70 border border-indigo-100 rounded-xl p-3">
+                      <p className="text-xs text-indigo-500 mb-1" style={{ fontWeight: 700 }}>Qué se busca probar primero</p>
+                      <p className="text-sm text-slate-700">{cQueProbamos.trim() || 'Define primero en Módulo B qué parte de la idea quieres probar.'}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-indigo-700">
+                    <span className="px-2.5 py-1 rounded-full bg-white border border-indigo-100">HMW activo: {trimForCard(hmw, 90)}</span>
+                    <span className="px-2.5 py-1 rounded-full bg-white border border-indigo-100">Línea roja: {challengeAnchor.redLine}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="border border-amber-200 bg-amber-50 rounded-2xl p-4">
+                  <p className="text-sm text-amber-800" style={{ fontWeight: 600 }}>Primero necesitas una idea elegida</p>
+                  <p className="text-xs text-amber-700 mt-1">Vuelve al Módulo B, elige una sola idea y aterrízala antes de construir la Card de experimentación.</p>
+                  <button
+                    onClick={() => setActiveModule('B')}
+                    className="mt-3 inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-4 py-2 text-sm transition-colors"
+                    style={{ fontWeight: 500 }}
+                  >
+                    Volver al Módulo B <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+
+              {selectedIdea && (
+                <>
+                  <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-5">
+                    <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-4">
+                      <div>
+                        <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Que vas a probar</p>
+                        <p className="text-xs text-slate-500 mt-1">Aterriza la idea en una ficha MVP clara: qué problema atiende, cuál es la hipótesis crítica y qué decisión te ayudará a tomar.</p>
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Nombre del MVP o experimento</label>
+                          <input
+                            value={experimentCard.name}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Ej. MVP formulario unificado de accesos"
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Problema u oportunidad que busca atender</label>
+                          <input
+                            value={experimentCard.problem}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, problem: e.target.value }))}
+                            placeholder="Ej. El alta de accesos es lenta y poco trazable."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Hipótesis a validar</label>
+                        <p className="text-xs text-slate-500 mb-2">Piensa aquí la hipótesis más riesgosa: la que más incertidumbre tiene y que, si falla, debilita la propuesta.</p>
+                        <textarea
+                          value={experimentCard.hypothesis}
+                          onChange={e => setExperimentCard(prev => ({ ...prev, hypothesis: e.target.value }))}
+                          rows={3}
+                          placeholder="Si [usuario] usa/interactúa con [mecanismo mínimo], entonces [resultado esperado], porque [supuesto principal]."
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                        />
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Decisión que este MVP ayudará a tomar</label>
+                          <textarea
+                            value={experimentCard.decision}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, decision: e.target.value }))}
+                            rows={3}
+                            placeholder="Ej. Decidir si escalar, iterar, cambiar el formato o detener la iniciativa."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Comportamiento o resultado esperado</label>
+                          <textarea
+                            value={experimentCard.expectedOutcome}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, expectedOutcome: e.target.value }))}
+                            rows={3}
+                            placeholder="Ej. Menos errores, mayor velocidad, mejor trazabilidad o mayor adopción."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-4">
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                          <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Como lo vas a probar</p>
+                          <p className="text-xs text-slate-500 mt-1">Define la pieza mínima, la herramienta, el contexto y los actores para correr una prueba pequeña y ejecutable.</p>
+                        </div>
+                        <button
+                          onClick={handleIaExperimentGuide}
+                          disabled={experimentAiLoading}
+                          className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 transition-colors disabled:opacity-50"
+                          style={{ fontWeight: 500 }}
+                        >
+                          {experimentAiLoading
+                            ? <><span className="animate-spin inline-block">...</span> Sugiriendo...</>
+                            : <><Sparkles size={11} /> IA: sugerir mecanismo y herramienta</>}
+                        </button>
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Mecanismo mínimo</label>
+                          <textarea
+                            value={experimentCard.minimumMechanism}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, minimumMechanism: e.target.value }))}
+                            rows={3}
+                            placeholder="Ej. Un formulario, una landing, una demo guiada o una versión manual del servicio."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Herramienta o formato de prueba</label>
+                          <textarea
+                            value={experimentCard.tool}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, tool: e.target.value }))}
+                            rows={3}
+                            placeholder="Ej. WhatsApp, QR, landing, formulario, piloto manual, chatbot simple, one pager, Make o n8n."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Contexto de prueba</label>
+                          <textarea
+                            value={experimentCard.context}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, context: e.target.value }))}
+                            rows={4}
+                            placeholder="Incluye lugar, momento del proceso, duración estimada y cantidad de usuarios o casos."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Usuarios y actores involucrados</label>
+                          <textarea
+                            value={experimentCard.actors}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, actors: e.target.value }))}
+                            rows={4}
+                            placeholder="Usuario principal, actores relevantes, quién facilita y quién podría bloquear."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-xl p-4 bg-white space-y-3">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div>
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Pasos mínimos para montar el experimento</p>
+                            <p className="text-xs text-slate-500">Deja una secuencia simple de 5 a 8 pasos. La ejecución detallada quedará para el siguiente step.</p>
+                          </div>
+                          <span className={`text-xs px-2.5 py-1 rounded-full ${completedExperimentSteps >= 5 && completedExperimentSteps <= 8 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`} style={{ fontWeight: 600 }}>
+                            {completedExperimentSteps}/8 pasos
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {testCard.pasos.map((step, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs flex items-center justify-center shrink-0" style={{ fontWeight: 700 }}>{index + 1}</span>
+                              <input
+                                value={step}
+                                onChange={e => {
+                                  const nextSteps = [...testCard.pasos];
+                                  nextSteps[index] = e.target.value;
+                                  setTestCard(prev => ({ ...prev, pasos: nextSteps }));
+                                }}
+                                placeholder={`Paso ${index + 1}`}
+                                className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                              {testCard.pasos.length > 5 && (
+                                <button
+                                  onClick={() => setTestCard(prev => ({ ...prev, pasos: prev.pasos.filter((_, stepIndex) => stepIndex !== index) }))}
+                                  className="text-slate-300 hover:text-red-400 transition-colors"
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {testCard.pasos.length < 8 && (
+                          <button
+                            onClick={() => setTestCard(prev => ({ ...prev, pasos: [...prev.pasos, ''] }))}
+                            className="inline-flex items-center gap-2 text-xs text-indigo-600 hover:text-indigo-700"
+                            style={{ fontWeight: 600 }}
+                          >
+                            <Plus size={13} /> Agregar paso
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-4">
+                      <div>
+                        <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Como sabras si funciono</p>
+                        <p className="text-xs text-slate-500 mt-1">Aquí dejas la señal que vas a medir y la evidencia que recogerás para evaluar si vale la pena seguir.</p>
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Métrica de éxito</label>
+                          <textarea
+                            value={experimentCard.metric}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, metric: e.target.value }))}
+                            rows={3}
+                            placeholder="Ej. porcentaje de adopción, reducción de errores, tiempo promedio o señal de comprensión."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Riesgos y límites</label>
+                          <textarea
+                            value={testCard.riesgos}
+                            onChange={e => setTestCard(prev => ({ ...prev, riesgos: e.target.value }))}
+                            rows={3}
+                            placeholder="Ej. seguridad, operación, experiencia cliente, reputación o cumplimiento."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                          <p className="text-xs text-indigo-500 mt-2">Línea roja principal: {challengeAnchor.redLine}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Evidencia cuantitativa</label>
+                          <textarea
+                            value={experimentCard.evidenceQuant}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, evidenceQuant: e.target.value }))}
+                            rows={3}
+                            placeholder="Ej. tiempos, volumen, porcentaje de uso, errores o conversiones."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Evidencia cualitativa</label>
+                          <textarea
+                            value={experimentCard.evidenceQual}
+                            onChange={e => setExperimentCard(prev => ({ ...prev, evidenceQual: e.target.value }))}
+                            rows={3}
+                            placeholder="Ej. comentarios, notas de observación, citas, capturas o feedback breve."
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border border-emerald-200 bg-emerald-50 rounded-2xl p-4 space-y-3">
+                    <div>
+                      <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>FICHA RESUMEN DEL MVP</p>
+                      <p className="text-sm text-emerald-900" style={{ fontWeight: 600 }}>{experimentCard.name || 'Nombre pendiente'}</p>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div className="bg-white/70 border border-emerald-100 rounded-xl p-3">
+                        <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Problema u oportunidad</p>
+                        <p className="text-sm text-slate-700">{experimentCard.problem || 'Pendiente de definir'}</p>
+                      </div>
+                      <div className="bg-white/70 border border-emerald-100 rounded-xl p-3">
+                        <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Hipótesis crítica</p>
+                        <p className="text-sm text-slate-700">{experimentCard.hypothesis || 'Pendiente de definir'}</p>
+                      </div>
+                      <div className="bg-white/70 border border-emerald-100 rounded-xl p-3">
+                        <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Decisión que ayudará a tomar</p>
+                        <p className="text-sm text-slate-700">{experimentCard.decision || 'Pendiente de definir'}</p>
+                      </div>
+                      <div className="bg-white/70 border border-emerald-100 rounded-xl p-3">
+                        <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Mecanismo y herramienta</p>
+                        <p className="text-sm text-slate-700">{experimentCard.minimumMechanism || 'Pendiente'}{experimentCard.tool ? ` · ${experimentCard.tool}` : ''}</p>
+                      </div>
+                      <div className="bg-white/70 border border-emerald-100 rounded-xl p-3">
+                        <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Contexto y actores</p>
+                        <p className="text-sm text-slate-700">{experimentCard.context || 'Pendiente de definir'}</p>
+                        <p className="text-xs text-slate-500 mt-1">{experimentCard.actors || 'Actores pendientes de definir'}</p>
+                      </div>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div className="bg-white/70 border border-emerald-100 rounded-xl p-3">
+                        <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Métrica de éxito</p>
+                        <p className="text-sm text-slate-700">{experimentCard.metric || 'Pendiente de definir'}</p>
+                      </div>
+                      <div className="bg-white/70 border border-emerald-100 rounded-xl p-3">
+                        <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Evidencia a recoger</p>
+                        <p className="text-sm text-slate-700">{experimentCard.evidenceQuant || 'Pendiente'}{experimentCard.evidenceQual ? ` · ${experimentCard.evidenceQual}` : ''}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!moduleCReady && (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                      <p className="text-xs text-slate-600" style={{ fontWeight: 600 }}>Para dejar la Card lista necesitas:</p>
+                      {[
+                        { ok: !!selectedIdea, label: selectedIdea ? 'La idea elegida ya está conectada.' : 'Primero elige una idea en el módulo anterior.' },
+                        { ok: !!experimentCard.name.trim() && !!experimentCard.problem.trim(), label: experimentCard.name.trim() && experimentCard.problem.trim() ? 'Nombre y problema del MVP definidos.' : 'Completa nombre del MVP y problema que atiende.' },
+                        { ok: !!experimentCard.hypothesis.trim() && !!experimentCard.decision.trim() && !!experimentCard.expectedOutcome.trim(), label: experimentCard.hypothesis.trim() && experimentCard.decision.trim() && experimentCard.expectedOutcome.trim() ? 'Hipótesis crítica, decisión y resultado esperado definidos.' : 'Completa hipótesis, decisión y resultado esperado.' },
+                        { ok: !!experimentCard.minimumMechanism.trim() && !!experimentCard.tool.trim() && !!experimentCard.context.trim() && !!experimentCard.actors.trim(), label: experimentCard.minimumMechanism.trim() && experimentCard.tool.trim() && experimentCard.context.trim() && experimentCard.actors.trim() ? 'Mecanismo, herramienta, contexto y actores ya están claros.' : 'Completa mecanismo mínimo, herramienta, contexto y actores.' },
+                        { ok: completedExperimentSteps >= 5 && completedExperimentSteps <= 8, label: completedExperimentSteps >= 5 && completedExperimentSteps <= 8 ? 'Paso a paso completo.' : `Necesitas entre 5 y 8 pasos. Hoy tienes ${completedExperimentSteps}.` },
+                        { ok: !!experimentCard.metric.trim() && !!experimentCard.evidenceQuant.trim() && !!experimentCard.evidenceQual.trim() && !!testCard.riesgos.trim(), label: experimentCard.metric.trim() && experimentCard.evidenceQuant.trim() && experimentCard.evidenceQual.trim() && testCard.riesgos.trim() ? 'Métrica, riesgos y evidencia definidos.' : 'Completa métrica, riesgos y evidencia cuantitativa/cualitativa.' },
+                      ].map((item, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${item.ok ? 'bg-emerald-100' : 'bg-slate-100'}`}>
+                            {item.ok ? <CheckCircle2 size={10} className="text-emerald-600" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-300 block" />}
+                          </div>
+                          <p className={`text-xs ${item.ok ? 'text-emerald-700' : 'text-slate-400'}`}>{item.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-4">
+                    <div>
+                      <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Revisión de la Card</p>
+                      <p className="text-xs text-slate-500 mt-1">Usa IA para revisar la coherencia de la card y deja espacio para observaciones del experto sobre el experimento.</p>
+                    </div>
+
+                    <div className="flex gap-3 flex-wrap">
+                      <button
+                        onClick={() => setShowSendModal(true)}
+                        disabled={!moduleCReady}
+                        className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-colors ${moduleCReady ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                        style={{ fontWeight: 500 }}
+                      >
+                        <Send size={14} /> Evaluar Card con IA
+                      </button>
+                      <button
+                        onClick={() => setShowMentorModal(true)}
+                        disabled={!moduleCReady}
+                        className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-colors ${moduleCReady ? 'border border-amber-200 text-amber-700 hover:bg-amber-50' : 'border border-slate-200 text-slate-400 cursor-not-allowed'}`}
+                        style={{ fontWeight: 500 }}
+                      >
+                        <Calendar size={14} /> Pedir revisión de experto
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 600 }}>Comentarios del experto sobre la Card</label>
+                      <textarea
+                        value={experimentExpertComment}
+                        onChange={e => setExperimentExpertComment(e.target.value)}
+                        rows={3}
+                        placeholder="Ej. La hipótesis está bien enfocada, pero conviene simplificar el método o precisar mejor la evidencia."
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                      />
+                    </div>
+
+                    {hasFeedback && <FeedbackIAPanel feedback={MOCK_FEEDBACK_S2} />}
+
+                    {hasFeedback && (
+                      sessionBooked ? (
+                        <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                              <CheckCircle2 size={15} className="text-emerald-600" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm text-emerald-800" style={{ fontWeight: 600 }}>Revisión del experto agendada</p>
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800" style={{ fontWeight: 600 }}>Step 2 listo</span>
+                              </div>
+                              <p className="text-xs text-emerald-600 mt-1">La Card quedó lista para pasar a revisión final del step.</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+                          <p className="text-sm text-amber-800" style={{ fontWeight: 600 }}>Falta la revisión del experto</p>
+                          <p className="text-xs text-amber-600 mt-1">Cuando la IA la vea consistente, agenda o registra la revisión experta para cerrar el Step 2.</p>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {false && activeModule === 'C' && (
             <div className="space-y-5">
 
               {/* Header */}
@@ -1386,12 +2639,12 @@ export function Step2Page() {
       {showSendModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
-            <h3 className="text-slate-900 mb-2" style={{ fontWeight: 600 }}>Enviar Step 2 a revisión IA</h3>
-            <p className="text-sm text-slate-500 mb-4">Se enviará: HMW + Ideas + Shortlist + Matriz DVF + Solution Card + Test Card.</p>
+            <h3 className="text-slate-900 mb-2" style={{ fontWeight: 600 }}>Evaluar Card de experimentación con IA</h3>
+            <p className="text-sm text-slate-500 mb-4">La IA revisará la hipótesis, el test, la métrica, los pasos, los riesgos y la evidencia definida para tu experimento.</p>
             <div className="flex gap-3">
               <button onClick={() => setShowSendModal(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm" style={{ fontWeight: 500 }}>Cancelar</button>
               <button onClick={() => { setShowSendModal(false); setTimeout(() => setHasFeedback(true), 1500); }} className="flex-1 bg-violet-600 text-white rounded-xl py-2.5 text-sm hover:bg-violet-700 transition-colors" style={{ fontWeight: 500 }}>
-                Enviar a revisión IA
+                Evaluar con IA
               </button>
             </div>
           </div>

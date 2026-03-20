@@ -2,2215 +2,2870 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Lock, CheckCircle2, ChevronRight, Sparkles, X,
-  FileText, Presentation, Send, Calendar, Clock, Download,
-  Share2, Package, Users, Paperclip, Plus, Edit2, Check,
-  Play, Video, Image, ClipboardList, Building2, AlertTriangle,
-  Target, Zap, TrendingUp, BarChart2, ChevronDown, ChevronUp,
-  BookOpen, Settings,
+  AlertTriangle,
+  ArrowLeft,
+  BookOpen,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Copy,
+  Download,
+  FileText,
+  Lock,
+  Mail,
+  MessageSquare,
+  Mic,
+  MoveRight,
+  Paperclip,
+  Play,
+  Presentation,
+  Sparkles,
+  Target,
+  Users,
+  Video,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
-import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
 import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 type ModuleId = 'overview' | 'A' | 'B' | 'C';
-type Audiencia = 'Gerencia' | 'Sponsor' | 'Comité' | 'Equipo operativo' | 'TI' | 'RRHH';
-type ObjetivoStory = 'Alinear' | 'Pedir aprobación' | 'Pedir recursos' | 'Decidir' | 'Informar avance';
-type DecisionTipo = 'Go' | 'Iterar' | 'No-Go' | 'Pivote' | null;
-type DemoFormato = 'Link demo' | 'Video' | 'Capturas' | 'Registro de uso';
-type TabC = 'deck' | 'plan' | 'talk';
+type Audiencia =
+  | 'Sponsor'
+  | 'Gerencia'
+  | 'Comite'
+  | 'Equipo operativo'
+  | 'Area duena';
+type MeetingGoal =
+  | 'Pedir aprobacion'
+  | 'Pedir recursos'
+  | 'Alinear responsables'
+  | 'Definir siguiente experimento'
+  | 'Compartir aprendizajes';
+type DecisionValue = 'Go' | 'Iterar' | 'Pivote' | 'No-Go' | null;
+type ClosureType =
+  | 'Implementar / mantener'
+  | 'Iterar'
+  | 'Pivotear'
+  | 'Solo aprendizajes';
+type MeetingOutcome =
+  | 'Aprobar implementacion'
+  | 'Aprobar siguiente experimento'
+  | 'Alinear ownership'
+  | 'Escalar a sponsor o comite'
+  | 'Cerrar con aprendizajes';
+type PresentationKey =
+  | 'problem'
+  | 'urgency'
+  | 'evidence'
+  | 'proposal'
+  | 'solutionComponents'
+  | 'usageFlow'
+  | 'tests'
+  | 'results'
+  | 'recommendation'
+  | 'orgNeeds'
+  | 'orgRisks'
+  | 'nextStep';
+type MentorDecision =
+  | 'Pendiente'
+  | 'Aprobado para presentar'
+  | 'Ajustar antes de presentar'
+  | 'Reensayar'
+  | 'No listo aun';
+type NextStepType =
+  | 'Reunion con sponsor'
+  | 'Presentacion a gerencia'
+  | 'Demo Day'
+  | 'Solo dejar recomendacion / aprendizajes';
+type MeetingStatus = 'Pendiente' | 'Invitado' | 'Agendado' | 'Confirmado';
+type PdfState = 'none' | 'uploaded' | 'analyzed';
 
 interface DemoItem {
-  id: string; formato: DemoFormato; url: string;
-  queDemuesta: string; audiencia: string;
+  id: string;
+  type: 'Link demo' | 'Video' | 'Capturas' | 'Registro de uso';
+  url: string;
+  proof: string;
+  supports: string;
+  usedIn: string;
 }
 
-// ── Seed data ─────────────────────────────────────────────────────────────────
-const MOCK_S4_FEEDBACK = {
-  status: 'Aprobado' as const,
-  summary: 'La historia es coherente con los Steps anteriores. El relato integra bien el reto, la solución, la evidencia y la decisión.',
-  goodPoints: ['Narrativa consistente con Steps 1–3', 'Métricas integradas', 'Decisión y aprendizajes documentados', 'Story outline completo'],
-  missing: [], actions: [],
-  questions: ['¿El story outline es comprensible para alguien sin contexto interno?'],
-  timestamp: '2025-03-01T15:00:00Z',
+interface EvidenceItem {
+  id: string;
+  title: string;
+  source: string;
+  selected: boolean;
+  proves: string;
+  supportsDecision: string;
+  usedIn: string;
+}
+
+interface PlanRow {
+  id: string;
+  stage: string;
+  activity: string;
+  owner: string;
+  area: string;
+  timing: string;
+  dependency: string;
+  expectedResult: string;
+}
+
+const AUDIENCES: Audiencia[] = [
+  'Sponsor',
+  'Gerencia',
+  'Comite',
+  'Equipo operativo',
+  'Area duena',
+];
+
+const MEETING_GOALS: MeetingGoal[] = [
+  'Pedir aprobacion',
+  'Pedir recursos',
+  'Alinear responsables',
+  'Definir siguiente experimento',
+  'Compartir aprendizajes',
+];
+
+const CLOSURE_TYPES: ClosureType[] = [
+  'Implementar / mantener',
+  'Iterar',
+  'Pivotear',
+  'Solo aprendizajes',
+];
+
+const MEETING_OUTCOMES: MeetingOutcome[] = [
+  'Aprobar implementacion',
+  'Aprobar siguiente experimento',
+  'Alinear ownership',
+  'Escalar a sponsor o comite',
+  'Cerrar con aprendizajes',
+];
+
+const PRESENTATION_SECTIONS: Array<{
+  key: PresentationKey;
+  title: string;
+  help: string;
+}> = [
+  {
+    key: 'problem',
+    title: '1. Problema / oportunidad',
+    help: 'Explica el problema validado y a quien afecta. Debe poder entenderse sin contexto previo.',
+  },
+  {
+    key: 'urgency',
+    title: '2. Por que importa ahora',
+    help: 'Conecta el problema con negocio, operacion o experiencia del usuario.',
+  },
+  {
+    key: 'evidence',
+    title: '3. Evidencia y datos de impacto',
+    help: 'Resume la evidencia principal y los datos que sostienen tu mensaje.',
+  },
+  {
+    key: 'proposal',
+    title: '4. Que propusimos / que disenamos',
+    help: 'Describe la apuesta del equipo y por que valia la pena probarla.',
+  },
+  {
+    key: 'solutionComponents',
+    title: '5. Componentes clave de la solucion',
+    help: 'Enumera lo minimo que la organizacion debe entender para decidir.',
+  },
+  {
+    key: 'usageFlow',
+    title: '6. Como se usa / como funciona',
+    help: 'Describe el flujo de uso para que la demo tenga sentido.',
+  },
+  {
+    key: 'tests',
+    title: '7. Que probamos',
+    help: 'Aclara alcance, muestra, criterio de exito y forma de validar.',
+  },
+  {
+    key: 'results',
+    title: '8. Que resultados o aprendizajes obtuvimos',
+    help: 'Muestra resultados y tambien lo que no funciono.',
+  },
+  {
+    key: 'recommendation',
+    title: '9. Que recomendamos ahora',
+    help: 'Conecta hallazgos, decision y recomendacion ejecutiva.',
+  },
+  {
+    key: 'orgNeeds',
+    title: '10. Que necesitamos de la organizacion',
+    help: 'Pide recursos, owners o habilitadores de forma concreta.',
+  },
+  {
+    key: 'orgRisks',
+    title: '11. Riesgos o consideraciones organizacionales',
+    help: 'Explica que podria frenar la implementacion o la siguiente validacion.',
+  },
+  {
+    key: 'nextStep',
+    title: '12. Proximo paso concreto',
+    help: 'Cierra con una accion puntual, fecha y responsable esperado.',
+  },
+];
+
+const DEFAULT_PRESENTATION: Record<PresentationKey, string> = {
+  problem:
+    'El alta de accesos para nuevos ingresos tarda entre 7 y 21 dias porque RRHH y TI operan con solicitudes dispersas y sin SLA visible.',
+  urgency:
+    'Hoy esto retrasa la incorporacion, genera horas manuales de seguimiento y deja una primera experiencia pobre para la persona que ingresa.',
+  evidence:
+    'En Steps 1 a 3 confirmamos el problema con entrevistas, tiempos reales y un piloto con 5 casos; 4 de 5 se resolvieron en menos de 24 horas.',
+  proposal:
+    'Propusimos un flujo unico de solicitud con formulario digital, trazabilidad compartida y un disparador claro para TI.',
+  solutionComponents:
+    'La solucion combina formulario unico, hoja de seguimiento visible, responsables definidos y criterio para separar casos especiales.',
+  usageFlow:
+    'RRHH activa la solicitud, TI recibe el requerimiento estandarizado y el equipo hace seguimiento con una sola fuente de verdad.',
+  tests:
+    'Probamos el flujo en un piloto controlado con 5 ingresos, midiendo tiempo de activacion, fricciones y percepcion del usuario.',
+  results:
+    'El piloto alcanzo 80% de casos resueltos en menos de 24 horas. El principal aprendizaje fue que los casos especiales requieren un camino aparte.',
+  recommendation:
+    'Recomendamos pasar a una implementacion acotada con reglas claras para casos especiales y responsables por area.',
+  orgNeeds:
+    'Necesitamos owner operativo, acuerdo de servicio con TI y tiempo de coordinacion con RRHH para escalar sin perder trazabilidad.',
+  orgRisks:
+    'Si no se define un owner y un manejo de excepciones, la iniciativa puede verse bien en el deck pero trabarse en operacion.',
+  nextStep:
+    'Cerrar validacion final con mentor, alinear sponsor y confirmar la reunion donde se movera la decision.',
 };
 
-const MOCK_EVIDENCIAS_S3 = [
-  { id: 'e1', tipo: 'Archivo', descripcion: 'Capturas de pantalla del formulario completo', fecha: '2025-02-24', incluir: true, queDemuesta: '(Placeholder) Que el formulario es funcional y completo.', queDecisionSoporta: 'Go', slidesSugerida: 'Resultado' },
-  { id: 'e2', tipo: 'Link', descripcion: 'Hoja de seguimiento en Google Sheets', fecha: '2025-02-25', incluir: true, queDemuesta: '(Placeholder) El registro de tiempo de respuesta por caso.', queDecisionSoporta: 'Go', slidesSugerida: 'Resultado' },
-  { id: 'e3', tipo: 'Nota', descripcion: 'Observaciones del facilitador durante el piloto', fecha: '2025-02-26', incluir: false, queDemuesta: '', queDecisionSoporta: '', slidesSugerida: 'Aprendizaje' },
-];
-
-const SLIDES_EJECUTIVO = [
-  { n: 1, titulo: 'El problema', bullets: ['(Placeholder) Nuevos empleados tardaban 7–21 días en tener accesos activos.', '(Placeholder) Costo: ~X horas de RRHH + TI por caso.'] },
-  { n: 2, titulo: 'Nuestra hipótesis', bullets: ['(Placeholder) Formulario unificado → ≤24h en ≥80% de casos.', '(Placeholder) Suposición clave: TI puede comprometerse a ese plazo.'] },
-  { n: 3, titulo: 'El experimento', bullets: ['(Placeholder) Piloto con 5 empleados · Google Forms + TI.', '(Placeholder) Semana del 24 de febrero.'] },
-  { n: 4, titulo: 'Demo / evidencia de uso', bullets: ['(Placeholder) Registro en video del flujo del formulario.', '(Placeholder) Qué pasó: accesos activos en < 5 horas en el caso 1.', '(Placeholder) Decisión que soporta: Go — el sistema funciona tal como se diseñó.'] },
-  { n: 5, titulo: 'Resultados', bullets: ['(Placeholder) 4/5 casos en ≤24h (80% — umbral alcanzado).', '(Placeholder) NPS: 82. 1 caso especial: 36h.'] },
-  { n: 6, titulo: 'Decisión y próximo paso', bullets: ['(Placeholder) Go — escalamos al 100% de ingresos desde abril.', '(Placeholder) SLA formal con TI + automatización casos especiales.'] },
-];
-
-const SLIDES_COMPLETO = [
-  ...SLIDES_EJECUTIVO.slice(0, 5),
-  { n: 6, titulo: 'Aprendizajes clave', bullets: ['(Placeholder) Formulario resuelve 80% estándar. Accesos especiales = cuello de botella.', '(Placeholder) TI dispuesto si hay automatización.'] },
-  { n: 7, titulo: 'Riesgos y mitigaciones', bullets: ['(Placeholder) Casos especiales → flujo de escalado.', '(Placeholder) Volumen → automatización SAP.'] },
-  { n: 8, titulo: 'Pedido al comité', bullets: ['(Placeholder) Aprobar presupuesto SAP (estimado $X).', '(Placeholder) Escalar a todos los ingresos desde abril 2025.', '(Placeholder) SLA formal ≤24h con TI.'] },
-];
-
-const IA_NARRATIVA_VERSIONES = [
-  { tipo: 'Ejecutiva (60–90 seg)', tags: ['Impacto', 'Decisión'], descripcion: 'Directa, orientada a decisiones. Foco en resultados y pedido final. Ideal para gerencia y sponsors.', ejemplo: '(Placeholder) Reducimos el alta en TI de 7 días a ≤24h en el 80% de los casos. Lo probamos con 5 empleados. El NPS fue 82. Recomendamos escalar.' },
-  { tipo: 'Operativa (implementación)', tags: ['Operación', 'Riesgo'], descripcion: 'Foco en cómo implementar, quién hace qué y qué riesgos manejar. Para equipos operativos.', ejemplo: '(Placeholder) El formulario automatiza la solicitud de accesos. El proceso requiere que TI confirme respuesta en 24h. El riesgo principal: accesos especiales que necesitan proceso separado.' },
-  { tipo: 'Técnica (evidencia + método)', tags: ['Costo/beneficio', 'Tiempo'], descripcion: 'Detalla metodología, métricas y evidencia. Para audiencias técnicas o comités de evaluación.', ejemplo: '(Placeholder) H1: Formulario unificado ≤24h en ≥80% de casos. n=5. Resultado: 80% (4/5). NPS=82. Umbral alcanzado. Decisión: Go condicionado a SLA formal TI.' },
-];
-
-const IA_EVIDENCIAS_REC = [
-  { ev: 'Hoja de seguimiento en Google Sheets', razon: '(Placeholder) La evidencia más cuantitativa: tiempos caso a caso. Directamente vinculada al umbral de ≤24h.' },
-  { ev: 'Capturas de pantalla del formulario', razon: '(Placeholder) Demuestra que el artefacto existe y es funcional. Clave para quien no conoce el contexto.' },
-  { ev: 'Observaciones del facilitador', razon: '(Placeholder) Añade contexto cualitativo y credibilidad. Complementa métricas con "lo que no mide el sheet".' },
-];
-
-const IA_DEMO_RECOMENDACIONES = [
-  { titulo: 'Graba el flujo completo del formulario', descripcion: '(Placeholder) Un video de 60–90 segundos mostrando el formulario desde el punto de vista del empleado nuevo. Demuestra usabilidad real.', impacto: 'alto' },
-  { titulo: 'Captura el sheet de seguimiento en tiempo real', descripcion: '(Placeholder) Muestra el sheet con los timestamps de 4 casos resueltos. Evidencia directa del umbral cumplido.', impacto: 'alto' },
-  { titulo: 'Registra el momento de activación de accesos', descripcion: '(Placeholder) Captura de pantalla del empleado con accesos activos + timestamp. El momento de "aha" de la historia.', impacto: 'medio' },
-];
-
-const CHECKLIST_S4_IA = [
-  { item: 'Audiencia definida y mensaje adaptado', sugerencia: 'Define la audiencia en "Configuración de historia" antes de redactar el relato.' },
-  { item: 'Story outline completo (las 7 secciones)', sugerencia: 'Las secciones Aprendizajes y Próximo paso aún están sin completar.' },
-  { item: 'Demo / evidencia de uso agregada', sugerencia: 'Agrega un demo (video/capturas) para fortalecer la credibilidad ante comités.' },
-  { item: 'Evidencias seleccionadas y con mensaje', sugerencia: 'Define qué demuestra cada evidencia y qué decisión soporta.' },
-  { item: 'Plan listo según decisión (Go/Iterar/Pivote)', sugerencia: 'Genera el plan en la pestaña "Plan" del módulo C.' },
-  { item: 'Deck generado (estructura + láminas)', sugerencia: 'Usa "Generar deck según audiencia" en el módulo C.' },
-  { item: 'Talk track listo (60–90 seg)', sugerencia: 'Practica y completa el checklist de ensayo.' },
-];
-
-const DELIVERABLES_BY_STEP = [
+const DEFAULT_EVIDENCE: EvidenceItem[] = [
   {
-    step: 1, nombre: 'Entender el problema',
-    estado: 'Listo', color: 'emerald',
-    bullets: ['(Placeholder) Proceso de alta TI identificado: 7–21 días, 3 áreas involucradas.', '(Placeholder) Usuario afectado: 100% de empleados nuevos (~25/mes).', '(Placeholder) Evidencia: 12 entrevistas + hoja de tiempos de TI.'],
-    artefactos: ['Desafío', 'Perfil usuario', 'Problema raíz', 'Evidencias Step 1'],
-    resumen: { titulo: 'Resumen Step 1 — Entender el problema', items: [{ label: 'Desafío', value: '(Placeholder) Nuevos empleados esperan 7–21 días para tener accesos TI activos.' }, { label: 'Usuario', value: '(Placeholder) Empleados nuevos + RRHH + TI — 3 actores directos.' }, { label: 'Problema raíz', value: '(Placeholder) No existe un proceso formal de solicitud de accesos con SLA.' }, { label: 'Evidencia', value: '(Placeholder) 12 entrevistas, hoja de tiempos TI, análisis de emails de solicitud.' }] },
+    id: 'ev-1',
+    title: 'Capturas del formulario y del flujo final',
+    source: 'Piloto Step 3',
+    selected: true,
+    proves: 'Que la solucion existe y se entiende rapido para alguien que no participo en el piloto.',
+    supportsDecision: 'Implementar / mantener',
+    usedIn: 'Problema y solucion',
   },
   {
-    step: 2, nombre: 'Diseñar la solución',
-    estado: 'Listo', color: 'emerald',
-    bullets: ['(Placeholder) HMW: ¿Cómo podríamos reducir el tiempo de alta TI a 1 día?', '(Placeholder) Solución: Formulario unificado + notificación automática a TI.', '(Placeholder) Test Card: Umbral ≤24h en ≥80% de casos con piloto de 5 empleados.'],
-    artefactos: ['HMW', 'Ideas generadas', 'Matriz DVF', 'Solution Card', 'Test Card'],
-    resumen: { titulo: 'Resumen Step 2 — Diseñar la solución', items: [{ label: 'HMW', value: '(Placeholder) ¿Cómo podríamos reducir el alta en TI de semanas a horas?' }, { label: 'Solución elegida', value: '(Placeholder) Formulario Google Forms unificado con notificación a TI por Slack.' }, { label: 'Métrica', value: '(Placeholder) Tiempo formulario → accesos activos ≤24h en ≥80% de casos.' }, { label: 'Test Card', value: '(Placeholder) Piloto con 5 empleados · semana del 24 de febrero.' }] },
+    id: 'ev-2',
+    title: 'Registro de tiempos del piloto',
+    source: 'Hoja de seguimiento',
+    selected: true,
+    proves: 'Que 4 de 5 casos llegaron a menos de 24 horas y donde aparecieron las excepciones.',
+    supportsDecision: 'Implementar / mantener',
+    usedIn: 'Resultados',
   },
   {
-    step: 3, nombre: 'Probar en pequeño',
-    estado: 'Aprobado', color: 'emerald',
-    bullets: ['(Placeholder) Resultado: 4/5 casos en ≤24h (80%). NPS: 82.', '(Placeholder) Aprendizaje: Accesos especiales = cuello de botella secundario.', '(Placeholder) Decisión: Go — escalar al 100% de ingresos desde abril.'],
-    artefactos: ['Plan experimento', 'Evidencias', 'Resultados', 'Decisión', 'Aprendizajes'],
-    resumen: { titulo: 'Resumen Step 3 — Probar en pequeño', items: [{ label: 'Resultado', value: '(Placeholder) 4/5 casos resueltos en ≤24h. NPS 82.' }, { label: 'Umbral', value: '(Placeholder) 80% alcanzado (umbral mínimo: 80%).' }, { label: 'Aprendizaje clave', value: '(Placeholder) Accesos especiales tardan 36h → proceso paralelo necesario.' }, { label: 'Decisión', value: '(Placeholder) Go — escalar con condición: SLA formal con TI.' }] },
-  },
-  {
-    step: 4, nombre: 'Contar la historia',
-    estado: 'En progreso', color: 'indigo',
-    bullets: ['(Placeholder) Story outline en construcción — 5/7 secciones completadas.', '(Placeholder) 2 evidencias seleccionadas con mensaje definido.', '(Placeholder) Deck: variante ejecutiva generada (placeholder).'],
-    artefactos: ['Story outline', 'Evidencias seleccionadas', 'Demo', 'Deck', 'Talk track'],
-    resumen: { titulo: 'Resumen Step 4 — Contar la historia', items: [{ label: 'Narrativa', value: '(Placeholder) 5/7 secciones del story outline completadas.' }, { label: 'Evidencias', value: '(Placeholder) 2 de 3 evidencias seleccionadas con mensaje.' }, { label: 'Deck', value: '(Placeholder) Variante ejecutiva (6 láminas) — borrador generado.' }, { label: 'Estado', value: '(Placeholder) En progreso — falta talk track y plan de implementación.' }] },
+    id: 'ev-3',
+    title: 'Observaciones del facilitador',
+    source: 'Notas de campo',
+    selected: false,
+    proves: 'Que los casos especiales requieren un flujo diferente para no romper la experiencia.',
+    supportsDecision: 'Iterar',
+    usedIn: 'Riesgos y siguiente paso',
   },
 ];
 
-// ── Helper components ─────────────────────────────────────────────────────────
-function SectionCard({ title, icon: Icon, children, accent = 'slate', badge }: {
-  title: string; icon: React.ElementType; children: React.ReactNode; accent?: string; badge?: React.ReactNode;
+const DEFAULT_DEMOS: DemoItem[] = [
+  {
+    id: 'demo-1',
+    type: 'Video',
+    url: 'https://loom.com/demo-onboarding-step4',
+    proof: 'Muestra el flujo completo desde la solicitud hasta la activacion en un caso real del piloto.',
+    supports: 'Refuerza credibilidad de la propuesta ante sponsor o encargado.',
+    usedIn: 'Como funciona / demo de uso',
+  },
+];
+
+const IMPLEMENTATION_ROWS: PlanRow[] = [
+  {
+    id: 'imp-1',
+    stage: '0-30 dias',
+    activity: 'Definir owner del flujo y formalizar reglas de atencion con TI.',
+    owner: 'Ana Rojas',
+    area: 'RRHH',
+    timing: 'Semana 1 a 4',
+    dependency: 'Alineacion con TI y sponsor',
+    expectedResult: 'Owner y reglas base listas para operar.',
+  },
+  {
+    id: 'imp-2',
+    stage: '31-60 dias',
+    activity: 'Escalar el flujo a todos los ingresos estandar y monitorear tiempos.',
+    owner: 'Carlos Vega',
+    area: 'TI',
+    timing: 'Mes 2',
+    dependency: 'Formulario y hoja de seguimiento activos',
+    expectedResult: 'Operacion estable con trazabilidad visible.',
+  },
+  {
+    id: 'imp-3',
+    stage: '61-90 dias',
+    activity: 'Ajustar manejo de casos especiales y definir automatizacion prioritaria.',
+    owner: 'Paula Ortiz',
+    area: 'Operacion',
+    timing: 'Mes 3',
+    dependency: 'Datos reales de la fase inicial',
+    expectedResult: 'Escalamiento sostenible y mejor criterio de excepciones.',
+  },
+];
+
+const ITERATION_ROWS: PlanRow[] = [
+  {
+    id: 'it-1',
+    stage: 'Ajuste',
+    activity: 'Separar casos especiales del flujo base para no contaminar el tiempo promedio.',
+    owner: 'Ana Rojas',
+    area: 'RRHH',
+    timing: 'Semana 1',
+    dependency: 'Feedback del piloto',
+    expectedResult: 'Nuevo experimento con foco claro.',
+  },
+  {
+    id: 'it-2',
+    stage: 'Validacion',
+    activity: 'Probar el flujo corregido con 3 casos especiales y comparar tiempos.',
+    owner: 'Carlos Vega',
+    area: 'TI',
+    timing: 'Semana 2 a 3',
+    dependency: 'Criterio de exito definido',
+    expectedResult: 'Decision de seguir, ajustar o cerrar.',
+  },
+];
+
+const PIVOT_ROWS: PlanRow[] = [
+  {
+    id: 'pv-1',
+    stage: 'Dejar atras',
+    activity: 'Cerrar la propuesta actual de formulario unico para todos los casos.',
+    owner: 'Equipo del proyecto',
+    area: 'Proyecto',
+    timing: 'Semana 1',
+    dependency: 'Alineacion con sponsor',
+    expectedResult: 'Scope actual cerrado sin ambiguedades.',
+  },
+  {
+    id: 'pv-2',
+    stage: 'Nueva direccion',
+    activity: 'Explorar una solucion diferenciada solo para accesos especiales.',
+    owner: 'Paula Ortiz',
+    area: 'Operacion',
+    timing: 'Semana 2 a 4',
+    dependency: 'Nueva hipotesis validada',
+    expectedResult: 'Siguiente hipotesis lista para presentar.',
+  },
+];
+
+const LEARNING_ROWS: PlanRow[] = [
+  {
+    id: 'lr-1',
+    stage: 'Aprendizaje',
+    activity: 'Documentar que no funciono y que condiciones faltaron para sostener la propuesta.',
+    owner: 'Equipo del proyecto',
+    area: 'Proyecto',
+    timing: 'Semana 1',
+    dependency: 'Cierre con mentor',
+    expectedResult: 'Aprendizajes utiles para el area.',
+  },
+  {
+    id: 'lr-2',
+    stage: 'Recomendacion',
+    activity: 'Definir senales que deberian activar una futura reactivacion.',
+    owner: 'Sponsor',
+    area: 'Negocio',
+    timing: 'Semana 2',
+    dependency: 'Revision final de resultados',
+    expectedResult: 'Decision cerrada con criterio claro.',
+  },
+];
+
+const PRACTICE_ITEMS = [
+  'Se entiende el problema sin contexto previo.',
+  'La evidencia aparece de forma natural y no como lista aislada.',
+  'La decision final esta clara.',
+  'El pedido final esta claro.',
+  'Se entiende que necesita la organizacion para avanzar.',
+  'La presentacion cabe en el tiempo esperado.',
+  'Se nota impacto en negocio, operacion o usuario.',
+  'Se entiende quien deberia hacerse cargo del siguiente paso.',
+];
+
+function mapDecisionToClosure(decision: DecisionValue): ClosureType {
+  if (decision === 'Go') return 'Implementar / mantener';
+  if (decision === 'Iterar') return 'Iterar';
+  if (decision === 'Pivote') return 'Pivotear';
+  return 'Solo aprendizajes';
+}
+
+function getDecisionSummary(decision: DecisionValue): string {
+  if (decision === 'Go') return 'Mantener / implementar';
+  if (decision === 'Iterar') return 'Iterar';
+  if (decision === 'Pivote') return 'Pivotear';
+  if (decision === 'No-Go') return 'Solo aprendizajes';
+  return 'Pendiente';
+}
+
+function inferStatus(done: boolean, partial: boolean): string {
+  if (done) return 'Completado';
+  if (partial) return 'En progreso';
+  return 'Pendiente';
+}
+
+function SectionCard({
+  title,
+  description,
+  icon: Icon,
+  badge,
+  children,
+}: {
+  title: string;
+  description?: string;
+  icon: React.ElementType;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
 }) {
-  const hdr = accent === 'indigo' ? 'bg-indigo-50 border-b border-indigo-100' : accent === 'violet' ? 'bg-violet-50 border-b border-violet-100' : 'bg-slate-50 border-b border-slate-100';
-  const iconColor = accent === 'indigo' ? 'text-indigo-500' : accent === 'violet' ? 'text-violet-500' : 'text-slate-500';
-  const titleColor = accent === 'indigo' ? 'text-indigo-700' : accent === 'violet' ? 'text-violet-700' : 'text-slate-700';
   return (
-    <div className="border border-slate-200 rounded-xl overflow-hidden">
-      <div className={`px-4 py-3 flex items-center gap-2 ${hdr}`}>
-        <Icon size={14} className={iconColor} />
-        <p className={`text-sm ${titleColor}`} style={{ fontWeight: 600 }}>{title}</p>
-        {badge && <div className="ml-auto">{badge}</div>}
+    <section className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+      <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-start gap-3">
+        <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0">
+          <Icon size={14} className="text-slate-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-sm text-slate-900" style={{ fontWeight: 600 }}>
+              {title}
+            </h2>
+            {badge}
+          </div>
+          {description ? (
+            <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+          ) : null}
+        </div>
       </div>
-      <div className="px-4 py-4">{children}</div>
-    </div>
+      <div className="p-4">{children}</div>
+    </section>
   );
 }
 
-function LoadingSpinner({ label }: { label: string }) {
+function TextInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
   return (
-    <div className="flex flex-col items-center py-8 gap-3">
-      <div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
-      <p className="text-sm text-slate-500">{label}</p>
+    <div>
+      <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>
+        {label}
+      </label>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
     </div>
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+function TextArea({
+  label,
+  value,
+  onChange,
+  placeholder,
+  rows = 3,
+  help,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  rows?: number;
+  help?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>
+        {label}
+      </label>
+      {help ? <p className="text-xs text-slate-400 mb-1.5">{help}</p> : null}
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+      />
+    </div>
+  );
+}
+
 export function Step4Page() {
   const { projectId } = useParams();
-  const { projects } = useApp();
   const navigate = useNavigate();
-  const project = projects.find(p => p.id === projectId);
-  const step3Status = project?.steps.find(s => s.number === 3)?.status;
-  const step4Status = project?.steps.find(s => s.number === 4)?.status;
-  const isUnlocked = step3Status === 'Aprobado' || step4Status === 'En progreso' || step4Status === 'Aprobado';
+  const { projects, updateProject } = useApp();
+  const project = projects.find((item) => item.id === projectId);
+  const step3Status = project?.steps.find((step) => step.number === 3)?.status;
+  const step4Status = project?.steps.find((step) => step.number === 4)?.status;
+  const isUnlocked =
+    step3Status === 'Aprobado' ||
+    step4Status === 'En progreso' ||
+    step4Status === 'Aprobado';
 
-  // ── Nav ───────────────────────────────────────────────────────────────────
   const [activeModule, setActiveModule] = useState<ModuleId>('overview');
+  const [audience, setAudience] = useState<Audiencia>('Sponsor');
+  const [meetingGoal, setMeetingGoal] = useState<MeetingGoal>('Pedir aprobacion');
+  const [decision, setDecision] = useState<DecisionValue>('Go');
+  const [closureType, setClosureType] = useState<ClosureType>('Implementar / mantener');
+  const [meetingOutcome, setMeetingOutcome] =
+    useState<MeetingOutcome>('Aprobar implementacion');
 
-  // ── Overview: Configuración de historia ───────────────────────────────────
-  const [audiencia, setAudiencia] = useState<Audiencia | ''>('');
-  const [objetivoStory, setObjetivoStory] = useState<ObjetivoStory | ''>('');
-  const [decision, setDecision] = useState<DecisionTipo>(null);
-
-  // ── Card_S4_DemoEvidence ───────────────────────────────────────────────────
-  const [demos, setDemos] = useState<DemoItem[]>([]);
-  const [showAddDemoOverlay, setShowAddDemoOverlay] = useState(false);
-  const [nuevoDemo, setNuevoDemo] = useState<Omit<DemoItem, 'id'>>({ formato: 'Link demo', url: '', queDemuesta: '', audiencia: '' });
-
-  // ── Overview: Entregables por Step ────────────────────────────────────────
-  const [showResumenOverlay, setShowResumenOverlay] = useState(false);
-  const [resumenStep, setResumenStep] = useState<typeof DELIVERABLES_BY_STEP[0] | null>(null);
-  const [showDownloadOverlay, setShowDownloadOverlay] = useState(false);
-  const [downloadStep, setDownloadStep] = useState<number | null>(null);
-
-  // ── Overview: Checklist IA ────────────────────────────────────────────────
-  const [checklistDone, setChecklistDone] = useState<boolean[]>(CHECKLIST_S4_IA.map(() => false));
-  const [showChecklistIAOverlay, setShowChecklistIAOverlay] = useState(false);
-  const [checklistIALoading, setChecklistIALoading] = useState(false);
-  const [checklistIAListo, setChecklistIAListo] = useState(false);
-  const [checklistIASelected, setChecklistIASelected] = useState<number | null>(null);
-  const [checklistIAAplicado, setChecklistIAAplicado] = useState(false);
-
-  // ── Overview: Contexto organizacional ────────────────────────────────────
-  const [contextoOrg, setContextoOrg] = useState({ cultura: '', estructura: '', relaciones: '', riesgos: '', requerimientos: '' });
-  const [showContextoIAOverlay, setShowContextoIAOverlay] = useState(false);
-  const [contextoIALoading, setContextoIALoading] = useState(false);
-  const [contextoIAListo, setContextoIAListo] = useState(false);
-
-  // ── S4A_Narrativa ─────────────────────────────────────────────────────────
-  const [narrativa, setNarrativa] = useState({
-    problema: '(Contenido de ejemplo para prototipo) El proceso de incorporación tardaba 7–21 días por el alta manual de accesos en TI, sin SLA formal.',
-    hipotesis: '(Contenido de ejemplo para prototipo) Si unificamos la solicitud con un formulario digital + notificación automática, reduciremos el tiempo a ≤24h en el 80% de casos.',
-    experimento: '(Contenido de ejemplo para prototipo) Piloto con 5 empleados usando Google Forms conectado a TI. Métricas: tiempo de respuesta + NPS día 3.',
-    resultados: '(Contenido de ejemplo para prototipo) 4/5 casos en ≤24h (80%). NPS: 82. Un caso especial tardó 36h.',
-    decision: '(Contenido de ejemplo para prototipo) Decisión: Go — escalamos al 100% de ingresos desde abril 2025, con SLA formal de TI.',
-    aprendizajes: '(Contenido de ejemplo para prototipo) El formulario resuelve el 80% de casos estándar. Accesos especiales necesitan proceso paralelo.',
-    proximoPaso: '(Contenido de ejemplo para prototipo) Integrar con RRHH desde el día 1. Explorar API SAP para accesos pre-aprobados. SLA formal ≤24h.',
+  const [presentation, setPresentation] =
+    useState<Record<PresentationKey, string>>(DEFAULT_PRESENTATION);
+  const [evidences, setEvidences] = useState<EvidenceItem[]>(DEFAULT_EVIDENCE);
+  const [demos, setDemos] = useState<DemoItem[]>(DEFAULT_DEMOS);
+  const [newDemo, setNewDemo] = useState<Omit<DemoItem, 'id'>>({
+    type: 'Link demo',
+    url: '',
+    proof: '',
+    supports: '',
+    usedIn: '',
   });
-  const [pedidoFinal, setPedidoFinal] = useState({ queDecision: '', queApoyo: '', proximoHito: '' });
-  const [showIANarrativaOverlay, setShowIANarrativaOverlay] = useState(false);
-  const [iaNarrativaLoading, setIaNarrativaLoading] = useState(false);
-  const [iaNarrativaListo, setIaNarrativaListo] = useState(false);
-  const [iaNarrativaSelected, setIaNarrativaSelected] = useState<number | null>(null);
 
-  // ── S4B_Evidencias ────────────────────────────────────────────────────────
-  const [evidencias, setEvidencias] = useState(MOCK_EVIDENCIAS_S3.map(e => ({ ...e, queDecisionSoporta: e.queDecisionSoporta || '', slidesSugerida: e.slidesSugerida || '' })));
-  const [showIAEvidenciasOverlay, setShowIAEvidenciasOverlay] = useState(false);
-  const [iaEvidenciasLoading, setIaEvidenciasLoading] = useState(false);
-  const [iaEvidenciasListo, setIaEvidenciasListo] = useState(false);
-  const [showIADemoRecOverlay, setShowIADemoRecOverlay] = useState(false);
-  const [iaDemoRecLoading, setIaDemoRecLoading] = useState(false);
-  const [iaDemoRecListo, setIaDemoRecListo] = useState(false);
+  const [pdfState, setPdfState] = useState<PdfState>('uploaded');
+  const [pdfName, setPdfName] = useState('Presentacion-impacto-v1.pdf');
+  const [pdfFeedbackReady, setPdfFeedbackReady] = useState(false);
 
-  // ── S4C: Section_FinalDelivery ────────────────────────────────────────────
-  type PdfState = 'none' | 'uploaded' | 'analyzed';
-  const [pdfState, setPdfState] = useState<PdfState>('none');
-  const [pdfFileName, setPdfFileName] = useState('Onboarding-Digital-Deck-v1.pdf');
-  const [pdfVersion, setPdfVersion] = useState('v1');
-  const [showUploadPDFOverlay, setShowUploadPDFOverlay] = useState(false);
-  const [showPDFPreviewOverlay, setShowPDFPreviewOverlay] = useState(false);
-  const [uploadDragOver, setUploadDragOver] = useState(false);
-  const [uploadFileInput, setUploadFileInput] = useState('Onboarding-Digital-Deck-v1.pdf');
+  const [orgContext, setOrgContext] = useState({
+    culture: 'TI pide definiciones claras de ownership antes de adoptar cambios operativos.',
+    affectedAreas: 'RRHH, TI y lideres de area que reciben nuevos ingresos.',
+    dependencies: 'Alineacion con TI para tiempos de respuesta y manejo de casos especiales.',
+    risks: 'Si no se distingue el flujo estandar del especial, el resultado se degrada rapido.',
+    requirements: 'Owner del flujo, acuerdos de servicio y seguimiento semanal las primeras 4 semanas.',
+  });
 
-  // Card_PrototypeDemo (C-specific add, shares demos[] state with Overview)
-  const [showAddDemoCOverlay, setShowAddDemoCOverlay] = useState(false);
-  const [nuevoDemoC, setNuevoDemoC] = useState<Omit<DemoItem, 'id'>>({ formato: 'Link demo', url: '', queDemuesta: '', audiencia: '' });
-  const [demoCDecision, setDemoCDecision] = useState<Record<string, string>>({});
-  const [demoCIncluir, setDemoCIncluir] = useState<Record<string, boolean>>({});
+  const [implementationPlan, setImplementationPlan] =
+    useState<PlanRow[]>(IMPLEMENTATION_ROWS);
+  const [iterationPlan, setIterationPlan] = useState<PlanRow[]>(ITERATION_ROWS);
+  const [pivotPlan, setPivotPlan] = useState<PlanRow[]>(PIVOT_ROWS);
+  const [learningPlan, setLearningPlan] = useState<PlanRow[]>(LEARNING_ROWS);
+  const [iterateWhatToAdjust, setIterateWhatToAdjust] = useState(
+    'Ajustar el manejo de casos especiales antes de escalar.'
+  );
+  const [iterateNextExperiment, setIterateNextExperiment] = useState(
+    'Nuevo piloto con 3 casos especiales y criterio de exito mas estricto.'
+  );
+  const [iterateDecisionRule, setIterateDecisionRule] = useState(
+    'Si 100% de casos especiales se resuelven en 24 horas o menos, volver a presentar para implementacion.'
+  );
+  const [pivotWhatStops, setPivotWhatStops] = useState(
+    'Se deja la idea de un flujo unico para todos los casos.'
+  );
+  const [pivotNewDirection, setPivotNewDirection] = useState(
+    'Nueva direccion: separar flujo estandar y flujo de excepciones.'
+  );
+  const [pivotHypothesis, setPivotHypothesis] = useState(
+    'Si tratamos accesos especiales como carril propio, podemos recuperar consistencia sin frenar el alta estandar.'
+  );
+  const [pivotReturnCondition, setPivotReturnCondition] = useState(
+    'Volver a presentar cuando exista evidencia de 3 casos especiales resueltos con nuevo flujo.'
+  );
+  const [learningSummary, setLearningSummary] = useState(
+    'Aprendimos que la propuesta funciona para casos estandar, pero no debe escalar sin manejo claro de excepciones.'
+  );
+  const [learningDoNotRepeat, setLearningDoNotRepeat] = useState(
+    'No repetir pilotos sin owner formal ni criterio de excepciones definido.'
+  );
+  const [learningSignals, setLearningSignals] = useState(
+    'Reactivar si TI confirma SLA y el volumen de ingresos especiales justifica un flujo dedicado.'
+  );
 
-  // Card_AIReviewPDF
-  type IAReviewState = 'pending' | 'analyzing' | 'done';
-  const [iaReviewState, setIaReviewState] = useState<IAReviewState>('pending');
-  const [iaReviewTab, setIaReviewTab] = useState<'gerencia' | 'sponsor' | 'comite'>('gerencia');
-  const [iaReviewLoading, setIaReviewLoading] = useState(false);
+  const [practiceChecks, setPracticeChecks] = useState<boolean[]>(
+    PRACTICE_ITEMS.map((_, index) => index < 3)
+  );
+  const [talkTrack, setTalkTrack] = useState(
+    'Detectamos un problema concreto en el alta de accesos. Lo validamos, probamos una solucion simple y obtuvimos evidencia suficiente para pedir una decision clara. Hoy necesitamos definir si avanzamos con una implementacion acotada y quien patrocinara el siguiente paso.'
+  );
+  const [mentorStatus, setMentorStatus] = useState<MentorDecision>('Pendiente');
+  const [mentorFeedback, setMentorFeedback] = useState(
+    'La historia ya es clara; falta reforzar que se hara con los casos especiales y dejar explicito el pedido final.'
+  );
+  const [mentorReviewer, setMentorReviewer] = useState('Carlos Mendez');
+  const [mentorReviewDate, setMentorReviewDate] = useState('2026-03-22');
 
-  // Cierre automático: Listo para presentar
-  const cierreDecks = pdfState === 'analyzed';
-  const cierreDemo = demos.length > 0;
-  const listoParaPresentar = cierreDecks && cierreDemo;
+  const [nextStepType, setNextStepType] = useState<NextStepType | ''>('');
+  const [inviteSubject, setInviteSubject] = useState(
+    'Solicitud de reunion para decidir siguiente paso de la iniciativa'
+  );
+  const [inviteBody, setInviteBody] = useState(
+    'Hola, cerramos la validacion de la iniciativa y ya contamos con hallazgos, evidencia y una recomendacion concreta. Me gustaria compartir la presentacion final para mover una decision clara sobre el siguiente paso.'
+  );
+  const [inviteSummary, setInviteSummary] = useState(
+    'Piloto validado con 80% de casos resueltos en menos de 24 horas.'
+  );
+  const [inviteRecipients, setInviteRecipients] = useState(
+    'sponsor@empresa.com; encargado-operacion@empresa.com'
+  );
+  const [meetingDate, setMeetingDate] = useState('2026-03-26');
+  const [meetingOwner, setMeetingOwner] = useState('Laura Perez');
+  const [meetingRole, setMeetingRole] = useState('Sponsor de Operaciones');
+  const [meetingObjective, setMeetingObjective] = useState(
+    'Validar recomendacion final y acordar siguiente paso habilitado por la organizacion.'
+  );
+  const [meetingStatus, setMeetingStatus] = useState<MeetingStatus>('Pendiente');
+  const [stepFinalized, setStepFinalized] = useState(false);
+  const [executiveDecisionReady, setExecutiveDecisionReady] = useState(false);
+  const [showFinalizeInitiativeConfirm, setShowFinalizeInitiativeConfirm] = useState(false);
+  const [showPracticeGuide, setShowPracticeGuide] = useState(false);
+  const [showFeedbackPanel, setShowFeedbackPanel] = useState(false);
+  const [pitchAudioName, setPitchAudioName] = useState('');
+  const [pitchVideoName, setPitchVideoName] = useState('');
+  const [pitchVideoLink, setPitchVideoLink] = useState('');
+  const [pitchAnalysisReady, setPitchAnalysisReady] = useState(false);
 
-  // ── S4C Deck + Plan + TalkTrack ───────────────────────────────────────────
-  const [tabC, setTabC] = useState<TabC>('deck');
-  const [deckVariante, setDeckVariante] = useState<'ejecutivo' | 'completo' | null>(null);
-  const [deckAplicado, setDeckAplicado] = useState(false);
-  const [showIADeckOverlay, setShowIADeckOverlay] = useState(false);
-  const [iaDeckLoading, setIaDeckLoading] = useState(false);
-  const [iaDeckListo, setIaDeckListo] = useState(false);
+  const saveState = useAutosave({
+    audience,
+    meetingGoal,
+    decision,
+    closureType,
+    meetingOutcome,
+    presentation,
+    evidences,
+    demos,
+    implementationPlan,
+    iterationPlan,
+    pivotPlan,
+    learningPlan,
+    practiceChecks,
+    mentorStatus,
+    nextStepType,
+    inviteSubject,
+    inviteBody,
+    meetingStatus,
+    stepFinalized,
+    executiveDecisionReady,
+  });
 
-  const [showIAPlanOverlay, setShowIAPlanOverlay] = useState(false);
-  const [iaPlanLoading, setIaPlanLoading] = useState(false);
-  const [iaPlanListo, setIaPlanListo] = useState(false);
-  const [planAplicado, setPlanAplicado] = useState(false);
-
-  const [talkTrack, setTalkTrack] = useState('(Contenido de ejemplo para prototipo) "Hola, soy Ana de RRHH. Identificamos que nuevos empleados tardaban hasta 3 semanas en tener accesos. Diseñamos un formulario digital. Lo probamos con 5 personas y el 80% tuvo accesos en ≤24h. NPS: 82. Recomendamos escalar. Necesitamos un SLA formal con TI. ¿Lo aprobamos?"');
-  const [ensayoChecks, setEnsayoChecks] = useState([false, false, false, false]);
-  const [showIATalkOverlay, setShowIATalkOverlay] = useState(false);
-  const [iaTalkLoading, setIaTalkLoading] = useState(false);
-  const [iaTalkListo, setIaTalkListo] = useState(false);
-
-  const [hasFeedback, setHasFeedback] = useState(false);
-  const [showSendModal, setShowSendModal] = useState(false);
-  const [showMentorModal, setShowMentorModal] = useState(false);
-  const [mentorDate, setMentorDate] = useState('');
-  const [mentorTime, setMentorTime] = useState('');
-  const [sessionBooked, setSessionBooked] = useState(false);
-
-  const saveState = useAutosave({ narrativa, pedidoFinal, evidencias, demos, talkTrack, decision, audiencia });
-
-  // ── Gate ──────────────────────────────────────────────────────────────────
-  if (!project) return <div className="p-6"><p className="text-slate-500">Proyecto no encontrado.</p></div>;
-  if (!isUnlocked) {
+  if (!project) {
     return (
-      <div className="p-8 max-w-lg mx-auto text-center">
-        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4"><Lock size={24} className="text-slate-400" /></div>
-        <h2 className="text-slate-900 mb-2" style={{ fontWeight: 600 }}>Step 4 bloqueado</h2>
-        <p className="text-sm text-slate-500 mb-4">Para contar tu historia, primero necesitas la aprobación del mentor en el Step 3.</p>
-        <button onClick={() => navigate(`/projects/${projectId}/step/3`)} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm hover:bg-indigo-700 transition-colors" style={{ fontWeight: 500 }}>→ Ir al Step 3</button>
+      <div className="p-6">
+        <p className="text-slate-500">Proyecto no encontrado.</p>
       </div>
     );
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  if (!isUnlocked) {
+    return (
+      <div className="p-8 max-w-lg mx-auto text-center">
+        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+          <Lock size={24} className="text-slate-400" />
+        </div>
+        <h2 className="text-slate-900 mb-2" style={{ fontWeight: 600 }}>
+          Step 4 bloqueado
+        </h2>
+        <p className="text-sm text-slate-500 mb-4">
+          Para entrar al cierre ejecutivo, primero necesitas la aprobacion del
+          mentor en el Step 3.
+        </p>
+        <button
+          onClick={() => navigate(`/projects/${projectId}/step/3`)}
+          className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm hover:bg-indigo-700 transition-colors"
+          style={{ fontWeight: 500 }}
+        >
+          Ir al Step 3
+        </button>
+      </div>
+    );
+  }
+
+  const selectedEvidenceCount = evidences.filter((item) => item.selected).length;
+  const filledPresentationCount = PRESENTATION_SECTIONS.filter(
+    ({ key }) => presentation[key].trim().length >= 40
+  ).length;
+  const presentationReady =
+    filledPresentationCount >= 9 &&
+    selectedEvidenceCount >= 1 &&
+    demos.length >= 1 &&
+    pdfFeedbackReady;
+  const demoReady = demos.length >= 1 && selectedEvidenceCount >= 1;
+
+  const currentPlanRows =
+    closureType === 'Implementar / mantener'
+      ? implementationPlan
+      : closureType === 'Iterar'
+        ? iterationPlan
+        : closureType === 'Pivotear'
+          ? pivotPlan
+          : learningPlan;
+
+  const planReady =
+    currentPlanRows.some(
+      (row) =>
+        row.activity.trim().length > 10 && row.owner.trim().length > 2 && row.expectedResult.trim().length > 10
+    ) &&
+    (closureType !== 'Iterar' || iterateDecisionRule.trim().length > 20) &&
+    (closureType !== 'Pivotear' || pivotHypothesis.trim().length > 20) &&
+    (closureType !== 'Solo aprendizajes' || learningSummary.trim().length > 20);
+
+  const practiceReady =
+    practiceChecks.filter(Boolean).length >= 6 && talkTrack.trim().length >= 120;
+  const mentorReviewed = mentorStatus !== 'Pendiente';
+  const mentorApproved = mentorStatus === 'Aprobado para presentar';
+  const nextStepTypeSelected = !!nextStepType;
+  const inviteReady =
+    nextStepTypeSelected &&
+    inviteSubject.trim().length > 10 &&
+    inviteBody.trim().length > 40 &&
+    inviteRecipients.trim().length > 5 &&
+    meetingOwner.trim().length > 2 &&
+    meetingObjective.trim().length > 20 &&
+    meetingStatus !== 'Pendiente';
+  const stepCanBeFinalized =
+    presentationReady && planReady && mentorReviewed && nextStepTypeSelected;
+  const mandatoryChecks = [
+    presentationReady,
+    demoReady,
+    planReady,
+    practiceReady,
+    mentorReviewed,
+    inviteReady,
+  ];
+  const stepReady = mandatoryChecks.every(Boolean) && stepFinalized;
+  const initiativeCanBeFinalized = stepReady && executiveDecisionReady;
+  const isProjectClosed = project.status === 'Finalizado';
+  const stepStatus = stepFinalized ? 'Completado' : 'En progreso';
+
   const modules = [
-    { id: 'overview' as const, label: 'Overview', icon: BookOpen, completed: checklistDone.some(Boolean) },
-    { id: 'A' as const, label: 'A · Narrativa', icon: Edit2, completed: narrativa.proximoPaso.trim().length > 30 },
-    { id: 'B' as const, label: 'B · Evidencias', icon: Paperclip, completed: evidencias.some(e => e.incluir && e.queDemuesta.trim().length > 5) },
-    { id: 'C' as const, label: 'C · Entregables', icon: Presentation, completed: deckAplicado && talkTrack.trim().length > 30 },
+    {
+      id: 'overview' as const,
+      label: 'Overview',
+      icon: BookOpen,
+      completed: mandatoryChecks.filter(Boolean).length >= 2,
+    },
+    {
+      id: 'A' as const,
+      label: 'A · Presentacion de impacto',
+      icon: Presentation,
+      completed: presentationReady,
+    },
+    {
+      id: 'B' as const,
+      label: 'B · Plan de implementacion',
+      icon: ClipboardList,
+      completed: planReady,
+    },
+    {
+      id: 'C' as const,
+      label: 'C · Practica, validacion y activacion',
+      icon: Mic,
+      completed: stepFinalized,
+    },
   ];
 
-  const addDemo = () => {
-    if (!nuevoDemo.queDemuesta.trim()) return;
-    setDemos(p => [...p, { ...nuevoDemo, id: Date.now().toString() }]);
-    setNuevoDemo({ formato: 'Link demo', url: '', queDemuesta: '', audiencia: '' });
-    setShowAddDemoOverlay(false);
-    toast.success('Demo agregado al Story Kit');
+  const outputCards = [
+    {
+      title: 'Presentacion de impacto',
+      module: 'A' as const,
+      status: inferStatus(presentationReady, filledPresentationCount > 0),
+      missing: presentationReady
+        ? 'Lista para presentar.'
+        : `Faltan ${Math.max(0, 9 - filledPresentationCount)} bloques clave o cerrar revision del PDF.`,
+      cta: 'Ir al modulo A',
+    },
+    {
+      title: 'Demo / evidencia de uso',
+      module: 'A' as const,
+      status: inferStatus(demoReady, selectedEvidenceCount > 0 || demos.length > 0),
+      missing: demoReady
+        ? 'Evidencia integrada al relato.'
+        : 'Selecciona evidencia clave y deja al menos una demo o prueba de uso.',
+      cta: 'Completar evidencia',
+    },
+    {
+      title: 'Plan accionable',
+      module: 'B' as const,
+      status: inferStatus(planReady, currentPlanRows.length > 0),
+      missing: planReady
+        ? `Plan coherente con ${closureType.toLowerCase()}.`
+        : 'Todavia falta dejar responsables, dependencias y resultado esperado.',
+      cta: 'Definir plan',
+    },
+    {
+      title: 'Siguiente paso organizacional definido',
+      module: 'C' as const,
+      status: inferStatus(stepFinalized, nextStepTypeSelected || inviteReady),
+      missing:
+        stepFinalized
+          ? `${nextStepType || 'Siguiente paso'} listo con estado ${meetingStatus.toLowerCase()}.`
+          : 'Falta definir el siguiente paso real y cerrar el Step 4 de forma explicita.',
+      cta: 'Cerrar paso final',
+    },
+  ];
+
+  const closureChecklist = [
+    {
+      title: 'Mensaje adaptado a la audiencia',
+      why: 'Evita una presentacion generica y te ayuda a pedir la decision correcta.',
+      done: !!audience && !!meetingGoal,
+      required: true,
+      module: 'overview' as const,
+    },
+    {
+      title: 'Evidencia conectada con hallazgo y decision',
+      why: 'La evidencia debe explicar por que recomiendas ese camino.',
+      done: demoReady,
+      required: true,
+      module: 'A' as const,
+    },
+    {
+      title: 'Presentacion lista',
+      why: 'Sin una presentacion clara, la reunion no mueve una decision real.',
+      done: presentationReady,
+      required: true,
+      module: 'A' as const,
+    },
+    {
+      title: 'Plan listo segun decision',
+      why: 'La organizacion necesita ver que pasa despues de decir que si, iterar o cerrar.',
+      done: planReady,
+      required: true,
+      module: 'B' as const,
+    },
+    {
+      title: 'Practica realizada',
+      why: 'El ensayo te ayuda a ordenar el mensaje y detectar huecos antes de presentar.',
+      done: practiceReady,
+      required: true,
+      module: 'C' as const,
+    },
+    {
+      title: 'Mentor valido el cierre',
+      why: 'El mentor es el gate final de calidad antes de ir con sponsor o encargado.',
+      done: mentorReviewed,
+      required: true,
+      module: 'C' as const,
+    },
+    {
+      title: 'Siguiente paso organizacional definido',
+      why: 'El cierre del step termina cuando ya existe un siguiente paso real hacia la decision del negocio.',
+      done: stepFinalized,
+      required: true,
+      module: 'C' as const,
+    },
+    {
+      title: 'PDF revisado con IA',
+      why: 'Te ayuda a detectar incoherencias narrativas antes de la reunion.',
+      done: pdfFeedbackReady,
+      required: false,
+      module: 'A' as const,
+    },
+  ];
+
+  const applyDecision = (value: DecisionValue) => {
+    setDecision(value);
+    setClosureType(mapDecisionToClosure(value));
   };
 
-  const DEMO_FORMATOS: { key: DemoFormato; icon: React.ElementType; color: string }[] = [
-    { key: 'Link demo', icon: Play, color: 'text-indigo-500' },
-    { key: 'Video', icon: Video, color: 'text-red-500' },
-    { key: 'Capturas', icon: Image, color: 'text-emerald-500' },
-    { key: 'Registro de uso', icon: ClipboardList, color: 'text-amber-500' },
-  ];
+  const updatePlanRow = (
+    setter: React.Dispatch<React.SetStateAction<PlanRow[]>>,
+    id: string,
+    field: keyof PlanRow,
+    value: string
+  ) => {
+    setter((rows) => rows.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+  };
 
-  const SLIDE_OPTIONS = ['Resultado', 'Riesgo', 'Aprendizaje', 'Próximo paso', 'Demo'];
-  const DECISION_SOPORTA = ['Go', 'Iterar', 'No-Go', 'Pivote', 'N/A'];
+  const addPlanRow = () => {
+    const newRow: PlanRow = {
+      id: `row-${Date.now()}`,
+      stage:
+        closureType === 'Implementar / mantener'
+          ? 'Nueva etapa'
+          : closureType === 'Iterar'
+            ? 'Nuevo ajuste'
+            : closureType === 'Pivotear'
+              ? 'Nuevo movimiento'
+              : 'Nuevo aprendizaje',
+      activity: '',
+      owner: '',
+      area: '',
+      timing: '',
+      dependency: '',
+      expectedResult: '',
+    };
+    if (closureType === 'Implementar / mantener') {
+      setImplementationPlan((rows) => [...rows, newRow]);
+    } else if (closureType === 'Iterar') {
+      setIterationPlan((rows) => [...rows, newRow]);
+    } else if (closureType === 'Pivotear') {
+      setPivotPlan((rows) => [...rows, newRow]);
+    } else {
+      setLearningPlan((rows) => [...rows, newRow]);
+    }
+  };
 
-  const currentDeckSlides = deckVariante === 'completo' ? SLIDES_COMPLETO : SLIDES_EJECUTIVO;
+  const generatePlanDraft = () => {
+    if (closureType === 'Implementar / mantener') {
+      setImplementationPlan(IMPLEMENTATION_ROWS);
+    } else if (closureType === 'Iterar') {
+      setIterationPlan(ITERATION_ROWS);
+    } else if (closureType === 'Pivotear') {
+      setPivotPlan(PIVOT_ROWS);
+    } else {
+      setLearningPlan(LEARNING_ROWS);
+    }
+    toast.success('Borrador sugerido por IA aplicado. Puedes editarlo completo.');
+  };
 
-  const CHECKLIST_VERSIONES_IA = [
-    { audiencia: 'Gerencia', items: ['Impacto en negocio cuantificado', 'Riesgos y mitigaciones definidos', 'Pedido de aprobación claro', 'Plan 30-60-90 días'], foco: 'Impacto, riesgos, plan' },
-    { audiencia: 'Equipo operativo', items: ['RACI definido (quién hace qué)', 'Cronograma de implementación', 'Dependencias identificadas', 'Indicadores de monitoreo'], foco: 'Implementación, RACI, tiempos' },
-    { audiencia: 'Comité', items: ['Metodología del experimento documentada', 'Evidencias cuantitativas presentadas', 'Decisión basada en datos', 'Próximo ciclo de validación definido'], foco: 'Evidencia, método, decisiones' },
-  ];
+  const addDemo = () => {
+    if (!newDemo.proof.trim() || !newDemo.supports.trim()) {
+      toast.error('Completa que demuestra y que decision soporta la demo.');
+      return;
+    }
+    setDemos((items) => [...items, { ...newDemo, id: `demo-${Date.now()}` }]);
+    setNewDemo({
+      type: 'Link demo',
+      url: '',
+      proof: '',
+      supports: '',
+      usedIn: '',
+    });
+    toast.success('Demo agregada al relato de impacto.');
+  };
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  const buildPlanRowsText = () =>
+    currentPlanRows
+      .map(
+        (row) =>
+          `${row.stage} | ${row.activity} | ${row.owner} | ${row.area} | ${row.timing} | ${row.dependency} | ${row.expectedResult}`
+      )
+      .join('\n');
+
+  const copyText = async (text: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(successMessage);
+    } catch {
+      toast.error('No se pudo copiar automaticamente. Intenta de nuevo desde un navegador con permisos.');
+    }
+  };
+
+  const downloadTextFile = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePlanPdfExport = () => {
+    const planWindow = window.open('', '_blank', 'width=980,height=760');
+    if (!planWindow) {
+      toast.error('No se pudo abrir la vista de impresion del plan.');
+      return;
+    }
+    planWindow.document.write(`
+      <html>
+        <head>
+          <title>Plan Step 4</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+            h1 { font-size: 22px; margin-bottom: 8px; }
+            p { font-size: 13px; color: #475569; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 12px; vertical-align: top; text-align: left; }
+            th { background: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h1>Plan de Step 4</h1>
+          <p>Modo: ${closureType}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Etapa</th>
+                <th>Actividad</th>
+                <th>Responsable</th>
+                <th>Area</th>
+                <th>Fecha o tramo</th>
+                <th>Dependencia</th>
+                <th>Resultado esperado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${currentPlanRows
+                .map(
+                  (row) => `
+                    <tr>
+                      <td>${row.stage}</td>
+                      <td>${row.activity}</td>
+                      <td>${row.owner}</td>
+                      <td>${row.area}</td>
+                      <td>${row.timing}</td>
+                      <td>${row.dependency}</td>
+                      <td>${row.expectedResult}</td>
+                    </tr>`
+                )
+                .join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    planWindow.document.close();
+    planWindow.focus();
+    planWindow.print();
+    toast.success('Se abrio una vista imprimible para guardar el plan como PDF.');
+  };
+
+  const buildFinalSummary = () => `Starteria - cierre ejecutivo
+
+Problema:
+${presentation.problem}
+
+Hipotesis / solucion:
+${presentation.proposal}
+
+Experimento:
+${presentation.tests}
+
+Resultados / aprendizajes:
+${presentation.results}
+
+Presentacion:
+${pdfName || 'No registrada'}
+
+Plan:
+${buildPlanRowsText()}
+
+Decision tomada:
+${getDecisionSummary(decision)}
+
+Resultado que quieres mover:
+${meetingOutcome}
+
+Siguiente paso organizacional:
+${nextStepType || 'Pendiente'}
+
+Estado organizacional:
+${meetingStatus}
+
+Mentor:
+${mentorStatus} - ${mentorReviewer}
+
+Instancia objetivo:
+${meetingOwner} / ${meetingRole}
+`;
+
+  const handlePrepareInvitation = () => {
+    copyText(
+      `Asunto: ${inviteSubject}\n\nPara: ${inviteRecipients}\n\nResumen: ${inviteSummary}\n\nObjetivo: ${meetingObjective}\n\n${inviteBody}`,
+      'Borrador completo listo para copiar.'
+    );
+  };
+
+  const handleSendInvitation = () => {
+    if (!inviteRecipients.trim()) {
+      toast.error('Primero define a quien invitar.');
+      return;
+    }
+    const mailto = `mailto:${encodeURIComponent(inviteRecipients)}?subject=${encodeURIComponent(inviteSubject)}&body=${encodeURIComponent(`${inviteSummary}\n\nObjetivo: ${meetingObjective}\n\n${inviteBody}`)}`;
+    window.location.href = mailto;
+    if (meetingStatus === 'Pendiente') {
+      setMeetingStatus('Invitado');
+    }
+    toast.success('Se abrio tu cliente de correo. Si no existe backend, este es el envio honesto disponible.');
+  };
+
+  const mobileTabs = (
+    <div className="flex gap-1 mb-5 md:hidden overflow-x-auto pb-1">
+      {modules.map((module) => (
+        <button
+          key={module.id}
+          onClick={() => setActiveModule(module.id)}
+          className={`shrink-0 px-3 py-1.5 rounded-full text-xs transition-colors ${
+            activeModule === module.id
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white border border-slate-200 text-slate-500'
+          }`}
+          style={{ fontWeight: activeModule === module.id ? 600 : 400 }}
+        >
+          {module.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex h-full">
-
-      {/* ── Sidebar ───────────────────────────────────────────────────────────── */}
-      <div className="hidden md:flex w-56 flex-col border-r border-slate-200 bg-white p-3 gap-1 shrink-0">
+      <div className="hidden md:flex w-64 flex-col border-r border-slate-200 bg-white p-3 gap-1 shrink-0">
         <div className="px-2 py-2 mb-1">
-          <button onClick={() => navigate(`/projects/${projectId}`)} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors">
+          <button
+            onClick={() => navigate(`/projects/${projectId}`)}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          >
             <ArrowLeft size={12} /> Volver al proyecto
           </button>
           <div className="flex items-center gap-2 mt-2">
-            <h2 className="text-sm text-slate-900" style={{ fontWeight: 600 }}>Step 4</h2>
-            <StatusChip status="En progreso" size="sm" />
+            <h2 className="text-sm text-slate-900" style={{ fontWeight: 600 }}>
+              Step 4
+            </h2>
+            <StatusChip status={stepStatus} size="sm" />
           </div>
-          <p className="text-xs text-slate-500">Contar la historia</p>
-          {audiencia && <p className="text-xs text-indigo-500 mt-1">👥 {audiencia}</p>}
-          {decision && <p className="text-xs text-emerald-500">🎯 {decision}</p>}
+          <p className="text-xs text-slate-500">
+            Cerrar la iniciativa y moverla a decision
+          </p>
+          <p className="text-xs text-indigo-600 mt-1">{audience}</p>
+          <p className="text-xs text-emerald-600">{getDecisionSummary(decision)}</p>
         </div>
-        <div className="px-2 mb-1"><p className="text-xs text-slate-400" style={{ fontWeight: 600 }}>SUBMÓDULOS</p></div>
-        {modules.map(m => (
-          <button key={m.id} onClick={() => setActiveModule(m.id)}
-            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs transition-colors text-left ${activeModule === m.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}
-            style={{ fontWeight: activeModule === m.id ? 600 : 400 }}>
-            <span className={`w-2 h-2 rounded-full shrink-0 ${m.completed ? 'bg-emerald-500' : activeModule === m.id ? 'bg-indigo-400' : 'bg-slate-300'}`} />
-            <span className="truncate">{m.label}</span>
+        <div className="px-2 mb-1">
+          <p className="text-xs text-slate-400" style={{ fontWeight: 600 }}>
+            MODULOS
+          </p>
+        </div>
+        {modules.map((module) => (
+          <button
+            key={module.id}
+            onClick={() => setActiveModule(module.id)}
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs transition-colors text-left ${
+              activeModule === module.id
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+            style={{ fontWeight: activeModule === module.id ? 600 : 400 }}
+          >
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                module.completed
+                  ? 'bg-emerald-500'
+                  : activeModule === module.id
+                    ? 'bg-indigo-400'
+                    : 'bg-slate-300'
+              }`}
+            />
+            <span className="truncate">{module.label}</span>
           </button>
         ))}
-        <div className="mt-auto pt-3 border-t border-slate-100"><AutosaveIndicator state={saveState} /></div>
+        <div className="mt-auto pt-3 border-t border-slate-100">
+          <AutosaveIndicator state={saveState} />
+        </div>
       </div>
 
-      {/* ── Main ──────────────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto p-5 md:p-6">
-        <div className="max-w-2xl mx-auto">
-
-          <button onClick={() => navigate(`/projects/${projectId}`)} className="flex md:hidden items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors">
+        <div className="max-w-5xl mx-auto">
+          <button
+            onClick={() => navigate(`/projects/${projectId}`)}
+            className="flex md:hidden items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors"
+          >
             <ArrowLeft size={14} /> Volver
           </button>
-          <div className="flex gap-1 mb-5 md:hidden overflow-x-auto pb-1">
-            {modules.map(m => (
-              <button key={m.id} onClick={() => setActiveModule(m.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-xs transition-colors ${activeModule === m.id ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}
-                style={{ fontWeight: activeModule === m.id ? 600 : 400 }}>
-                {m.label}
-              </button>
-            ))}
-          </div>
 
-          {/* Banner Step 3 aprobado */}
+          {mobileTabs}
+
           <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-100 rounded-xl mb-5 text-xs text-emerald-700">
             <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-            <span><span style={{ fontWeight: 600 }}>Step 3 aprobado.</span> Ya puedes construir el relato y preparar la presentación final.</span>
+            <span>
+              <span style={{ fontWeight: 600 }}>Step 3 aprobado.</span> Ya puedes
+              cerrar la iniciativa con una presentacion, un plan y una convocatoria real.
+            </span>
           </div>
 
-          {/* ══════════════════════════════════════════════════════════════════
-              S4_OVERVIEW — Control Tower
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeModule === 'overview' && (
+          {activeModule === 'overview' ? (
             <div className="space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Step 4 — Contar la historia</h1>
-                  <StatusChip status="En progreso" size="sm" />
+              <div className="border border-slate-200 rounded-2xl p-5 bg-white">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>
+                    Step 4 - Cerrar la iniciativa y moverla a decision
+                  </h1>
+                  <StatusChip status={stepStatus} size="sm" />
                 </div>
-                <p className="text-sm text-slate-500">Este Overview reúne todo lo construido (Steps 1–3) para que armes una historia de impacto y un plan accionable.</p>
+                <p className="text-sm text-slate-500">
+                  Aqui transformaras lo validado en una presentacion de impacto,
+                  un plan accionable y una convocatoria real a sponsor o encargado.
+                </p>
               </div>
 
-              {/* ── Configuración de historia ───────────────────────────────── */}
-              <div className="border-2 border-indigo-200 bg-indigo-50 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-indigo-100 border-b border-indigo-200 flex items-center gap-2">
-                  <Settings size={14} className="text-indigo-600" />
-                  <p className="text-sm text-indigo-800" style={{ fontWeight: 600 }}>Configuración de historia</p>
-                  <span className="ml-auto text-xs text-indigo-500 italic">Tu historia se ajusta automáticamente según audiencia y objetivo.</span>
-                </div>
-                <div className="px-4 py-4 space-y-4">
-                  {/* Audiencia */}
-                  <div>
-                    <p className="text-xs text-indigo-700 mb-2" style={{ fontWeight: 600 }}>👥 AUDIENCIA</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(['Gerencia', 'Sponsor', 'Comité', 'Equipo operativo', 'TI', 'RRHH'] as Audiencia[]).map(a => (
-                        <button key={a} onClick={() => setAudiencia(audiencia === a ? '' : a)}
-                          className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${audiencia === a ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
-                          style={{ fontWeight: audiencia === a ? 600 : 400 }}>{a}</button>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Objetivo */}
-                  <div>
-                    <p className="text-xs text-indigo-700 mb-2" style={{ fontWeight: 600 }}>🎯 OBJETIVO</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(['Alinear', 'Pedir aprobación', 'Pedir recursos', 'Decidir', 'Informar avance'] as ObjetivoStory[]).map(o => (
-                        <button key={o} onClick={() => setObjetivoStory(objetivoStory === o ? '' : o)}
-                          className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${objetivoStory === o ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600'}`}
-                          style={{ fontWeight: objetivoStory === o ? 600 : 400 }}>{o}</button>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Decisión */}
-                  <div>
-                    <p className="text-xs text-indigo-700 mb-2" style={{ fontWeight: 600 }}>📌 DECISIÓN TOMADA</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(['Go', 'Iterar', 'No-Go', 'Pivote'] as NonNullable<DecisionTipo>[]).map(d => (
-                        <button key={d} onClick={() => setDecision(decision === d ? null : d)}
-                          className={`px-3 py-1.5 rounded-full text-xs border-2 transition-colors ${decision === d ? d === 'Go' ? 'bg-emerald-500 text-white border-emerald-500' : d === 'Iterar' ? 'bg-amber-500 text-white border-amber-500' : d === 'No-Go' ? 'bg-red-500 text-white border-red-500' : 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
-                          style={{ fontWeight: decision === d ? 700 : 400 }}>{d}</button>
-                      ))}
-                    </div>
-                  </div>
-                  {(audiencia || decision) && (
-                    <div className="flex items-center gap-2 p-2.5 bg-white border border-indigo-200 rounded-xl text-xs text-indigo-700">
-                      <Sparkles size={12} className="text-indigo-400 shrink-0" />
-                      <span>Historia configurada para: {[audiencia, objetivoStory, decision].filter(Boolean).join(' · ')}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ── Resumen para contar (Step 3) ──────────────────────────────── */}
-              <SectionCard title="Resumen para contar (del Step 3)" icon={FileText}>
-                <p className="text-xs text-slate-400 mb-3">Pre-cargado con los datos del Step 3. Edita en el módulo A — Narrativa.</p>
-                <div className="space-y-2">
+              <SectionCard
+                title="Resumen ejecutivo de entrada"
+                description="Esta es la base que viene de Steps 1 a 3 para construir el cierre."
+                icon={FileText}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {[
-                    { label: 'Problema', value: 'Alta en TI tardaba 7–21 días.' },
-                    { label: 'Hipótesis', value: 'Formulario unificado → ≤24h en ≥80% de casos.' },
-                    { label: 'Experimento', value: 'Piloto con 5 empleados · Google Forms + TI.' },
-                    { label: 'Resultado', value: '80% de casos en ≤24h. NPS: 82.' },
-                    { label: 'Decisión', value: decision ? `${decision} — (Placeholder) escalar al 100% de ingresos.` : '(Placeholder) Pendiente — elige la decisión arriba.' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex items-start gap-2">
-                      <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-500 shrink-0" style={{ fontWeight: 600 }}>{label}</span>
-                      <p className="text-xs text-slate-700">{value}</p>
+                    {
+                      label: 'Problema validado',
+                      value:
+                        'El alta de accesos para nuevos ingresos era lenta, dependia de correos dispersos y no tenia una trazabilidad compartida.',
+                    },
+                    {
+                      label: 'Hipotesis / apuesta',
+                      value:
+                        'Un flujo unico y visible podia reducir tiempos de activacion y bajar la carga manual de seguimiento.',
+                    },
+                    {
+                      label: 'Que se probo',
+                      value:
+                        'Un piloto con 5 ingresos usando formulario digital, hoja de seguimiento y coordinacion acotada con TI.',
+                    },
+                    {
+                      label: 'Resultados / aprendizajes',
+                      value:
+                        'Se logro 80% de casos en menos de 24 horas; los casos especiales siguen necesitando manejo diferenciado.',
+                    },
+                    {
+                      label: 'Decision actual',
+                      value: getDecisionSummary(decision),
+                    },
+                  ].map((item) => (
+                    <div key={item.label} className="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                      <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>
+                        {item.label}
+                      </p>
+                      <p className="text-sm text-slate-700">{item.value}</p>
                     </div>
                   ))}
                 </div>
               </SectionCard>
 
-              {/* ── Card_S4_DemoEvidence ──────────────────────────────────────── */}
-              <div className={`border-2 rounded-xl overflow-hidden ${demos.length > 0 ? 'border-emerald-200' : 'border-dashed border-slate-300'}`}>
-                <div className={`px-4 py-3 border-b flex items-center justify-between gap-2 ${demos.length > 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className="flex items-center gap-2">
-                    <Play size={14} className={demos.length > 0 ? 'text-emerald-500' : 'text-slate-400'} />
-                    <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Demo del prototipo / evidencia de uso</p>
-                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700" style={{ fontWeight: 600 }}>Recomendado</span>
-                  </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${demos.length > 0 ? 'bg-emerald-200 text-emerald-700' : 'bg-slate-200 text-slate-500'}`} style={{ fontWeight: 600 }}>
-                    {demos.length > 0 ? '✓ Agregado' : 'No agregado'}
-                  </span>
-                </div>
-                <div className="px-4 py-4">
-                  <p className="text-xs text-slate-400 mb-3">Agrega un demo (link, video, capturas o registro de uso) para fortalecer la credibilidad ante comités.</p>
-                  {/* Chips de formato */}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {DEMO_FORMATOS.map(({ key, icon: Icon, color }) => (
-                      <span key={key} className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-500 rounded-full text-xs">
-                        <Icon size={10} className={color} />{key}
-                      </span>
-                    ))}
-                  </div>
-                  {/* Items agregados */}
-                  {demos.length > 0 && (
-                    <div className="space-y-2 mb-3">
-                      {demos.map(d => (
-                        <div key={d.id} className="flex items-start gap-2 p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl group">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs px-1.5 py-0.5 bg-emerald-200 text-emerald-700 rounded" style={{ fontWeight: 600 }}>{d.formato}</span>
-                              {d.url && <span className="text-xs text-indigo-500 truncate">{d.url}</span>}
-                            </div>
-                            <p className="text-xs text-slate-700 mt-1">{d.queDemuesta}</p>
-                            {d.audiencia && <p className="text-xs text-slate-400 mt-0.5">Audiencia: {d.audiencia}</p>}
-                          </div>
-                          <button onClick={() => setDemos(p => p.filter(x => x.id !== d.id))} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                            <X size={12} className="text-slate-300 hover:text-red-400" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <button onClick={() => setShowAddDemoOverlay(true)}
-                    className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
-                    style={{ fontWeight: 500 }}>
-                    <Plus size={12} /> Agregar demo
-                  </button>
-                </div>
-              </div>
-
-              {/* ── Section_DeliverablesByStep ────────────────────────────────── */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-                  <Package size={14} className="text-slate-500" />
-                  <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Entregables por Step (resumen + descargables)</p>
-                </div>
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {DELIVERABLES_BY_STEP.map(step => (
-                    <div key={step.step} className={`border rounded-xl p-3 ${step.color === 'emerald' ? 'border-emerald-100 bg-emerald-50' : 'border-indigo-100 bg-indigo-50'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs text-slate-400" style={{ fontWeight: 700 }}>Step {step.step}</span>
-                        <p className="text-xs text-slate-700 flex-1" style={{ fontWeight: 600 }}>{step.nombre}</p>
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${step.estado === 'Aprobado' ? 'bg-emerald-200 text-emerald-700' : step.estado === 'Listo' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-700'}`} style={{ fontWeight: 600 }}>{step.estado}</span>
-                      </div>
-                      <ul className="space-y-0.5 mb-2">
-                        {step.bullets.map((b, i) => (
-                          <li key={i} className="flex items-start gap-1.5 text-xs text-slate-600">
-                            <span className="text-slate-300 shrink-0 mt-0.5">·</span>{b}
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {step.artefactos.map(a => (
-                          <span key={a} className="text-xs px-1.5 py-0.5 bg-white border border-slate-200 text-slate-500 rounded">{a}</span>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => { setResumenStep(step); setShowResumenOverlay(true); }}
-                          className="flex-1 text-xs border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg py-1.5 transition-colors" style={{ fontWeight: 500 }}>
-                          Ver resumen
-                        </button>
-                        <button onClick={() => { setDownloadStep(step.step); setShowDownloadOverlay(true); }}
-                          className="flex-1 text-xs border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-600 rounded-lg py-1.5 transition-colors flex items-center justify-center gap-1" style={{ fontWeight: 500 }}>
-                          <Download size={10} /> Descargar
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── Checklist recomendado por IA ──────────────────────────────── */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={14} className="text-slate-500" />
-                    <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Checklist de impacto</p>
-                    <span className="text-xs px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full" style={{ fontWeight: 600 }}>Recomendación IA</span>
-                  </div>
-                  <button onClick={() => {
-                    setShowChecklistIAOverlay(true);
-                    if (!checklistIAListo) { setChecklistIALoading(true); setTimeout(() => { setChecklistIALoading(false); setChecklistIAListo(true); }, 1400); }
-                  }}
-                    className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-800 px-2.5 py-1.5 bg-violet-50 border border-violet-200 rounded-lg transition-colors"
-                    style={{ fontWeight: 500 }}>
-                    <Sparkles size={11} /> Recomendar con IA
-                  </button>
-                </div>
-                <div className="px-4 pt-2 pb-1">
-                  <p className="text-xs text-slate-400 mb-2">La IA te sugiere el siguiente orden para maximizar impacto{audiencia ? ` con ${audiencia}` : ''}:</p>
-                </div>
-                <div className="divide-y divide-slate-50">
-                  {CHECKLIST_S4_IA.map((item, i) => (
-                    <label key={i} className="flex items-start gap-3 px-4 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors">
-                      <input type="checkbox" checked={checklistDone[i]}
-                        onChange={e => { const n = [...checklistDone]; n[i] = e.target.checked; setChecklistDone(n); }}
-                        className="w-4 h-4 mt-0.5 shrink-0 accent-indigo-600" />
-                      <div className="flex-1">
-                        <span className={`text-sm transition-colors ${checklistDone[i] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{item.item}</span>
-                        {!checklistDone[i] && <p className="text-xs text-amber-600 mt-0.5">{item.sugerencia}</p>}
-                      </div>
-                    </label>
-                  ))}
-                </div>
-                <div className="px-4 pb-4 pt-2">
-                  <p className={`text-xs ${checklistDone.every(Boolean) ? 'text-emerald-600' : 'text-slate-400'}`} style={{ fontWeight: 500 }}>
-                    {checklistDone.filter(Boolean).length}/{CHECKLIST_S4_IA.length} completados{checklistDone.every(Boolean) && ' · ¡Listo para presentar!'}
-                  </p>
-                </div>
-              </div>
-
-              {/* ── Contexto organizacional ───────────────────────────────────── */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Building2 size={14} className="text-slate-500" />
-                    <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Contexto organizacional (para que sea realista)</p>
-                  </div>
-                  <button onClick={() => {
-                    setShowContextoIAOverlay(true);
-                    if (!contextoIAListo) { setContextoIALoading(true); setTimeout(() => { setContextoIALoading(false); setContextoIAListo(true); }, 1500); }
-                  }}
-                    className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg transition-colors"
-                    style={{ fontWeight: 500 }}>
-                    <Sparkles size={11} /> Sugerir consideraciones con IA
-                  </button>
-                </div>
-                <div className="px-4 py-4 space-y-3">
-                  {([
-                    { key: 'cultura' as const, label: 'Cultura (¿qué puede resistirse?)', placeholder: '(Placeholder) Ej. TI suele resistir cambios de proceso sin aprobación formal del CTO.' },
-                    { key: 'estructura' as const, label: 'Estructura (áreas afectadas)', placeholder: '(Placeholder) Ej. RRHH, TI, Gerencia de Operaciones, Líderes de área.' },
-                    { key: 'relaciones' as const, label: 'Relaciones / dependencias (quién debe alinearse)', placeholder: '(Placeholder) Ej. TI debe comprometerse con SLA. RRHH debe compartir el formulario con nuevos ingresos.' },
-                    { key: 'riesgos' as const, label: 'Top 3 riesgos', placeholder: '(Placeholder) Ej. 1. TI no cumple SLA. 2. Casos especiales colapsan el proceso. 3. Baja adopción por parte de líderes.' },
-                    { key: 'requerimientos' as const, label: 'Requerimientos (recursos, herramientas, tiempo)', placeholder: '(Placeholder) Ej. 1 dev para integración SAP · presupuesto $X · 4 semanas de transición.' },
-                  ] as const).map(({ key, label, placeholder }) => (
-                    <div key={key}>
-                      <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>{label}</label>
-                      <textarea value={contextoOrg[key]} onChange={e => setContextoOrg(p => ({ ...p, [key]: e.target.value }))}
-                        rows={2} placeholder={placeholder}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Nav a submódulos */}
-              <div>
-                <p className="text-xs text-slate-400 mb-3" style={{ fontWeight: 500 }}>CONTINÚA EN LOS SUBMÓDULOS</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    { id: 'A' as const, label: 'A · Narrativa', desc: 'Story outline adaptado a tu audiencia', icon: Edit2, color: 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100' },
-                    { id: 'B' as const, label: 'B · Evidencias', desc: 'Evidencia → Mensaje → Slide', icon: Paperclip, color: 'border-violet-200 bg-violet-50 hover:bg-violet-100' },
-                    { id: 'C' as const, label: 'C · Entregables', desc: 'Deck · Plan · Talk track', icon: Presentation, color: 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100' },
-                  ].map(({ id, label, desc, icon: Icon, color }) => (
-                    <button key={id} onClick={() => setActiveModule(id)}
-                      className={`text-left p-4 rounded-xl border-2 transition-colors ${color}`}>
-                      <Icon size={16} className="text-slate-600 mb-2" />
-                      <p className="text-sm text-slate-800 mb-0.5" style={{ fontWeight: 600 }}>{label}</p>
-                      <p className="text-xs text-slate-500">{desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              S4A_NARRATIVA
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeModule === 'A' && (
-            <div className="space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>A · Narrativa (story outline)</h1>
-                  <StatusChip status="En progreso" size="sm" />
-                </div>
-                <p className="text-sm text-slate-500">Story outline en 7 secciones. Breve y accionable.</p>
-              </div>
-
-              {/* Enfoque por audiencia */}
-              {audiencia && (
-                <div className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                  <Sparkles size={12} className="text-indigo-400 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-xs text-indigo-700 mb-1" style={{ fontWeight: 600 }}>Enfoque por audiencia: {audiencia}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(audiencia === 'Gerencia' ? ['Impacto', 'Riesgo', 'Costo/beneficio'] : audiencia === 'Comité' ? ['Evidencia', 'Método', 'Decisiones'] : audiencia === 'Equipo operativo' ? ['Operación', 'Tiempo', 'Riesgo'] : ['Impacto', 'Operación', 'Tiempo']).map(tag => (
-                        <span key={tag} className="text-xs px-2 py-0.5 bg-indigo-200 text-indigo-700 rounded-full" style={{ fontWeight: 600 }}>{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Ajustar a audiencia con IA */}
-              <div className="flex items-center justify-between gap-3 p-3 bg-violet-50 border border-violet-100 rounded-xl flex-wrap">
-                <div>
-                  <p className="text-sm text-violet-800" style={{ fontWeight: 500 }}>Ajustar narrativa a la audiencia con IA</p>
-                  <p className="text-xs text-violet-500 mt-0.5">3 versiones: ejecutiva, operativa y técnica.</p>
-                </div>
-                <button onClick={() => {
-                  setShowIANarrativaOverlay(true);
-                  if (!iaNarrativaListo) { setIaNarrativaLoading(true); setTimeout(() => { setIaNarrativaLoading(false); setIaNarrativaListo(true); }, 1600); }
-                }}
-                  className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 px-3 py-2 bg-white border border-violet-200 rounded-lg transition-colors shrink-0"
-                  style={{ fontWeight: 500 }}>
-                  <Sparkles size={12} /> Ajustar con IA
-                </button>
-              </div>
-
-              {/* Secciones 1–7 */}
-              {([
-                { key: 'problema' as const, n: 1, label: 'Problema', hint: 'Quién lo sufre, cuánto cuesta, de dónde viene el dato. (del Step 1)' },
-                { key: 'hipotesis' as const, n: 2, label: 'Hipótesis', hint: 'La apuesta del equipo: qué solución propusieron y por qué. (del Step 2)' },
-                { key: 'experimento' as const, n: 3, label: 'Experimento', hint: 'Método, muestra, duración, qué midieron. (del Step 3)' },
-                { key: 'resultados' as const, n: 4, label: 'Resultados', hint: 'Métricas vs umbral. Incluye lo que no funcionó.' },
-                { key: 'decision' as const, n: 5, label: 'Decisión', hint: `Go/Iterar/No-Go/Pivote. Por qué.${decision ? ` Decisión actual: ${decision}.` : ''}` },
-                { key: 'aprendizajes' as const, n: 6, label: 'Aprendizajes', hint: 'Los 2–3 insights más importantes que cambiarán cómo trabajan.' },
-                { key: 'proximoPaso' as const, n: 7, label: 'Próximo paso', hint: 'Qué necesitan para avanzar. El pedido concreto.' },
-              ]).map(({ key, n, label, hint }) => (
-                <div key={key}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>{n}</span>
-                    <label className="text-sm text-slate-700" style={{ fontWeight: 500 }}>{label}</label>
-                  </div>
-                  <p className="text-xs text-slate-400 mb-1.5 ml-7">{hint}</p>
-                  <textarea value={narrativa[key]} onChange={e => setNarrativa(p => ({ ...p, [key]: e.target.value }))}
-                    rows={3} className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-                </div>
-              ))}
-
-              {/* Pedido final (call-to-action) */}
-              <div className="border-2 border-indigo-200 rounded-xl p-4 space-y-3">
-                <p className="text-sm text-indigo-800" style={{ fontWeight: 600 }}>Pedido final (call-to-action)</p>
-                <p className="text-xs text-indigo-500">Define con claridad qué necesitas de esta audiencia al final de la presentación.</p>
-                {([
-                  { key: 'queDecision' as const, label: 'Qué decisión necesitamos', placeholder: '(Placeholder) Ej. Aprobar el escalado del proceso a todos los ingresos desde abril.' },
-                  { key: 'queApoyo' as const, label: 'Qué apoyo necesitamos (recursos / sponsor / acceso)', placeholder: '(Placeholder) Ej. Presupuesto para integración SAP + SLA formal con TI.' },
-                  { key: 'proximoHito' as const, label: 'Próximo hito y fecha', placeholder: '(Placeholder) Ej. Primer ingreso bajo el nuevo proceso: 7 de abril 2025.' },
-                ] as const).map(({ key, label, placeholder }) => (
-                  <div key={key}>
-                    <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>{label}</label>
-                    <input value={pedidoFinal[key]} onChange={e => setPedidoFinal(p => ({ ...p, [key]: e.target.value }))}
-                      placeholder={placeholder} className="w-full border border-indigo-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button onClick={() => toast.success('Borrador guardado')} className="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>Guardar</button>
-                <button onClick={() => { toast.success('Narrativa lista'); setActiveModule('B'); }}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors flex items-center justify-center gap-2" style={{ fontWeight: 500 }}>
-                  Siguiente: Evidencias <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              S4B_EVIDENCIAS
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeModule === 'B' && (
-            <div className="space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>B · Evidencias y soporte</h1>
-                  <StatusChip status="En progreso" size="sm" />
-                </div>
-                <p className="text-sm text-slate-500">Evidencia → Mensaje → Slide. Conecta cada evidencia con la decisión que soporta.</p>
-              </div>
-
-              {/* Recomendar con IA */}
-              <div className="flex items-center justify-between gap-3 p-3 bg-violet-50 border border-violet-100 rounded-xl flex-wrap">
-                <p className="text-sm text-violet-700" style={{ fontWeight: 500 }}>¿No sabes cuáles incluir?</p>
-                <button onClick={() => {
-                  setShowIAEvidenciasOverlay(true);
-                  if (!iaEvidenciasListo) { setIaEvidenciasLoading(true); setTimeout(() => { setIaEvidenciasLoading(false); setIaEvidenciasListo(true); }, 1400); }
-                }}
-                  className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 px-3 py-2 bg-white border border-violet-200 rounded-lg transition-colors"
-                  style={{ fontWeight: 500 }}>
-                  <Sparkles size={12} /> Recomendar evidencia + mensaje con IA
-                </button>
-              </div>
-
-              {/* Lista evidencias */}
-              <div className="space-y-3">
-                {evidencias.map((ev, i) => (
-                  <div key={ev.id} className={`border-2 rounded-xl p-4 transition-colors ${ev.incluir ? 'border-indigo-200 bg-indigo-50' : 'border-slate-200 bg-white'}`}>
-                    <div className="flex items-start gap-3 mb-3">
-                      <input type="checkbox" checked={ev.incluir}
-                        onChange={e => setEvidencias(p => p.map((x, j) => j === i ? { ...x, incluir: e.target.checked } : x))}
-                        className="w-4 h-4 mt-0.5 shrink-0 accent-indigo-600" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${ev.tipo === 'Archivo' ? 'bg-slate-100 text-slate-600' : ev.tipo === 'Link' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-700'}`} style={{ fontWeight: 500 }}>{ev.tipo}</span>
-                          <p className="text-sm text-slate-800" style={{ fontWeight: ev.incluir ? 500 : 400 }}>{ev.descripcion}</p>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-0.5"><Clock size={9} className="inline mr-0.5" />{ev.fecha}</p>
-                      </div>
-                    </div>
-                    {ev.incluir && (
-                      <div className="space-y-2 ml-7">
-                        <div>
-                          <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>¿Qué demuestra?</label>
-                          <input value={ev.queDemuesta} onChange={e => setEvidencias(p => p.map((x, j) => j === i ? { ...x, queDemuesta: e.target.value } : x))}
-                            placeholder="Ej. Que el tiempo de respuesta fue ≤24h en 4 de 5 casos."
-                            className="w-full border border-indigo-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>¿Qué decisión soporta?</label>
-                            <select value={ev.queDecisionSoporta} onChange={e => setEvidencias(p => p.map((x, j) => j === i ? { ...x, queDecisionSoporta: e.target.value } : x))}
-                              className="w-full border border-indigo-200 rounded-xl px-2.5 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                              <option value="">Seleccionar…</option>
-                              {DECISION_SOPORTA.map(d => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>Slide sugerida</label>
-                            <select value={ev.slidesSugerida} onChange={e => setEvidencias(p => p.map((x, j) => j === i ? { ...x, slidesSugerida: e.target.value } : x))}
-                              className="w-full border border-indigo-200 rounded-xl px-2.5 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                              <option value="">Seleccionar…</option>
-                              {SLIDE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Section_S4B_DemoEvidence */}
-              <div className="border-2 border-dashed border-emerald-300 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Play size={14} className="text-emerald-500" />
-                    <p className="text-sm text-emerald-800" style={{ fontWeight: 600 }}>Evidencia de uso (Demo)</p>
-                    {demos.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-emerald-200 text-emerald-700 rounded-full" style={{ fontWeight: 600 }}>{demos.length} agregado{demos.length > 1 ? 's' : ''}</span>}
-                  </div>
-                  <button onClick={() => {
-                    setShowIADemoRecOverlay(true);
-                    if (!iaDemoRecListo) { setIaDemoRecLoading(true); setTimeout(() => { setIaDemoRecLoading(false); setIaDemoRecListo(true); }, 1500); }
-                  }}
-                    className="flex items-center gap-1 text-xs text-emerald-700 hover:text-emerald-900 px-2.5 py-1.5 bg-white border border-emerald-200 rounded-lg transition-colors"
-                    style={{ fontWeight: 500 }}>
-                    <Sparkles size={11} /> Recomendar demo con IA
-                  </button>
-                </div>
-                <div className="px-4 py-4">
-                  {demos.length === 0 ? (
-                    <div className="text-center py-4">
-                      <Play size={20} className="text-slate-300 mx-auto mb-2" />
-                      <p className="text-xs text-slate-400 mb-3">Sin demos agregados. Ve al Overview para agregar uno.</p>
-                      <button onClick={() => setActiveModule('overview')} className="text-xs text-indigo-600 hover:text-indigo-700" style={{ fontWeight: 500 }}>→ Ir al Overview</button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {demos.map(d => (
-                        <div key={d.id} className="border border-emerald-200 rounded-xl p-3 bg-white">
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full" style={{ fontWeight: 600 }}>{d.formato}</span>
-                            {d.url && <span className="text-xs text-indigo-500">{d.url}</span>}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div><span className="text-slate-400">Qué demuestra: </span><span className="text-slate-700">{d.queDemuesta}</span></div>
-                            {d.audiencia && <div><span className="text-slate-400">Audiencia: </span><span className="text-slate-700">{d.audiencia}</span></div>}
-                          </div>
-                          <div className="mt-2 grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="block text-xs text-slate-500 mb-1">Decisión que soporta</label>
-                              <select className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400">
-                                <option value="">Seleccionar…</option>
-                                {DECISION_SOPORTA.map(d => <option key={d} value={d}>{d}</option>)}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-xs text-slate-500 mb-1">Slide sugerida</label>
-                              <select className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400">
-                                <option value="Demo">Demo</option>
-                                {SLIDE_OPTIONS.filter(s => s !== 'Demo').map(s => <option key={s} value={s}>{s}</option>)}
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button onClick={() => toast.success('Evidencias guardadas')} className="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>Guardar</button>
-                <button onClick={() => { toast.success('Evidencias confirmadas'); setActiveModule('C'); }}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors flex items-center justify-center gap-2" style={{ fontWeight: 500 }}>
-                  Siguiente: Entregables <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════════════
-              S4C_ENTREGABLES — Deck / Plan / Talk Track
-          ══════════════════════════════════════════════════════════════════ */}
-          {activeModule === 'C' && (
-            <div className="space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>C · Entregables finales</h1>
-                  <StatusChip status={deckAplicado ? 'Completado' : 'En progreso'} size="sm" />
-                </div>
-                <p className="text-sm text-slate-500">Deck, Plan y Talk Track — los tres entregables para presentar y actuar.</p>
-              </div>
-
-              {/* ── Section_FinalDelivery ────────────────────────────────────── */}
-              <div className="border-2 border-indigo-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Package size={14} className="text-indigo-500" />
-                    <p className="text-sm text-indigo-800" style={{ fontWeight: 600 }}>Entrega final (para comité)</p>
-                    {listoParaPresentar && (
-                      <span className="text-xs px-2 py-0.5 bg-emerald-500 text-white rounded-full" style={{ fontWeight: 700 }}>Listo para presentar ✅</span>
-                    )}
-                  </div>
-                  <span className="text-xs text-indigo-400">Adjunta el deck PDF y la demo antes de la sesión.</span>
-                </div>
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-                  {/* Card_FinalPDF */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="px-3 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <FileText size={13} className="text-slate-500" />
-                        <p className="text-xs text-slate-700" style={{ fontWeight: 600 }}>Deck final (PDF)</p>
-                      </div>
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${pdfState === 'analyzed' ? 'bg-emerald-100 text-emerald-700' : pdfState === 'uploaded' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-500'}`} style={{ fontWeight: 600 }}>
-                        {pdfState === 'analyzed' ? 'Analizado por IA' : pdfState === 'uploaded' ? 'Subido' : 'No subido'}
-                      </span>
-                    </div>
-                    <div className="p-3">
-                      {pdfState === 'none' ? (
-                        <>
-                          <div
-                            onDragOver={e => { e.preventDefault(); setUploadDragOver(true); }}
-                            onDragLeave={() => setUploadDragOver(false)}
-                            onDrop={e => { e.preventDefault(); setUploadDragOver(false); setPdfState('uploaded'); toast.success('PDF cargado (modo demo)'); }}
-                            className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors cursor-pointer mb-2 ${uploadDragOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 hover:border-indigo-300 hover:bg-slate-50'}`}
-                            onClick={() => setShowUploadPDFOverlay(true)}>
-                            <Download size={18} className="text-slate-300 mx-auto mb-1.5" />
-                            <p className="text-xs text-slate-500">Arrastra el PDF aquí o</p>
-                            <p className="text-xs text-indigo-600 mt-0.5" style={{ fontWeight: 500 }}>Haz clic para subir</p>
-                          </div>
-                          <p className="text-xs text-slate-400 italic">PDF, máx. 30 MB (demo). Evita datos personales sensibles.</p>
-                        </>
-                      ) : (
-                        <>
-                          {/* Mini preview placeholder */}
-                          <div className="flex gap-2 mb-2">
-                            {[1, 2].map(n => (
-                              <div key={n} className="flex-1 aspect-[4/3] bg-gradient-to-br from-indigo-50 to-slate-100 border border-slate-200 rounded-lg flex items-center justify-center relative overflow-hidden">
-                                <div className="absolute inset-0 flex flex-col p-2 gap-1">
-                                  <div className="h-1.5 bg-indigo-200 rounded w-3/4" />
-                                  <div className="h-1 bg-slate-200 rounded w-full" />
-                                  <div className="h-1 bg-slate-200 rounded w-5/6" />
-                                  <div className="flex-1 bg-slate-100 rounded mt-1 flex items-center justify-center">
-                                    <span className="text-xs text-slate-300" style={{ fontWeight: 700 }}>{n}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <p className="text-xs text-slate-700 mb-0.5" style={{ fontWeight: 500 }}>{pdfFileName}</p>
-                          <div className="flex items-center gap-2 text-xs text-slate-400 mb-2">
-                            <span>{new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                            <span className="px-1.5 py-0.5 bg-slate-100 rounded" style={{ fontWeight: 600 }}>{pdfVersion}</span>
-                          </div>
-                          <div className="flex gap-1.5 flex-wrap">
-                            <button onClick={() => setShowPDFPreviewOverlay(true)}
-                              className="text-xs px-2.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg transition-colors" style={{ fontWeight: 500 }}>
-                              Ver PDF
-                            </button>
-                            <button onClick={() => { setPdfState('none'); setPdfVersion('v2'); }}
-                              className="text-xs px-2.5 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg transition-colors" style={{ fontWeight: 500 }}>
-                              Reemplazar
-                            </button>
-                          </div>
-                        </>
-                      )}
-                      <button
-                        disabled={pdfState === 'none'}
-                        onClick={() => {
-                          if (pdfState !== 'uploaded') return;
-                          setIaReviewLoading(true);
-                          setIaReviewState('analyzing');
-                          setTimeout(() => { setIaReviewLoading(false); setIaReviewState('done'); setPdfState('analyzed'); toast.success('PDF analizado por IA'); }, 2000);
-                        }}
-                        className={`mt-3 w-full flex items-center justify-center gap-1.5 text-xs rounded-xl py-2 transition-colors ${pdfState === 'none' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : pdfState === 'uploaded' ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-emerald-100 text-emerald-700 cursor-default'}`}
-                        style={{ fontWeight: 500 }}>
-                        <Sparkles size={11} />
-                        {pdfState === 'analyzed' ? '✓ Analizado por IA' : 'Analizar con IA'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Card_PrototypeDemo */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="px-3 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Play size={13} className={demos.length > 0 ? 'text-emerald-500' : 'text-slate-400'} />
-                        <p className="text-xs text-slate-700" style={{ fontWeight: 600 }}>Demo del prototipo</p>
-                      </div>
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${demos.length > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`} style={{ fontWeight: 600 }}>
-                        {demos.length > 0 ? `Agregada (${demos.length})` : 'No agregada'}
-                      </span>
-                    </div>
-                    <div className="p-3">
-                      {/* Chips de formato */}
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {([
-                          { key: 'Link demo', label: 'Link (Figma/staging)', icon: Play },
-                          { key: 'Video', label: 'Video (Loom/Drive)', icon: Video },
-                          { key: 'Capturas', label: 'Capturas', icon: Image },
-                          { key: 'Registro de uso', label: 'Registro de uso', icon: ClipboardList },
-                        ] as const).map(({ key, label, icon: Icon }) => (
-                          <span key={key} className="flex items-center gap-1 text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full">
-                            <Icon size={9} />{label}
-                          </span>
-                        ))}
-                      </div>
-                      {/* Items agregados */}
-                      {demos.length > 0 ? (
-                        <div className="space-y-2 mb-3">
-                          {demos.map(d => (
-                            <div key={d.id} className="border border-emerald-100 bg-emerald-50 rounded-xl p-2.5 space-y-1.5">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs px-1.5 py-0.5 bg-emerald-200 text-emerald-700 rounded" style={{ fontWeight: 600 }}>{d.formato}</span>
-                                {d.url && <span className="text-xs text-indigo-500 truncate max-w-[120px]">{d.url}</span>}
-                              </div>
-                              <p className="text-xs text-slate-600">{d.queDemuesta}</p>
-                              {/* Decisión que soporta */}
-                              <select
-                                value={demoCDecision[d.id] || ''}
-                                onChange={e => setDemoCDecision(p => ({ ...p, [d.id]: e.target.value }))}
-                                className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400">
-                                <option value="">Decisión que soporta…</option>
-                                {['Go', 'Iterar', 'No-Go', 'Pivote', 'N/A'].map(v => <option key={v} value={v}>{v}</option>)}
-                              </select>
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={!!demoCIncluir[d.id]}
-                                  onChange={e => setDemoCIncluir(p => ({ ...p, [d.id]: e.target.checked }))}
-                                  className="w-3.5 h-3.5 accent-indigo-600" />
-                                <span className="text-xs text-slate-600">Incluir en deck</span>
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-3 mb-2">
-                          <Play size={16} className="text-slate-300 mx-auto mb-1" />
-                          <p className="text-xs text-slate-400">Sin demos agregadas aún.</p>
-                        </div>
-                      )}
-                      <button onClick={() => setShowAddDemoCOverlay(true)}
-                        className="w-full flex items-center justify-center gap-1.5 text-xs border border-dashed border-emerald-300 text-emerald-600 hover:bg-emerald-50 rounded-xl py-2 transition-colors"
-                        style={{ fontWeight: 500 }}>
-                        <Plus size={11} /> Agregar demo
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mini-checklist de cierre */}
-                <div className="px-4 py-3 border-t border-indigo-100 flex items-center gap-4 flex-wrap bg-indigo-50">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs ${cierreDecks ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-white'}`}>
-                      {cierreDecks ? '✓' : '·'}
-                    </span>
-                    <span className={`text-xs ${cierreDecks ? 'text-emerald-700' : 'text-slate-500'}`}>Deck final (PDF) subido y analizado por IA</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs ${cierreDemo ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-white'}`}>
-                      {cierreDemo ? '✓' : '·'}
-                    </span>
-                    <span className={`text-xs ${cierreDemo ? 'text-emerald-700' : 'text-slate-500'}`}>Demo del prototipo adjunta (evidencia de uso)</span>
-                  </div>
-                  {listoParaPresentar && (
-                    <span className="ml-auto text-xs px-2.5 py-1 bg-emerald-500 text-white rounded-full" style={{ fontWeight: 700 }}>Listo para presentar ✅</span>
-                  )}
-                </div>
-              </div>
-
-              {/* ── Card_AIReviewPDF ─────────────────────────────────────────── */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={14} className="text-violet-500" />
-                    <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Revisión IA del deck (PDF)</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${iaReviewState === 'done' ? 'bg-emerald-100 text-emerald-700' : iaReviewState === 'analyzing' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-500'}`} style={{ fontWeight: 600 }}>
-                      {iaReviewState === 'done' ? 'Analizado' : iaReviewState === 'analyzing' ? 'Analizando…' : 'Pendiente de análisis'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 italic w-full sm:w-auto">La IA evalúa claridad, evidencia, coherencia narrativa, pedido final y plan.</p>
-                </div>
-                <div className="px-4 py-4">
-                  {iaReviewState === 'pending' && (
-                    <div className="text-center py-6">
-                      <Sparkles size={24} className="text-slate-300 mx-auto mb-2" />
-                      <p className="text-sm text-slate-500 mb-1">Sube el PDF y haz click en "Analizar con IA" para obtener el diagnóstico.</p>
-                      <p className="text-xs text-slate-400">El análisis tarda ~30 segundos (modo demo: instantáneo).</p>
-                      <button
-                        disabled={pdfState === 'none'}
-                        onClick={() => {
-                          if (pdfState === 'none') return;
-                          setIaReviewLoading(true);
-                          setIaReviewState('analyzing');
-                          setTimeout(() => { setIaReviewLoading(false); setIaReviewState('done'); setPdfState('analyzed'); toast.success('Análisis IA completado'); }, 2000);
-                        }}
-                        className={`mt-4 flex items-center gap-2 mx-auto text-sm px-5 py-2.5 rounded-xl transition-colors ${pdfState === 'none' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-violet-600 hover:bg-violet-700 text-white'}`}
-                        style={{ fontWeight: 500 }}>
-                        <Sparkles size={14} /> Analizar PDF con IA
-                      </button>
-                    </div>
-                  )}
-                  {iaReviewState === 'analyzing' && (
-                    <div className="flex flex-col items-center py-8 gap-3">
-                      <div className="w-8 h-8 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" />
-                      <p className="text-sm text-slate-500">Analizando deck: claridad, evidencia, narrativa…</p>
-                    </div>
-                  )}
-                  {iaReviewState === 'done' && (
-                    <div className="space-y-4">
-                      {/* 1) Lo que está bien */}
-                      <div>
-                        <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>✅ LO QUE ESTÁ BIEN</p>
-                        <div className="space-y-1.5">
-                          {[
-                            'Narrativa consistente con los Steps 1–3.',
-                            'La decisión "Go" está sustentada con datos (4/5 casos, NPS 82).',
-                            'El pedido al comité es claro y específico (SLA formal + presupuesto SAP).',
-                            'La lámina de "Demo / evidencia de uso" fortalece credibilidad.',
-                            'Impacto proyectado cuantificado en tiempo y costo.',
-                          ].map((item, i) => (
-                            <div key={i} className="flex items-start gap-2 text-xs text-slate-700">
-                              <CheckCircle2 size={11} className="text-emerald-500 shrink-0 mt-0.5" />{item}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* 2) Riesgos / confusiones */}
-                      <div>
-                        <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>⚠️ RIESGOS / POSIBLES CONFUSIONES</p>
-                        <div className="space-y-1.5">
-                          {[
-                            '(Placeholder) La lámina de resultados no aclara el criterio de éxito (umbral ≥80%) desde el inicio — puede confundir si el comité desconoce la metodología.',
-                            '(Placeholder) El caso especial (36h) no tiene explicación en la lámina — puede generar dudas en audiencias técnicas.',
-                            '(Placeholder) El plan 30-60-90 no menciona responsable del SLA por nombre o área — recomendable hacerlo explícito.',
-                          ].map((item, i) => (
-                            <div key={i} className="flex items-start gap-2 text-xs text-slate-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                              <AlertTriangle size={11} className="text-amber-500 shrink-0 mt-0.5" />{item}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* 3) Recomendaciones por audiencia */}
-                      <div>
-                        <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>🎯 RECOMENDACIONES POR AUDIENCIA</p>
-                        <div className="flex gap-1 mb-3">
-                          {(['gerencia', 'sponsor', 'comite'] as const).map(tab => (
-                            <button key={tab} onClick={() => setIaReviewTab(tab)}
-                              className={`flex-1 py-1.5 rounded-lg text-xs transition-colors ${iaReviewTab === tab ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                              style={{ fontWeight: iaReviewTab === tab ? 600 : 400 }}>
-                              {tab === 'gerencia' ? 'Gerencia' : tab === 'sponsor' ? 'Sponsor' : 'Comité'}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="space-y-1.5">
-                          {(iaReviewTab === 'gerencia' ? [
-                            '(Placeholder) Abre con el impacto en negocio: "X horas/mes de RRHH + TI recuperadas". No con el proceso.',
-                            '(Placeholder) Reduce las láminas de metodología a 1. Gerencia no necesita el detalle del experimento.',
-                          ] : iaReviewTab === 'sponsor' ? [
-                            '(Placeholder) Enfatiza el ROI: costo actual vs costo con proceso nuevo. Incluye cálculo simple.',
-                            '(Placeholder) Muestra el riesgo de NO actuar: qué pasa si siguen con el proceso actual en 6 meses.',
-                          ] : [
-                            '(Placeholder) Agrega una lámina de "Metodología" con el detalle del experimento, muestra y criterio de éxito.',
-                            '(Placeholder) Referencia los artefactos: el formulario, el sheet de seguimiento, las observaciones.',
-                          ]).map((item, i) => (
-                            <div key={i} className="flex items-start gap-2 text-xs text-slate-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
-                              <span className="text-indigo-400 shrink-0">→</span>{item}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* 4) Checklist "Listo para presentar" */}
-                      <div>
-                        <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>📋 CHECKLIST "LISTO PARA PRESENTAR"</p>
-                        <div className="space-y-1.5">
-                          {[
-                            { item: 'Narrativa coherente con Steps 1–3', ok: true },
-                            { item: 'Evidencias con mensaje claro', ok: true },
-                            { item: 'Decisión sustentada con datos', ok: true },
-                            { item: 'Demo / evidencia de uso incluida', ok: demos.length > 0 },
-                            { item: 'Pedido final al comité definido', ok: !!pedidoFinal.queDecision.trim() },
-                            { item: 'Plan según decisión incluido', ok: planAplicado || !!decision },
-                            { item: 'Talk track ensayado', ok: ensayoChecks.some(Boolean) },
-                          ].map(({ item, ok }, i) => (
-                            <div key={i} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${ok ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-500'}`}>
-                              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs shrink-0 ${ok ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-white'}`}>{ok ? '✓' : '·'}</span>
-                              {item}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* 5) Cambios sugeridos v2 */}
-                      <div>
-                        <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>✏️ CAMBIOS SUGERIDOS (para v2)</p>
-                        <div className="space-y-1.5">
-                          {[
-                            { tipo: 'Claridad', sugerencia: '(Placeholder) Lámina 2 — Agrega el criterio de éxito (≥80% en ≤24h) en el título, no solo en el cuerpo.' },
-                            { tipo: 'Evidencia', sugerencia: '(Placeholder) Lámina 4 (Demo) — Especifica el timestamp del video donde se ve la confirmación de accesos.' },
-                            { tipo: 'Pedido final', sugerencia: '(Placeholder) Lámina 6 — Cambia "Recomendamos escalar" por "¿Aprobamos el escalado desde el 7 de abril?"' },
-                            { tipo: 'Plan', sugerencia: '(Placeholder) Agrega nombre del responsable de TI en la tabla 30-60-90 para generar compromiso en sala.' },
-                          ].map(({ tipo, sugerencia }, i) => (
-                            <div key={i} className="flex items-start gap-2 border border-slate-200 rounded-xl p-3">
-                              <span className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded shrink-0" style={{ fontWeight: 600 }}>{tipo}</span>
-                              <p className="text-xs text-slate-600">{sugerencia}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Acciones */}
-                      <div className="flex gap-2 pt-1 border-t border-slate-100">
-                        <button onClick={() => toast.success('Lista de mejoras generada (modo demo)')}
-                          className="flex-1 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-xl py-2 text-xs transition-colors" style={{ fontWeight: 500 }}>
-                          Generar lista de mejoras (para v2)
-                        </button>
-                        <button onClick={() => { setPdfState('none'); setIaReviewState('pending'); setPdfVersion(pdfVersion === 'v1' ? 'v2' : 'v3'); toast.success('Subir v2 del PDF'); }}
-                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2 text-xs transition-colors" style={{ fontWeight: 500 }}>
-                          Subir v2 del deck
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Tabs Deck / Plan / Talk */}
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-                {([
-                  { key: 'deck' as const, label: '📊 Deck' },
-                  { key: 'plan' as const, label: `📋 Plan${decision ? ` (${decision})` : ''}` },
-                  { key: 'talk' as const, label: '🎙 Talk track' },
-                ]).map(({ key, label }) => (
-                  <button key={key} onClick={() => setTabC(key)}
-                    className={`flex-1 py-2 rounded-lg text-xs transition-colors ${tabC === key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    style={{ fontWeight: tabC === key ? 600 : 400 }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* TAB: DECK ─────────────────────────────────────────────────── */}
-              {tabC === 'deck' && (
+              <SectionCard
+                title="Configuracion de cierre"
+                description="Define para quien es la reunion, que decision buscas mover y que tipo de cierre corresponde."
+                icon={Target}
+              >
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex-wrap">
-                    <div>
-                      <p className="text-sm text-indigo-800" style={{ fontWeight: 500 }}>Generar deck según audiencia con IA</p>
-                      <p className="text-xs text-indigo-500 mt-0.5">2 variantes: ejecutiva (6) o completa (8 láminas){audiencia ? ` · optimizado para ${audiencia}` : ''}.</p>
-                    </div>
-                    <button onClick={() => {
-                      setShowIADeckOverlay(true);
-                      if (!iaDeckListo) { setIaDeckLoading(true); setTimeout(() => { setIaDeckLoading(false); setIaDeckListo(true); }, 1800); }
-                    }}
-                      className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 px-3 py-2 bg-white border border-indigo-200 rounded-lg transition-colors shrink-0"
-                      style={{ fontWeight: 500 }}>
-                      <Sparkles size={12} /> Generar deck con IA
-                    </button>
-                  </div>
-
-                  <SectionCard title={`Estructura del deck${deckAplicado ? ` — ${deckVariante === 'ejecutivo' ? 'Ejecutiva (6)' : 'Completa (8)'}` : ' (placeholder)'}`} icon={Presentation}>
-                    {!deckAplicado && <p className="text-xs text-slate-400 mb-3 italic">Usa "Generar deck con IA" para personalizar la estructura.</p>}
-                    <div className="space-y-2">
-                      {currentDeckSlides.map(slide => (
-                        <div key={slide.n} className="border border-slate-200 rounded-xl p-3 hover:bg-slate-50 transition-colors">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs text-slate-400" style={{ fontWeight: 700 }}>#{slide.n}</span>
-                            <span className="text-sm text-slate-800" style={{ fontWeight: 600 }}>{slide.titulo}</span>
-                            {slide.titulo === 'Demo / evidencia de uso' && demos.length > 0 && (
-                              <span className="text-xs px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full" style={{ fontWeight: 600 }}>✓ Demo agregado</span>
-                            )}
-                          </div>
-                          <ul className="space-y-0.5">
-                            {slide.bullets.map((b, i) => (
-                              <li key={i} className="flex items-start gap-1.5 text-xs text-slate-500">
-                                <span className="text-slate-300 shrink-0">·</span>{b}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </SectionCard>
-                </div>
-              )}
-
-              {/* TAB: PLAN ─────────────────────────────────────────────────── */}
-              {tabC === 'plan' && (
-                <div className="space-y-4">
-                  {!decision && (
-                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                      <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-700">Elige una decisión en el Overview para ver el plan correspondiente (Go / Iterar / No-Go / Pivote).</p>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between gap-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex-wrap">
-                    <div>
-                      <p className="text-sm text-indigo-800" style={{ fontWeight: 500 }}>Generar plan según decisión con IA</p>
-                      <p className="text-xs text-indigo-500 mt-0.5">{decision ? `Plan de ${decision === 'Go' ? 'implementación' : decision === 'Iterar' ? 'iteración' : 'aprendizajes/qué no hacer'}` : 'Selecciona la decisión en el Overview primero'}.</p>
-                    </div>
-                    <button onClick={() => {
-                      if (!decision) { toast.error('Elige una decisión en el Overview primero'); return; }
-                      setShowIAPlanOverlay(true);
-                      if (!iaPlanListo) { setIaPlanLoading(true); setTimeout(() => { setIaPlanLoading(false); setIaPlanListo(true); }, 1600); }
-                    }}
-                      className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 px-3 py-2 bg-white border border-indigo-200 rounded-lg transition-colors shrink-0"
-                      style={{ fontWeight: 500 }}>
-                      <Sparkles size={12} /> Generar plan con IA
-                    </button>
-                  </div>
-
-                  {/* Plan Go */}
-                  {(decision === 'Go' || (!decision && true)) && decision === 'Go' && (
-                    <div className="space-y-3">
-                      <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>🚀 Plan de implementación</p>
-                      <div className="border border-slate-200 rounded-xl overflow-hidden">
-                        <div className="grid grid-cols-4 bg-slate-50 border-b border-slate-100 text-xs text-slate-500 px-3 py-2" style={{ fontWeight: 600 }}>
-                          <span>Hito</span><span>30 días</span><span>60 días</span><span>90 días</span>
-                        </div>
-                        {[
-                          { hito: 'Formalizar SLA con TI', d30: '(Placeholder) Firmar acuerdo', d60: '(Placeholder) 1er mes de operación', d90: '(Placeholder) Revisión y ajuste' },
-                          { hito: 'Escalar formulario', d30: '(Placeholder) 10 ingresos nuevos', d60: '(Placeholder) 100% de ingresos', d90: '(Placeholder) Automatizar notificaciones' },
-                          { hito: 'Integración SAP', d30: '(Placeholder) Kick-off técnico', d60: '(Placeholder) Prueba piloto API', d90: '(Placeholder) Go-live integración' },
-                        ].map((row, i) => (
-                          <div key={i} className="grid grid-cols-4 border-b border-slate-50 last:border-0 px-3 py-2.5 text-xs hover:bg-slate-50">
-                            <span className="text-slate-700" style={{ fontWeight: 500 }}>{row.hito}</span>
-                            <span className="text-slate-500">{row.d30}</span>
-                            <span className="text-slate-500">{row.d60}</span>
-                            <span className="text-slate-500">{row.d90}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="border border-slate-200 rounded-xl p-3">
-                        <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>RACI simplificado</p>
-                        <div className="space-y-1">
-                          {[
-                            { rol: 'Responsable', quienes: '(Placeholder) Ana R. (RRHH)' },
-                            { rol: 'Aprobador', quienes: '(Placeholder) Gerencia de Operaciones' },
-                            { rol: 'Soporte', quienes: '(Placeholder) TI · Líderes de área' },
-                          ].map(r => (
-                            <div key={r.rol} className="flex items-center gap-2 text-xs">
-                              <span className="text-slate-400 w-24 shrink-0" style={{ fontWeight: 600 }}>{r.rol}</span>
-                              <span className="text-slate-600">{r.quienes}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Plan Iterar */}
-                  {decision === 'Iterar' && (
-                    <div className="space-y-3">
-                      <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>🔄 Plan de iteración</p>
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 mb-2">
-                        💡 No busques la perfección. Apunta al mínimo que resuelve el punto pendiente y se puede probar rápido.
-                      </div>
-                      {[
-                        { label: 'Qué ajustar (1–3 cambios)', value: '(Placeholder) Agregar campo "tipo acceso especial" + flujo escalado TI Senior.' },
-                        { label: 'Próximo experimento / re-test', value: '(Placeholder) 3 empleados nuevos con accesos especiales · semana del 10 de marzo.' },
-                        { label: 'Evidencia mínima a capturar', value: '(Placeholder) Tiempo resolución casos especiales + NPS diferenciado por perfil.' },
-                        { label: 'Criterio go/no-go para cerrar ciclo', value: '(Placeholder) ≤24h en 100% de casos (incluidos especiales).' },
-                      ].map(({ label, value }) => (
-                        <div key={label} className="border border-slate-200 rounded-xl p-3">
-                          <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>{label}</p>
-                          <p className="text-xs text-slate-700">{value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Plan No-Go / Pivote */}
-                  {(decision === 'No-Go' || decision === 'Pivote') && (
-                    <div className="space-y-3">
-                      <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>{decision === 'No-Go' ? '🛑 Aprendizajes y qué no hacer' : '🔀 Aprendizajes del pivote'}</p>
-                      {[
-                        { label: 'Supuestos invalidados', value: '(Placeholder) El proceso informal de TI podría adaptarse en 24h — falso para casos especiales.' },
-                        { label: 'Señales encontradas en campo', value: '(Placeholder) Accesos especiales = 20% del volumen, 80% de los retrasos.' },
-                        { label: 'Qué mantener (lo rescatable)', value: '(Placeholder) El formulario como interfaz · el sheet de seguimiento · la colaboración con TI.' },
-                        { label: 'Qué NO repetir', value: '(Placeholder) Pilotear sin SLA previo con TI. No incluir casos especiales sin proceso paralelo.' },
-                        { label: 'Qué validar primero si se re-intenta', value: '(Placeholder) ¿TI puede pre-aprobar accesos por perfil de cargo?' },
-                      ].map(({ label, value }) => (
-                        <div key={label} className="border border-slate-200 rounded-xl p-3">
-                          <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>{label}</p>
-                          <p className="text-xs text-slate-700">{value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {!decision && (
-                    <div className="text-center py-8">
-                      <Target size={24} className="text-slate-300 mx-auto mb-2" />
-                      <p className="text-xs text-slate-400">El plan aparecerá aquí según la decisión que elijas en el Overview.</p>
-                      <button onClick={() => setActiveModule('overview')} className="text-xs text-indigo-600 hover:text-indigo-700 mt-2" style={{ fontWeight: 500 }}>→ Ir al Overview</button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TAB: TALK TRACK ────────────────────────────────────────────── */}
-              {tabC === 'talk' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3 p-3 bg-violet-50 border border-violet-100 rounded-xl flex-wrap">
-                    <div>
-                      <p className="text-sm text-violet-800" style={{ fontWeight: 500 }}>Generar talk track con IA</p>
-                      <p className="text-xs text-violet-500 mt-0.5">Guion de 60–90 seg{audiencia ? ` adaptado para ${audiencia}` : ''}.</p>
-                    </div>
-                    <button onClick={() => {
-                      setShowIATalkOverlay(true);
-                      if (!iaTalkListo) { setIaTalkLoading(true); setTimeout(() => { setIaTalkLoading(false); setIaTalkListo(true); }, 1400); }
-                    }}
-                      className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 px-3 py-2 bg-white border border-violet-200 rounded-lg transition-colors shrink-0"
-                      style={{ fontWeight: 500 }}>
-                      <Sparkles size={12} /> Generar talk track
-                    </button>
-                  </div>
-
-                  <SectionCard title="Talk track (60–90 seg)" icon={Users}>
-                    <p className="text-xs text-slate-400 mb-2">Escribe el guion conversacional. No leerlo literalmente — úsalo como referencia.</p>
-                    <textarea value={talkTrack} onChange={e => setTalkTrack(e.target.value)} rows={7}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none mb-3" />
-                    <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 500 }}>Checklist de ensayo</p>
-                    <div className="space-y-0 -mx-4">
-                      {['Dentro del tiempo (60–90 segundos)', '¿Se entiende sin conocer el contexto?', 'Evidencia citada de forma natural', 'Pedido final claro ("¿lo aprobamos?")'].map((item, i) => (
-                        <label key={i} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-slate-50 border-b border-slate-50 last:border-0">
-                          <input type="checkbox" checked={ensayoChecks[i]}
-                            onChange={e => { const n = [...ensayoChecks]; n[i] = e.target.checked; setEnsayoChecks(n); }}
-                            className="w-4 h-4 shrink-0 accent-emerald-500" />
-                          <span className={`text-xs ${ensayoChecks[i] ? 'text-slate-400 line-through' : 'text-slate-600'}`}>{item}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <p className={`text-xs mt-3 ${ensayoChecks.every(Boolean) ? 'text-emerald-600' : 'text-slate-400'}`} style={{ fontWeight: 500 }}>
-                      {ensayoChecks.filter(Boolean).length}/4{ensayoChecks.every(Boolean) && ' · ¡Listo para presentar!'}
+                  <div>
+                    <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>
+                      Audiencia principal
                     </p>
-                  </SectionCard>
+                    <div className="flex flex-wrap gap-2">
+                      {AUDIENCES.map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => setAudience(item)}
+                          className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                            audience === item
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                          }`}
+                          style={{ fontWeight: audience === item ? 600 : 400 }}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                  {/* Enviar a IA / Sesión / Export */}
-                  {!hasFeedback ? (
-                    <button onClick={() => setShowSendModal(true)}
-                      className="w-full bg-violet-600 hover:bg-violet-700 text-white rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors" style={{ fontWeight: 500 }}>
-                      <Send size={14} /> Enviar a revisión IA
-                    </button>
-                  ) : <FeedbackIAPanel feedback={MOCK_S4_FEEDBACK} />}
+                  <div>
+                    <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>
+                      Objetivo de la reunion
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {MEETING_GOALS.map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => setMeetingGoal(item)}
+                          className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                            meetingGoal === item
+                              ? 'bg-violet-600 text-white border-violet-600'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600'
+                          }`}
+                          style={{ fontWeight: meetingGoal === item ? 600 : 400 }}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                  {hasFeedback && (
-                    sessionBooked ? (
-                      <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0"><CheckCircle2 size={15} className="text-emerald-600" /></div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm text-emerald-800" style={{ fontWeight: 600 }}>Sesión de cierre agendada</p>
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800" style={{ fontWeight: 600 }}>✓ Step 4 listo</span>
+                  <div>
+                    <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>
+                      Decision tomada
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: 'Mantener / implementar', value: 'Go' as const },
+                        { label: 'Iterar', value: 'Iterar' as const },
+                        { label: 'Pivotear', value: 'Pivote' as const },
+                        { label: 'Solo aprendizajes', value: 'No-Go' as const },
+                      ].map((item) => (
+                        <button
+                          key={item.value}
+                          onClick={() => applyDecision(item.value)}
+                          className={`px-3 py-1.5 rounded-full text-xs border-2 transition-colors ${
+                            decision === item.value
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'
+                          }`}
+                          style={{ fontWeight: decision === item.value ? 600 : 400 }}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>
+                      Resultado que quieres mover en la reunion
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {MEETING_OUTCOMES.map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => setMeetingOutcome(item)}
+                          className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                            meetingOutcome === item
+                              ? 'bg-slate-900 text-white border-slate-900'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                          }`}
+                          style={{ fontWeight: meetingOutcome === item ? 600 : 400 }}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">
+                      La decision del proyecto sigue teniendo una sola fuente de verdad arriba. Aqui solo defines que resultado quieres mover en la reunion.
+                    </p>
+                  </div>
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="Outputs finales del step"
+                description="Cada output muestra estado, que falta y el modulo donde se completa."
+                icon={Presentation}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {outputCards.map((card) => (
+                    <div key={card.title} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-sm text-slate-800 flex-1" style={{ fontWeight: 600 }}>
+                          {card.title}
+                        </p>
+                        <StatusChip status={card.status} size="sm" />
+                      </div>
+                      <p className="text-xs text-slate-500 mb-3">{card.missing}</p>
+                      <button
+                        onClick={() => setActiveModule(card.module)}
+                        className="w-full flex items-center justify-center gap-2 text-xs bg-white border border-slate-200 hover:bg-slate-100 rounded-xl py-2 transition-colors"
+                        style={{ fontWeight: 500 }}
+                      >
+                        {card.cta} <ChevronRight size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="Checklist de cierre"
+                description="Cada item explica por que importa y te lleva al espacio correcto."
+                icon={CheckCircle2}
+              >
+                <div className="space-y-3">
+                  {closureChecklist.map((item) => (
+                    <div key={item.title} className="border border-slate-200 rounded-xl p-3">
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`w-5 h-5 rounded-full text-xs flex items-center justify-center shrink-0 mt-0.5 ${
+                            item.done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
+                          }`}
+                        >
+                          {item.done ? '✓' : '·'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                              {item.title}
+                            </p>
+                            <span
+                              className={`text-[11px] px-2 py-0.5 rounded-full ${
+                                item.required
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-slate-100 text-slate-500'
+                              }`}
+                              style={{ fontWeight: 600 }}
+                            >
+                              {item.required ? 'Obligatorio' : 'Recomendado'}
+                            </span>
                           </div>
-                          {mentorDate && <p className="text-xs text-emerald-600 mt-0.5"><Clock size={10} className="inline mr-1" />{mentorDate}{mentorTime ? ` · ${mentorTime}` : ''}</p>}
+                          <p className="text-xs text-slate-500">{item.why}</p>
+                        </div>
+                        <button
+                          onClick={() => setActiveModule(item.module)}
+                          className="shrink-0 text-xs text-indigo-600 hover:text-indigo-700"
+                          style={{ fontWeight: 600 }}
+                        >
+                          Ir ahora
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="Orden sugerido"
+                description="Este step ya no mezcla todo: aqui tienes la secuencia recomendada."
+                icon={MoveRight}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {[
+                    {
+                      step: '1',
+                      title: 'Arma la presentacion',
+                      description: 'Define mensaje, evidencia, demo y deck.',
+                      module: 'A' as const,
+                    },
+                    {
+                      step: '2',
+                      title: 'Define el plan',
+                      description: 'Traduce la decision en acciones y responsables.',
+                      module: 'B' as const,
+                    },
+                    {
+                      step: '3',
+                      title: 'Practica y valida',
+                      description: 'Ensaya, ajusta y pasa el gate del mentor.',
+                      module: 'C' as const,
+                    },
+                    {
+                      step: '4',
+                      title: 'Invita y agenda',
+                      description: 'Cierra con una convocatoria real a sponsor o Demo Day.',
+                      module: 'C' as const,
+                    },
+                  ].map((item) => (
+                    <button
+                      key={item.step}
+                      onClick={() => setActiveModule(item.module)}
+                      className="text-left border border-slate-200 rounded-xl p-4 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
+                    >
+                      <span className="text-xs text-indigo-600" style={{ fontWeight: 700 }}>
+                        Paso {item.step}
+                      </span>
+                      <p className="text-sm text-slate-800 mt-1" style={{ fontWeight: 600 }}>
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">{item.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </SectionCard>
+
+              {stepFinalized ? (
+                <SectionCard
+                  title="Cierre organizacional"
+                  description="El Overview ya refleja como sale la iniciativa de Step 4."
+                  icon={CheckCircle2}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                      <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>
+                        Siguiente paso organizacional definido
+                      </p>
+                      <p className="text-sm text-slate-800">{nextStepType || 'Pendiente'}</p>
+                    </div>
+                    <div className="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                      <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>
+                        Estado actual
+                      </p>
+                      <p className="text-sm text-slate-800">{meetingStatus}</p>
+                    </div>
+                    <div className="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                      <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>
+                        Resultado que buscas mover
+                      </p>
+                      <p className="text-sm text-slate-800">{meetingOutcome}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <button
+                      onClick={() => setActiveModule('C')}
+                      className="text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors"
+                      style={{ fontWeight: 500 }}
+                    >
+                      Revisar cierre
+                    </button>
+                    <button
+                      onClick={() => downloadTextFile('starteria-cierre-ejecutivo.txt', buildFinalSummary())}
+                      className="text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors inline-flex items-center gap-2"
+                      style={{ fontWeight: 500 }}
+                    >
+                      <Download size={12} /> Descargar cierre ejecutivo
+                    </button>
+                  </div>
+                </SectionCard>
+              ) : null}
+            </div>
+          ) : null}
+
+          {activeModule === 'A' ? (
+            <div className="space-y-5">
+              <div className="border border-slate-200 rounded-2xl p-5 bg-white">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>
+                    A · Presentacion de impacto
+                  </h1>
+                  <StatusChip
+                    status={presentationReady ? 'Completado' : 'En progreso'}
+                    size="sm"
+                  />
+                </div>
+                <p className="text-sm text-slate-500">
+                  Aqui preparas el contenido real de la presentacion, con evidencia
+                  al servicio del relato y un pedido final listo para decision.
+                </p>
+              </div>
+
+              <SectionCard
+                title="Datos base del relato"
+                description="Ancla visible para que no pierdas el foco del cierre."
+                icon={Target}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Audiencia', value: audience },
+                    { label: 'Objetivo', value: meetingGoal },
+                    { label: 'Decision tomada', value: getDecisionSummary(decision) },
+                    { label: 'Enfoque del cierre', value: closureType },
+                  ].map((item) => (
+                    <div key={item.label} className="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                      <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>
+                        {item.label}
+                      </p>
+                      <p className="text-sm text-slate-700">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="Estructura guiada de la presentacion"
+                description="Cada bloque explica que escribir y para que sirve."
+                icon={Presentation}
+                badge={
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700" style={{ fontWeight: 600 }}>
+                    {filledPresentationCount}/12 listos
+                  </span>
+                }
+              >
+                <div className="space-y-4">
+                  {PRESENTATION_SECTIONS.map((section) => (
+                    <TextArea
+                      key={section.key}
+                      label={section.title}
+                      help={section.help}
+                      value={presentation[section.key]}
+                      onChange={(value) =>
+                        setPresentation((current) => ({ ...current, [section.key]: value }))
+                      }
+                      placeholder="Escribe aqui el contenido que ira a tu presentacion."
+                      rows={3}
+                    />
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="Evidencia al servicio del relato"
+                description="Selecciona solo la evidencia que realmente ayuda a sostener la decision."
+                icon={Paperclip}
+              >
+                <div className="space-y-3">
+                  {evidences.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`border rounded-xl p-4 transition-colors ${
+                        item.selected ? 'border-indigo-200 bg-indigo-50' : 'border-slate-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 mb-3">
+                        <input
+                          type="checkbox"
+                          checked={item.selected}
+                          onChange={(event) =>
+                            setEvidences((current) =>
+                              current.map((evidence) =>
+                                evidence.id === item.id
+                                  ? { ...evidence, selected: event.target.checked }
+                                  : evidence
+                              )
+                            )
+                          }
+                          className="w-4 h-4 mt-1 accent-indigo-600"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                              {item.title}
+                            </p>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-500">
+                              {item.source}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                            <TextInput
+                              label="Que demuestra"
+                              value={item.proves}
+                              onChange={(value) =>
+                                setEvidences((current) =>
+                                  current.map((evidence) =>
+                                    evidence.id === item.id ? { ...evidence, proves: value } : evidence
+                                  )
+                                )
+                              }
+                              placeholder="Describe el hallazgo que prueba."
+                            />
+                            <TextInput
+                              label="Que decision soporta"
+                              value={item.supportsDecision}
+                              onChange={(value) =>
+                                setEvidences((current) =>
+                                  current.map((evidence) =>
+                                    evidence.id === item.id
+                                      ? { ...evidence, supportsDecision: value }
+                                      : evidence
+                                  )
+                                )
+                              }
+                              placeholder="Ej. Implementar / mantener"
+                            />
+                            <TextInput
+                              label="Donde se usa en la presentacion"
+                              value={item.usedIn}
+                              onChange={(value) =>
+                                setEvidences((current) =>
+                                  current.map((evidence) =>
+                                    evidence.id === item.id ? { ...evidence, usedIn: value } : evidence
+                                  )
+                                )
+                              }
+                              placeholder="Ej. Resultados"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="Demo / evidencia de uso"
+                description="La demo fortalece la credibilidad de la propuesta."
+                icon={Play}
+              >
+                <div className="space-y-4">
+                  {demos.map((item) => (
+                    <div key={item.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700" style={{ fontWeight: 600 }}>
+                          {item.type}
+                        </span>
+                        <span className="text-xs text-indigo-600">{item.url || 'Sin link cargado'}</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-slate-600">
+                        <p>
+                          <span style={{ fontWeight: 600 }}>Que demuestra:</span> {item.proof}
+                        </p>
+                        <p>
+                          <span style={{ fontWeight: 600 }}>Decision que refuerza:</span> {item.supports}
+                        </p>
+                        <p>
+                          <span style={{ fontWeight: 600 }}>Parte del deck:</span> {item.usedIn}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="border border-dashed border-slate-300 rounded-xl p-4">
+                    <p className="text-sm text-slate-800 mb-3" style={{ fontWeight: 600 }}>
+                      Agregar nueva demo o evidencia de uso
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <TextInput
+                        label="Tipo"
+                        value={newDemo.type}
+                        onChange={(value) =>
+                          setNewDemo((current) => ({
+                            ...current,
+                            type: value as DemoItem['type'],
+                          }))
+                        }
+                        placeholder="Link demo / Video / Capturas / Registro de uso"
+                      />
+                      <TextInput
+                        label="Link o referencia"
+                        value={newDemo.url}
+                        onChange={(value) => setNewDemo((current) => ({ ...current, url: value }))}
+                        placeholder="https://... o nombre de archivo"
+                      />
+                      <TextInput
+                        label="Que demuestra"
+                        value={newDemo.proof}
+                        onChange={(value) =>
+                          setNewDemo((current) => ({ ...current, proof: value }))
+                        }
+                        placeholder="Ej. Que el flujo se puede completar sin ayuda."
+                      />
+                      <TextInput
+                        label="Que decision soporta"
+                        value={newDemo.supports}
+                        onChange={(value) =>
+                          setNewDemo((current) => ({ ...current, supports: value }))
+                        }
+                        placeholder="Ej. Implementar / mantener"
+                      />
+                      <div className="md:col-span-2">
+                        <TextInput
+                          label="En que parte de la presentacion se usa"
+                          value={newDemo.usedIn}
+                          onChange={(value) =>
+                            setNewDemo((current) => ({ ...current, usedIn: value }))
+                          }
+                          placeholder="Ej. Como funciona / resultados"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={addDemo}
+                      className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors"
+                      style={{ fontWeight: 500 }}
+                    >
+                      Agregar demo
+                    </button>
+                  </div>
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="Deck PDF y analisis con IA"
+                description="Aqui se registra el entregable del modulo A."
+                icon={FileText}
+                badge={<StatusChip status={pdfState === 'analyzed' ? 'Completado' : 'Pendiente'} size="sm" />}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                    <TextInput
+                      label="Nombre del PDF"
+                      value={pdfName}
+                      onChange={setPdfName}
+                      placeholder="Presentacion-impacto-v1.pdf"
+                    />
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => {
+                          setPdfState('uploaded');
+                          toast.success('PDF registrado en el modulo A.');
+                        }}
+                        className="flex-1 border border-slate-200 bg-white hover:bg-slate-100 rounded-xl py-2 text-sm transition-colors"
+                        style={{ fontWeight: 500 }}
+                      >
+                        Registrar PDF
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!pdfName.trim()) {
+                            toast.error('Primero registra el nombre del PDF.');
+                            return;
+                          }
+                          setPdfState('analyzed');
+                          setPdfFeedbackReady(true);
+                          toast.success('Analisis IA completado para el deck.');
+                        }}
+                        className="flex-1 bg-violet-600 hover:bg-violet-700 text-white rounded-xl py-2 text-sm transition-colors"
+                        style={{ fontWeight: 500 }}
+                      >
+                        Analizar con IA
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl p-4">
+                    <p className="text-xs text-slate-500 mb-3" style={{ fontWeight: 600 }}>
+                      Feedback IA
+                    </p>
+                    {pdfFeedbackReady ? (
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <p className="text-emerald-700 text-xs mb-1" style={{ fontWeight: 700 }}>
+                            Que esta bien
+                          </p>
+                          <p className="text-slate-600">
+                            La historia conecta problema, evidencia, decision y pedido final de forma consistente.
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-amber-700 text-xs mb-1" style={{ fontWeight: 700 }}>
+                            Que falta
+                          </p>
+                          <p className="text-slate-600">
+                            Explicitar mejor como se resolveran los casos especiales y quien tomara ownership.
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-indigo-700 text-xs mb-1" style={{ fontWeight: 700 }}>
+                            Siguiente accion recomendada
+                          </p>
+                          <p className="text-slate-600">
+                            Ajusta la parte de riesgos organizacionales y asegurate de que el pedido final este en la ultima diapositiva.
+                          </p>
                         </div>
                       </div>
                     ) : (
-                      <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
-                        <p className="text-sm text-amber-800 mb-1" style={{ fontWeight: 600 }}>Sesión de cierre obligatoria</p>
-                        <p className="text-xs text-amber-600 mb-3">Agenda la sesión final con tu mentor para presentar el proyecto.</p>
-                        <button onClick={() => setShowMentorModal(true)} className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-4 py-2 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                          <Calendar size={14} /> Agendar sesión de cierre
-                        </button>
-                      </div>
-                    )
-                  )}
-
-                  {hasFeedback && sessionBooked && (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-                        <Download size={14} className="text-slate-500" />
-                        <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Exportar materiales</p>
-                      </div>
-                      <div className="p-4 grid grid-cols-2 gap-2">
-                        {[
-                          { icon: FileText, label: 'One-Pager PDF', color: 'bg-blue-50 border-blue-200' },
-                          { icon: Package, label: 'Demo Day ZIP', color: 'bg-indigo-50 border-indigo-200' },
-                          { icon: Share2, label: 'Link público', color: 'bg-violet-50 border-violet-200' },
-                          { icon: FileText, label: 'Texto CV/LinkedIn', color: 'bg-emerald-50 border-emerald-200' },
-                        ].map(({ icon: Icon, label, color }) => (
-                          <button key={label} onClick={() => toast.success(`${label} — (modo demo)`)}
-                            className={`flex items-center gap-2 p-3 border rounded-xl text-left transition-colors hover:opacity-90 ${color}`}>
-                            <Icon size={14} className="text-slate-500 shrink-0" />
-                            <span className="text-xs text-slate-700" style={{ fontWeight: 500 }}>{label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                      <p className="text-sm text-slate-500">
+                        Analiza el PDF para revisar claridad, coherencia narrativa, solidez de evidencia y consistencia entre hallazgos, decision y pedido final.
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+              </SectionCard>
 
-      {/* ════════════════════════════════════════════════════════════════════════
-          OVERLAYS
-      ════════════════════════════════════════════════════════════════════════ */}
+              <SectionCard
+                title="Contexto organizacional"
+                description="Mantiene la propuesta realista y conecta naturalmente con el modulo B."
+                icon={Building2}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <TextArea
+                    label="Cultura / resistencias"
+                    value={orgContext.culture}
+                    onChange={(value) =>
+                      setOrgContext((current) => ({ ...current, culture: value }))
+                    }
+                    placeholder="Describe resistencias o sensibilidades organizacionales."
+                  />
+                  <TextArea
+                    label="Areas afectadas"
+                    value={orgContext.affectedAreas}
+                    onChange={(value) =>
+                      setOrgContext((current) => ({ ...current, affectedAreas: value }))
+                    }
+                    placeholder="Indica que areas se veran impactadas."
+                  />
+                  <TextArea
+                    label="Dependencias"
+                    value={orgContext.dependencies}
+                    onChange={(value) =>
+                      setOrgContext((current) => ({ ...current, dependencies: value }))
+                    }
+                    placeholder="Alineaciones o dependencias necesarias."
+                  />
+                  <TextArea
+                    label="Riesgos"
+                    value={orgContext.risks}
+                    onChange={(value) =>
+                      setOrgContext((current) => ({ ...current, risks: value }))
+                    }
+                    placeholder="Que puede bloquear el avance."
+                  />
+                  <div className="md:col-span-2">
+                    <TextArea
+                      label="Requerimientos"
+                      value={orgContext.requirements}
+                      onChange={(value) =>
+                        setOrgContext((current) => ({ ...current, requirements: value }))
+                      }
+                      placeholder="Recursos, owners o habilitadores necesarios."
+                    />
+                  </div>
+                </div>
+              </SectionCard>
 
-      {/* Overlay_S4_AddDemo */}
-      {showAddDemoOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Play size={15} className="text-emerald-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Agregar demo</h3>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => toast.success('Modulo A guardado.')}
+                  className="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl py-2.5 text-sm transition-colors"
+                  style={{ fontWeight: 500 }}
+                >
+                  Guardar
+                </button>
+                <button
+                  onClick={() => setActiveModule('B')}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors flex items-center justify-center gap-2"
+                  style={{ fontWeight: 500 }}
+                >
+                  Siguiente: plan de implementacion <ChevronRight size={14} />
+                </button>
               </div>
-              <button onClick={() => setShowAddDemoOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
             </div>
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>Tipo de demo</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {DEMO_FORMATOS.map(({ key, icon: Icon, color }) => (
-                    <button key={key} onClick={() => setNuevoDemo(p => ({ ...p, formato: key }))}
-                      className={`flex items-center gap-2 p-2.5 rounded-xl border-2 transition-colors ${nuevoDemo.formato === key ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <Icon size={14} className={nuevoDemo.formato === key ? 'text-indigo-500' : color} />
-                      <span className="text-xs text-slate-700" style={{ fontWeight: nuevoDemo.formato === key ? 600 : 400 }}>{key}</span>
+          ) : null}
+
+          {activeModule === 'B' ? (
+            <div className="space-y-5">
+              <div className="border border-slate-200 rounded-2xl p-5 bg-white">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>
+                    B · Plan de implementacion
+                  </h1>
+                  <StatusChip status={planReady ? 'Completado' : 'En progreso'} size="sm" />
+                </div>
+                <p className="text-sm text-slate-500">
+                  Traduce la decision tomada en un plan claro, editable y realista.
+                </p>
+              </div>
+
+              <SectionCard
+                title="Modo del plan"
+                description="El plan se adapta a la decision tomada, pero todo sigue siendo editable."
+                icon={ClipboardList}
+              >
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {CLOSURE_TYPES.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => setClosureType(item)}
+                      className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                        closureType === item
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                      }`}
+                      style={{ fontWeight: closureType === item ? 600 : 400 }}
+                    >
+                      {item}
                     </button>
                   ))}
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>URL / archivo (placeholder)</label>
-                <input value={nuevoDemo.url} onChange={e => setNuevoDemo(p => ({ ...p, url: e.target.value }))}
-                  placeholder="https://... o nombre del archivo"
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>¿Qué demuestra? (1 línea)</label>
-                <input value={nuevoDemo.queDemuesta} onChange={e => setNuevoDemo(p => ({ ...p, queDemuesta: e.target.value }))}
-                  placeholder="Ej. Que el formulario es fácil de usar y el proceso tarda menos de 10 min."
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>Audiencia objetivo (opcional)</label>
-                <input value={nuevoDemo.audiencia} onChange={e => setNuevoDemo(p => ({ ...p, audiencia: e.target.value }))}
-                  placeholder="Ej. Comité / Gerencia / Equipo operativo"
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-            </div>
-            <div className="flex gap-3 px-6 pb-5">
-              <button onClick={() => setShowAddDemoOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>Cancelar</button>
-              <button onClick={addDemo} disabled={!nuevoDemo.queDemuesta.trim()}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>Guardar demo</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_S4_ViewSummary */}
-      {showResumenOverlay && resumenStep && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <h3 className="text-slate-900" style={{ fontWeight: 600 }}>{resumenStep.resumen.titulo}</h3>
-              <button onClick={() => setShowResumenOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
-              <div className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-100 rounded-xl">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${resumenStep.estado === 'Aprobado' ? 'bg-emerald-100 text-emerald-700' : resumenStep.estado === 'Listo' ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-100 text-indigo-700'}`} style={{ fontWeight: 600 }}>{resumenStep.estado}</span>
-                <span className="text-xs text-slate-400">Step {resumenStep.step} · {resumenStep.nombre}</span>
-              </div>
-              <div className="space-y-2">
-                {resumenStep.resumen.items.map(({ label, value }) => (
-                  <div key={label} className="border border-slate-200 rounded-xl p-3">
-                    <p className="text-xs text-slate-500 mb-0.5" style={{ fontWeight: 600 }}>{label}</p>
-                    <p className="text-sm text-slate-700">{value}</p>
+                <div className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                  <Sparkles size={13} className="text-indigo-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm text-indigo-800" style={{ fontWeight: 600 }}>
+                      IA como asistente, no como reemplazo
+                    </p>
+                    <p className="text-xs text-indigo-600 mt-1">
+                      Puedes generar un borrador inicial y luego editar actividades, responsables, fechas y dependencias.
+                    </p>
                   </div>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                <p className="text-xs text-slate-400 w-full mb-1" style={{ fontWeight: 600 }}>ARTEFACTOS</p>
-                {resumenStep.artefactos.map(a => (
-                  <span key={a} className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">{a}</span>
-                ))}
-              </div>
-            </div>
-            <div className="px-6 pb-5 flex gap-3">
-              <button onClick={() => setShowResumenOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>Cerrar</button>
-              <button onClick={() => { setShowResumenOverlay(false); setDownloadStep(resumenStep.step); setShowDownloadOverlay(true); }}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors flex items-center justify-center gap-2" style={{ fontWeight: 500 }}>
-                <Download size={13} /> Descargar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                  <button
+                    onClick={generatePlanDraft}
+                    className="shrink-0 text-xs bg-white border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-xl px-3 py-2 transition-colors"
+                    style={{ fontWeight: 500 }}
+                  >
+                    Generar borrador con IA
+                  </button>
+                </div>
+              </SectionCard>
 
-      {/* Overlay_S4_Download_Demo */}
-      {showDownloadOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Download size={15} className="text-indigo-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Descargar — Step {downloadStep}</h3>
+              <SectionCard
+                title="Salida util del plan"
+                description="Estas acciones te permiten reutilizar el plan fuera del sistema para la sustentacion."
+                icon={Download}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() =>
+                      copyText(
+                        `Etapa | Actividad | Responsable | Area | Fecha o tramo | Dependencia | Resultado esperado\n${buildPlanRowsText()}`,
+                        'Tabla del plan copiada.'
+                      )
+                    }
+                    className="inline-flex items-center gap-2 text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors"
+                    style={{ fontWeight: 500 }}
+                  >
+                    <Copy size={12} /> Copiar tabla
+                  </button>
+                  <button
+                    onClick={handlePlanPdfExport}
+                    className="inline-flex items-center gap-2 text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors"
+                    style={{ fontWeight: 500 }}
+                  >
+                    <Download size={12} /> Descargar PDF
+                  </button>
+                  <button
+                    onClick={() =>
+                      copyText(
+                        currentPlanRows
+                          .map(
+                            (row) =>
+                              `- ${row.stage}: ${row.activity}. Responsable: ${row.owner}. Resultado esperado: ${row.expectedResult}.`
+                          )
+                          .join('\n'),
+                        'Resumen del plan copiado para slides.'
+                      )
+                    }
+                    className="inline-flex items-center gap-2 text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors"
+                    style={{ fontWeight: 500 }}
+                  >
+                    <Copy size={12} /> Copiar para slides
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mt-3">
+                  El PDF usa una vista imprimible del navegador para que puedas guardarlo como archivo si no existe exportador nativo.
+                </p>
+              </SectionCard>
+
+              {closureType === 'Implementar / mantener' ? (
+                <SectionCard
+                  title="Plan 0-30 / 31-60 / 61-90 dias"
+                  description="Muestra fases, actividades, responsables, dependencias y resultado esperado."
+                  icon={Calendar}
+                >
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[920px]">
+                      <div className="grid grid-cols-7 gap-2 px-2 pb-2 text-[11px] text-slate-500" style={{ fontWeight: 700 }}>
+                        <span>Etapa</span>
+                        <span>Actividad</span>
+                        <span>Responsable</span>
+                        <span>Area duena</span>
+                        <span>Fecha o tramo</span>
+                        <span>Dependencia</span>
+                        <span>Resultado esperado</span>
+                      </div>
+                      <div className="space-y-2">
+                        {implementationPlan.map((row) => (
+                          <div key={row.id} className="grid grid-cols-7 gap-2">
+                            {(
+                              ['stage', 'activity', 'owner', 'area', 'timing', 'dependency', 'expectedResult'] as Array<keyof PlanRow>
+                            ).map((field) => (
+                              <input
+                                key={field}
+                                value={row[field]}
+                                onChange={(event) =>
+                                  updatePlanRow(setImplementationPlan, row.id, field, event.target.value)
+                                }
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={addPlanRow}
+                    className="mt-3 text-xs text-indigo-600 hover:text-indigo-700"
+                    style={{ fontWeight: 600 }}
+                  >
+                    Agregar actividad
+                  </button>
+                </SectionCard>
+              ) : null}
+
+              {closureType === 'Iterar' ? (
+                <div className="space-y-5">
+                  <SectionCard
+                    title="Definicion de la iteracion"
+                    description="Aclara que se ajusta, que se volvera a validar y cual es la regla para decidir el siguiente paso."
+                    icon={Target}
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <TextArea label="Que parte se ajusta" value={iterateWhatToAdjust} onChange={setIterateWhatToAdjust} placeholder="Explica que se corrige." />
+                      <TextArea label="Nuevo experimento o validacion" value={iterateNextExperiment} onChange={setIterateNextExperiment} placeholder="Describe la siguiente prueba." />
+                      <div className="md:col-span-2">
+                        <TextArea label="Criterio para decidir el siguiente paso" value={iterateDecisionRule} onChange={setIterateDecisionRule} placeholder="Explica bajo que criterio volverias a presentar." />
+                      </div>
+                    </div>
+                  </SectionCard>
+                  <SectionCard title="Vista del plan" description="Tabla simple para entender actividad, responsable, fecha y resultado esperado." icon={Calendar}>
+                    <div className="space-y-2">
+                      {iterationPlan.map((row) => (
+                        <div key={row.id} className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                          {(
+                            ['stage', 'activity', 'owner', 'timing', 'dependency', 'expectedResult'] as Array<keyof PlanRow>
+                          ).map((field) => (
+                            <input
+                              key={field}
+                              value={row[field]}
+                              onChange={(event) =>
+                                updatePlanRow(setIterationPlan, row.id, field, event.target.value)
+                              }
+                              className="rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={addPlanRow} className="mt-3 text-xs text-indigo-600 hover:text-indigo-700" style={{ fontWeight: 600 }}>
+                      Agregar actividad
+                    </button>
+                  </SectionCard>
+                </div>
+              ) : null}
+
+              {closureType === 'Pivotear' ? (
+                <div className="space-y-5">
+                  <SectionCard title="Plantilla de pivote" description="Aclara que se deja, que cambia y bajo que condicion volveria a presentarse." icon={AlertTriangle}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <TextArea label="Que se deja" value={pivotWhatStops} onChange={setPivotWhatStops} placeholder="Explica que ya no se hara." />
+                      <TextArea label="Nueva direccion" value={pivotNewDirection} onChange={setPivotNewDirection} placeholder="Describe hacia donde cambia la iniciativa." />
+                      <TextArea label="Siguiente hipotesis a validar" value={pivotHypothesis} onChange={setPivotHypothesis} placeholder="Escribe la nueva hipotesis." />
+                      <TextArea label="Condiciones para volver a presentar" value={pivotReturnCondition} onChange={setPivotReturnCondition} placeholder="Que deberia pasar antes de volver a reunion." />
+                    </div>
+                  </SectionCard>
+                  <SectionCard title="Vista del plan" description="Timeline simple para ownership, dependencia y resultado esperado." icon={Calendar}>
+                    <div className="space-y-2">
+                      {pivotPlan.map((row) => (
+                        <div key={row.id} className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                          {(
+                            ['stage', 'activity', 'owner', 'timing', 'dependency', 'expectedResult'] as Array<keyof PlanRow>
+                          ).map((field) => (
+                            <input
+                              key={field}
+                              value={row[field]}
+                              onChange={(event) =>
+                                updatePlanRow(setPivotPlan, row.id, field, event.target.value)
+                              }
+                              className="rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={addPlanRow} className="mt-3 text-xs text-indigo-600 hover:text-indigo-700" style={{ fontWeight: 600 }}>
+                      Agregar actividad
+                    </button>
+                  </SectionCard>
+                </div>
+              ) : null}
+
+              {closureType === 'Solo aprendizajes' ? (
+                <div className="space-y-5">
+                  <SectionCard title="Cierre por aprendizajes" description="Organiza lo que se aprendio, lo que no funciono y que senales justificarian reactivar la iniciativa." icon={BookOpen}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <TextArea label="Que aprendimos" value={learningSummary} onChange={setLearningSummary} placeholder="Resume el aprendizaje principal." />
+                      <TextArea label="Que no deberiamos repetir" value={learningDoNotRepeat} onChange={setLearningDoNotRepeat} placeholder="Deja claro que errores evitar." />
+                      <TextArea label="Senales para una futura reactivacion" value={learningSignals} onChange={setLearningSignals} placeholder="Describe que deberia cambiar para retomarlo." />
+                    </div>
+                  </SectionCard>
+                  <SectionCard title="Vista del plan" description="Tambien los aprendizajes deben quedar accionables para el area." icon={Calendar}>
+                    <div className="space-y-2">
+                      {learningPlan.map((row) => (
+                        <div key={row.id} className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                          {(
+                            ['stage', 'activity', 'owner', 'timing', 'dependency', 'expectedResult'] as Array<keyof PlanRow>
+                          ).map((field) => (
+                            <input
+                              key={field}
+                              value={row[field]}
+                              onChange={(event) =>
+                                updatePlanRow(setLearningPlan, row.id, field, event.target.value)
+                              }
+                              className="rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={addPlanRow} className="mt-3 text-xs text-indigo-600 hover:text-indigo-700" style={{ fontWeight: 600 }}>
+                      Agregar actividad
+                    </button>
+                  </SectionCard>
+                </div>
+              ) : null}
+
+              <SectionCard title="Output del modulo B" description="Este output debe quedar listo para presentar y reutilizar en el deck." icon={CheckCircle2}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-sm text-slate-600">
+                    {planReady
+                      ? `Tu plan ya esta listo y es coherente con la decision de ${closureType.toLowerCase()}.`
+                      : 'Todavia falta aterrizar actividad, owner y resultado esperado para que el plan sea presentable.'}
+                  </p>
+                  <StatusChip status={planReady ? 'Completado' : 'Pendiente'} size="sm" />
+                </div>
+              </SectionCard>
+
+              <div className="flex gap-3">
+                <button onClick={() => toast.success('Modulo B guardado.')} className="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
+                  Guardar
+                </button>
+                <button onClick={() => setActiveModule('C')} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors flex items-center justify-center gap-2" style={{ fontWeight: 500 }}>
+                  Siguiente: practica y convocatoria <ChevronRight size={14} />
+                </button>
               </div>
-              <button onClick={() => setShowDownloadOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
             </div>
-            <div className="px-6 py-4 space-y-2">
-              <p className="text-xs text-slate-400 mb-3">Elige el formato. Solo visual — sin exportación real en este prototipo.</p>
-              {[
-                { icon: FileText, label: 'One-pager (PDF)', desc: 'Resumen de 1 página listo para compartir', color: 'bg-blue-50 border-blue-200' },
-                { icon: BookOpen, label: 'Documento narrativo', desc: 'Story outline completo en formato doc', color: 'bg-indigo-50 border-indigo-200' },
-                { icon: ClipboardList, label: 'Evidencias (CSV/Sheet)', desc: 'Listado de evidencias con fecha y descripción', color: 'bg-emerald-50 border-emerald-200' },
-              ].map(({ icon: Icon, label, desc, color }) => (
-                <button key={label} onClick={() => { setShowDownloadOverlay(false); toast.success(`${label} — (modo demo, sin descarga real)`); }}
-                  className={`w-full flex items-start gap-3 p-3 border rounded-xl text-left transition-colors hover:opacity-90 ${color}`}>
-                  <Icon size={16} className="text-slate-500 mt-0.5 shrink-0" />
+          ) : null}
+
+          {activeModule === 'C' ? (
+            <div className="space-y-5">
+              <div className="border border-slate-200 rounded-2xl p-5 bg-white">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>
+                    C · Practica, validacion y activacion
+                  </h1>
+                  <StatusChip status={practiceReady && mentorReviewed && inviteReady ? 'Completado' : 'En progreso'} size="sm" />
+                </div>
+                <p className="text-sm text-slate-500">
+                  Asegura que llegues listo a presentar, pases la validacion final del mentor y cierres con una convocatoria real.
+                </p>
+              </div>
+
+              <SectionCard title="Checklist de ensayo" description="Evalua cosas reales antes de salir a la reunion final." icon={ClipboardList} badge={<span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700" style={{ fontWeight: 600 }}>{practiceChecks.filter(Boolean).length}/{PRACTICE_ITEMS.length}</span>}>
+                <div className="space-y-2">
+                  {PRACTICE_ITEMS.map((item, index) => (
+                    <label key={item} className="flex items-start gap-3 border border-slate-200 rounded-xl p-3 cursor-pointer hover:bg-slate-50">
+                      <input
+                        type="checkbox"
+                        checked={practiceChecks[index]}
+                        onChange={(event) =>
+                          setPracticeChecks((current) =>
+                            current.map((value, itemIndex) => (itemIndex === index ? event.target.checked : value))
+                          )
+                        }
+                        className="w-4 h-4 mt-0.5 accent-emerald-600"
+                      />
+                      <span className={`text-sm ${practiceChecks[index] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{item}</span>
+                    </label>
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Practica guiada" description="Este espacio no es solo un textarea: te ayuda a ensayar mejor." icon={Mic}>
+                <TextArea label="Talk track" value={talkTrack} onChange={setTalkTrack} placeholder="Escribe el guion breve que usaras para abrir y cerrar la presentacion." rows={6} />
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button
+                    onClick={() => {
+                      setTalkTrack('Tenemos evidencia de que el problema es real, una solucion probada y una recomendacion concreta. Hoy buscamos definir el siguiente paso viable con responsables y condiciones claras para avanzar.');
+                      toast.success('Talk track sugerido listo para editar.');
+                    }}
+                    className="text-xs bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-3 py-2 transition-colors"
+                    style={{ fontWeight: 500 }}
+                  >
+                    Generar talk track
+                  </button>
+                  <button onClick={() => setShowPracticeGuide((current) => !current)} className="text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors" style={{ fontWeight: 500 }}>
+                    Ayudas para practicar
+                  </button>
+                  <button onClick={() => setShowFeedbackPanel((current) => !current)} className="text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors" style={{ fontWeight: 500 }}>
+                    Solicitar feedback
+                  </button>
+                </div>
+                {showPracticeGuide ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 p-4 bg-slate-50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-slate-800 mb-2" style={{ fontWeight: 600 }}>
+                          Estructura sugerida del pitch
+                        </p>
+                        <ul className="space-y-1 text-slate-600">
+                          <li>1. Problema claro</li>
+                          <li>2. Que se probo</li>
+                          <li>3. Que evidencia se obtuvo</li>
+                          <li>4. Que decision recomiendas</li>
+                          <li>5. Que necesitas de la organizacion</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="text-slate-800 mb-2" style={{ fontWeight: 600 }}>
+                          Recordatorios utiles
+                        </p>
+                        <ul className="space-y-1 text-slate-600">
+                          <li>Duracion esperada: 60 a 90 segundos.</li>
+                          <li>No leas el guion literal; usa ideas clave.</li>
+                          <li>Conecta evidencia con pedido final.</li>
+                          <li>Evita explicar de mas el metodo si la audiencia es ejecutiva.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="text-slate-800 mb-2" style={{ fontWeight: 600 }}>
+                          Errores comunes
+                        </p>
+                        <ul className="space-y-1 text-slate-600">
+                          <li>Hablar de la solucion antes del problema.</li>
+                          <li>Mostrar evidencia sin decir que decision soporta.</li>
+                          <li>Cerrar sin un pedido concreto.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="text-slate-800 mb-2" style={{ fontWeight: 600 }}>
+                          Preguntas posibles de sponsor o encargado
+                        </p>
+                        <ul className="space-y-1 text-slate-600">
+                          <li>Que riesgo organizacional ves para implementarlo?</li>
+                          <li>Quien deberia ser owner del siguiente paso?</li>
+                          <li>Que pasaria si no hacemos nada?</li>
+                          <li>Que necesitas exactamente para avanzar?</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                {showFeedbackPanel ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 p-4 bg-slate-50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-slate-800 mb-2" style={{ fontWeight: 600 }}>
+                          Solicitar revision del mentor
+                        </p>
+                        <p className="text-xs text-slate-500 mb-3">
+                          Usa este espacio para preparar la revision humana final del pitch.
+                        </p>
+                        <button
+                          onClick={() => {
+                            setMentorStatus('Ajustar antes de presentar');
+                            toast.success('Se dejo lista la solicitud de revision para el mentor.');
+                          }}
+                          className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-3 py-2 transition-colors"
+                          style={{ fontWeight: 500 }}
+                        >
+                          Preparar solicitud para mentor
+                        </button>
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-800 mb-2" style={{ fontWeight: 600 }}>
+                          Analisis IA del pitch
+                        </p>
+                        <p className="text-xs text-slate-500 mb-3">
+                          La IA puede revisar claridad, evidencia, pedido final y duracion aproximada del pitch.
+                        </p>
+                        <button
+                          onClick={() => {
+                            setPitchAnalysisReady(true);
+                            toast.success('Analisis IA del pitch disponible.');
+                          }}
+                          className="text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors"
+                          style={{ fontWeight: 500 }}
+                        >
+                          Pedir analisis IA
+                        </button>
+                      </div>
+                    </div>
+                    {pitchAnalysisReady ? (
+                      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3">
+                          <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>
+                            Que esta bien
+                          </p>
+                          <p className="text-emerald-900">El pitch abre con un problema claro y cierra con una decision concreta.</p>
+                        </div>
+                        <div className="border border-amber-200 bg-amber-50 rounded-xl p-3">
+                          <p className="text-xs text-amber-700 mb-1" style={{ fontWeight: 700 }}>
+                            Que falta
+                          </p>
+                          <p className="text-amber-900">Todavia puedes reforzar el uso de evidencia y nombrar mejor el owner del siguiente paso.</p>
+                        </div>
+                        <div className="border border-slate-200 bg-white rounded-xl p-3">
+                          <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700 }}>
+                            Pedido final
+                          </p>
+                          <p className="text-slate-700">Haz explicito que decision esperas de la reunion.</p>
+                        </div>
+                        <div className="border border-slate-200 bg-white rounded-xl p-3">
+                          <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700 }}>
+                            Duracion aproximada
+                          </p>
+                          <p className="text-slate-700">El pitch actual se ve cercano al rango recomendado de 60 a 90 segundos.</p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </SectionCard>
+
+              <SectionCard title="Pitch grabado" description="Te permite dejar evidencia del pitch aunque no tengas una revision sincronica con mentor." icon={Video}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <TextInput label="Audio del pitch" value={pitchAudioName} onChange={setPitchAudioName} placeholder="Nombre del archivo o referencia" />
+                  <TextInput label="Video del pitch" value={pitchVideoName} onChange={setPitchVideoName} placeholder="Nombre del archivo o referencia" />
+                  <TextInput label="Link del video" value={pitchVideoLink} onChange={setPitchVideoLink} placeholder="https://..." />
+                </div>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button
+                    onClick={() => {
+                      if (!pitchAudioName.trim() && !pitchVideoName.trim() && !pitchVideoLink.trim()) {
+                        toast.error('Carga al menos un audio, video o link del pitch.');
+                        return;
+                      }
+                      setPitchAnalysisReady(true);
+                      toast.success('Pitch registrado para revision IA o mentor.');
+                    }}
+                    className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-3 py-2 transition-colors"
+                    style={{ fontWeight: 500 }}
+                  >
+                    Registrar pitch
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!pitchAudioName.trim() && !pitchVideoName.trim() && !pitchVideoLink.trim()) {
+                        toast.error('Primero registra un audio, video o link.');
+                        return;
+                      }
+                      setPitchAnalysisReady(true);
+                      toast.success('La IA ya puede usar este material como apoyo de evaluacion.');
+                    }}
+                    className="text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors"
+                    style={{ fontWeight: 500 }}
+                  >
+                    Analizar pitch con IA
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mt-3">
+                  Esta capa es apoyo operativo. La validacion humana del mentor puede seguir siendo obligatoria segun negocio.
+                </p>
+              </SectionCard>
+
+              <SectionCard title="Validacion final del mentor" description="Este es el gate final del step. Debe quedar visible si puedes presentar o no." icon={Users} badge={<StatusChip status={mentorReviewed ? 'En progreso' : 'Pendiente'} size="sm" />}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-slate-800" style={{ fontWeight: 500 }}>{label}</p>
-                    <p className="text-xs text-slate-500">{desc}</p>
+                    <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>
+                      Resultado de la revision
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        'Aprobado para presentar',
+                        'Ajustar antes de presentar',
+                        'Reensayar',
+                        'No listo aun',
+                      ].map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => setMentorStatus(item as MentorDecision)}
+                          className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                            mentorStatus === item
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                          }`}
+                          style={{ fontWeight: mentorStatus === item ? 600 : 400 }}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                      <TextInput label="Mentor" value={mentorReviewer} onChange={setMentorReviewer} placeholder="Nombre del mentor" />
+                      <TextInput label="Fecha de revision" value={mentorReviewDate} onChange={setMentorReviewDate} placeholder="AAAA-MM-DD" />
+                    </div>
                   </div>
-                </button>
-              ))}
-            </div>
-            <div className="px-6 pb-5">
-              <button onClick={() => setShowDownloadOverlay(false)} className="w-full border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_S4_AI_Checklist */}
-      {showChecklistIAOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-violet-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Checklist recomendado por IA según audiencia</h3>
-              </div>
-              <button onClick={() => setShowChecklistIAOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
-              {checklistIALoading ? <LoadingSpinner label="Analizando audiencia y objetivo…" /> : (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-400 mb-2">3 versiones según audiencia. Elige la que mejor se adapta a tu presentación:</p>
-                  {CHECKLIST_VERSIONES_IA.map((v, i) => (
-                    <div key={i} onClick={() => setChecklistIASelected(i)}
-                      className={`border-2 rounded-xl p-4 cursor-pointer transition-colors ${checklistIASelected === i ? 'border-violet-400 bg-violet-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        {checklistIASelected === i && <Check size={13} className="text-violet-600" />}
-                        <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>{v.audiencia}</p>
-                        <span className="text-xs text-slate-400 ml-auto">Foco: {v.foco}</span>
-                      </div>
-                      <ul className="space-y-1">
-                        {v.items.map((item, j) => (
-                          <li key={j} className="flex items-start gap-1.5 text-xs text-slate-600">
-                            <span className="text-slate-300 shrink-0">·</span>{item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                  <TextArea label="Feedback del mentor" value={mentorFeedback} onChange={setMentorFeedback} placeholder="Registra que esta bien, que falta y que recomienda hacer ahora." rows={6} />
                 </div>
-              )}
-            </div>
-            {!checklistIALoading && (
-              <div className="flex gap-3 px-6 pb-5">
-                <button onClick={() => setShowChecklistIAOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>Cancelar</button>
-                <button disabled={checklistIASelected === null}
-                  onClick={() => { setChecklistIAAplicado(true); setShowChecklistIAOverlay(false); toast.success(`Checklist "${CHECKLIST_VERSIONES_IA[checklistIASelected!].audiencia}" aplicado`); }}
-                  className="flex-1 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                  Aplicar checklist
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_S4_AI_ContextoOrg */}
-      {showContextoIAOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-indigo-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Consideraciones organizacionales — IA</h3>
-              </div>
-              <button onClick={() => setShowContextoIAOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4">
-              {contextoIALoading ? <LoadingSpinner label="Analizando contexto y audiencia…" /> : (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-400 mb-2">Sugerencias para adaptar la historia a la realidad de tu organización:</p>
-                  {[
-                    { tipo: '🏛️ Cultura', bullets: ['(Placeholder) TI suele resistir cambios de proceso — muestra el piloto como propuesta, no imposición.', '(Placeholder) Evita lenguaje de "automatización total" — usa "apoyo digital" con RRHH como protagonista.'] },
-                    { tipo: '⚠️ Riesgos organizacionales', bullets: ['(Placeholder) Si TI no tiene capacidad para el SLA, la propuesta colapsa — valida antes de presentar.', '(Placeholder) Los casos especiales (20%) pueden convertirse en la objeción principal del comité.'] },
-                    { tipo: '🤝 Alineaciones clave', bullets: ['(Placeholder) TI debe estar presente en la sesión de aprobación — o tener carta de intención previa.', '(Placeholder) Gerencia de Operaciones necesita ver el impacto en costo, no solo en tiempo.'] },
-                    { tipo: '📋 Requerimientos mínimos', bullets: ['(Placeholder) SLA formal firmado por TI antes del escalado.', '(Placeholder) Integración SAP: 1 developer + 4 semanas + aprobación de presupuesto.'] },
-                  ].map(({ tipo, bullets }) => (
-                    <div key={tipo} className="border border-slate-200 rounded-xl p-3">
-                      <p className="text-xs text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>{tipo}</p>
-                      <ul className="space-y-0.5">
-                        {bullets.map((b, i) => (
-                          <li key={i} className="flex items-start gap-1.5 text-xs text-slate-500">
-                            <span className="text-slate-300 shrink-0">·</span>{b}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                <div className={`mt-4 rounded-xl p-3 text-sm ${
+                  mentorApproved
+                    ? 'bg-emerald-50 border border-emerald-100 text-emerald-700'
+                    : 'bg-amber-50 border border-amber-100 text-amber-700'
+                }`}>
+                  {mentorApproved
+                    ? 'Mentor aprobado: ya puedes cerrar con convocatoria real.'
+                    : 'El step no se considera realmente cerrado hasta dejar visible el resultado de mentor.'}
                 </div>
-              )}
-            </div>
-            <div className="px-6 pb-5">
-              <button onClick={() => { setShowContextoIAOverlay(false); toast.success('Consideraciones revisadas'); }}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>Entendido</button>
-            </div>
-          </div>
-        </div>
-      )}
+              </SectionCard>
 
-      {/* Overlay_S4_AI_AudienceNarrative */}
-      {showIANarrativaOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-violet-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Ajustar narrativa a la audiencia con IA</h3>
-              </div>
-              <button onClick={() => setShowIANarrativaOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4 max-h-[65vh] overflow-y-auto">
-              {iaNarrativaLoading ? <LoadingSpinner label="Analizando audiencia y narrativa…" /> : (
-                <div className="space-y-3">
-                  {iaNarrativaListo && audiencia && (
-                    <div className="flex items-center gap-2 p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 mb-3">
-                      <Sparkles size={11} className="text-indigo-400" />
-                      Adaptado para: <span style={{ fontWeight: 600 }}>{audiencia}</span>
-                    </div>
-                  )}
-                  {IA_NARRATIVA_VERSIONES.map((v, i) => (
-                    <div key={i} onClick={() => setIaNarrativaSelected(i)}
-                      className={`border-2 rounded-xl p-4 cursor-pointer transition-colors ${iaNarrativaSelected === i ? 'border-violet-400 bg-violet-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className="text-xs px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full" style={{ fontWeight: 600 }}>{v.tipo}</span>
-                        <div className="flex gap-1">
-                          {v.tags.map(t => <span key={t} className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded">{t}</span>)}
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-500 mb-2">{v.descripcion}</p>
-                      <div className="p-2.5 bg-slate-50 rounded-lg">
-                        <p className="text-xs text-slate-700 italic">"{v.ejemplo}"</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {!iaNarrativaLoading && (
-              <div className="flex gap-3 px-6 pb-5">
-                <button onClick={() => setShowIANarrativaOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50" style={{ fontWeight: 500 }}>Cancelar</button>
-                <button disabled={iaNarrativaSelected === null}
-                  onClick={() => { setShowIANarrativaOverlay(false); toast.success(`Versión "${IA_NARRATIVA_VERSIONES[iaNarrativaSelected!].tipo}" aplicada`); }}
-                  className="flex-1 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                  Aplicar versión
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_S4_AI_EvidenceMessaging */}
-      {showIAEvidenciasOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-violet-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Evidencias recomendadas + mensaje — IA</h3>
-              </div>
-              <button onClick={() => setShowIAEvidenciasOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4">
-              {iaEvidenciasLoading ? <LoadingSpinner label="Analizando evidencias del Step 3…" /> : (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-400 mb-2">Top 3 evidencias + mensaje propuesto para tu historia:</p>
-                  {IA_EVIDENCIAS_REC.map((rec, i) => (
-                    <div key={i} className="border border-emerald-200 bg-emerald-50 rounded-xl p-3">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="w-5 h-5 rounded-full bg-emerald-200 text-emerald-700 flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>#{i + 1}</span>
-                        <p className="text-xs text-emerald-800" style={{ fontWeight: 500 }}>{rec.ev}</p>
-                      </div>
-                      <p className="text-xs text-emerald-600 ml-7">{rec.razon}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="px-6 pb-5">
-              <button onClick={() => { setShowIAEvidenciasOverlay(false); toast.success('Recomendaciones de IA revisadas'); }}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>Entendido</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_S4_AI_DemoRecommendations */}
-      {showIADemoRecOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-emerald-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Qué grabar / capturar para mayor impacto — IA</h3>
-              </div>
-              <button onClick={() => setShowIADemoRecOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4">
-              {iaDemoRecLoading ? <LoadingSpinner label="Analizando evidencias y audiencia…" /> : (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-400 mb-2">Recomendaciones IA para fortalecer la credibilidad de tu presentación:</p>
-                  {IA_DEMO_RECOMENDACIONES.map((rec, i) => (
-                    <div key={i} className="border border-slate-200 rounded-xl p-3">
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <p className="text-sm text-slate-800" style={{ fontWeight: 500 }}>{rec.titulo}</p>
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${rec.impacto === 'alto' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`} style={{ fontWeight: 600 }}>
-                          Impacto {rec.impacto}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500">{rec.descripcion}</p>
-                      <button onClick={() => { setShowIADemoRecOverlay(false); setShowAddDemoOverlay(true); toast.success('Abre el formulario para agregar este demo'); }}
-                        className="mt-2 text-xs text-emerald-600 hover:text-emerald-800 flex items-center gap-1" style={{ fontWeight: 500 }}>
-                        <Plus size={10} /> Agregar este demo
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="px-6 pb-5">
-              <button onClick={() => setShowIADemoRecOverlay(false)}
-                className="w-full border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>Cerrar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_S4_AI_Deck */}
-      {showIADeckOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-indigo-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Generar deck según audiencia — IA</h3>
-              </div>
-              <button onClick={() => setShowIADeckOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
-              {iaDeckLoading ? <LoadingSpinner label="Generando estructura del deck…" /> : (
-                <div className="space-y-3">
-                  {audiencia && <div className="flex items-center gap-2 p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 mb-2"><Sparkles size={11} />Optimizado para: <span style={{ fontWeight: 600 }}>{audiencia}</span></div>}
-                  {([
-                    { key: 'ejecutivo' as const, label: 'Variante ejecutiva', n: 6, desc: 'Directa. Foco en decisión e impacto. Para comités de 10–15 min.', slides: SLIDES_EJECUTIVO },
-                    { key: 'completo' as const, label: 'Variante completa', n: 8, desc: 'Incluye aprendizajes, riesgos y pedido al comité. Para 20–30 min.', slides: SLIDES_COMPLETO },
-                  ]).map(({ key, label, n, desc, slides }) => (
-                    <div key={key} onClick={() => setDeckVariante(key)}
-                      className={`border-2 rounded-xl overflow-hidden cursor-pointer transition-colors ${deckVariante === key ? 'border-indigo-400' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <div className={`px-4 py-2.5 flex items-center justify-between ${deckVariante === key ? 'bg-indigo-50' : 'bg-slate-50'}`}>
-                        <div className="flex items-center gap-2">
-                          {deckVariante === key && <Check size={13} className="text-indigo-600" />}
-                          <p className="text-sm" style={{ fontWeight: 600 }}>{label}</p>
-                        </div>
-                        <span className="text-xs px-2 py-0.5 bg-slate-200 text-slate-600 rounded-full" style={{ fontWeight: 600 }}>{n} láminas</span>
-                      </div>
-                      <div className="px-4 pb-3 pt-2">
-                        <p className="text-xs text-slate-500 mb-2">{desc}</p>
-                        {slides.slice(0, 4).map(s => (
-                          <p key={s.n} className="text-xs text-slate-400"><span style={{ fontWeight: 600 }}>{s.n}.</span> {s.titulo}</p>
-                        ))}
-                        {slides.length > 4 && <p className="text-xs text-slate-300">+ {slides.length - 4} más…</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {!iaDeckLoading && (
-              <div className="flex gap-3 px-6 pb-5">
-                <button onClick={() => setShowIADeckOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50" style={{ fontWeight: 500 }}>Cancelar</button>
-                <button disabled={!deckVariante}
-                  onClick={() => { setDeckAplicado(true); setShowIADeckOverlay(false); toast.success(`Deck ${deckVariante === 'ejecutivo' ? 'ejecutivo (6)' : 'completo (8)'} aplicado`); }}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                  Aplicar variante
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_S4_AI_Plan */}
-      {showIAPlanOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-indigo-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Generar plan según decisión — IA</h3>
-              </div>
-              <button onClick={() => setShowIAPlanOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
-              {iaPlanLoading ? <LoadingSpinner label="Generando borrador del plan…" /> : (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-600 mb-2">
-                    Decisión: <span className={`px-2 py-0.5 rounded-full ml-1 ${decision === 'Go' ? 'bg-emerald-100 text-emerald-700' : decision === 'Iterar' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`} style={{ fontWeight: 600 }}>{decision}</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mb-2">Borrador de plan generado. Revisa y ajusta en la pestaña "Plan":</p>
-                  {decision === 'Go' && [
-                    { hito: '30 días', desc: '(Placeholder) Formalizar SLA con TI + escalar a 10 ingresos nuevos.' },
-                    { hito: '60 días', desc: '(Placeholder) 100% de ingresos bajo el proceso + kick-off integración SAP.' },
-                    { hito: '90 días', desc: '(Placeholder) Go-live integración SAP + revisión de SLA con datos reales.' },
-                  ].map(({ hito, desc }) => (
-                    <div key={hito} className="border border-emerald-200 bg-emerald-50 rounded-xl p-3">
-                      <p className="text-xs text-emerald-700 mb-0.5" style={{ fontWeight: 600 }}>{hito}</p>
-                      <p className="text-xs text-slate-600">{desc}</p>
-                    </div>
-                  ))}
-                  {decision === 'Iterar' && [
-                    { label: 'Qué ajustar', value: '(Placeholder) Campo "tipo acceso especial" + escalado directo a TI Senior.' },
-                    { label: 'Próximo re-test', value: '(Placeholder) 3 empleados con accesos especiales · semana del 10 de marzo.' },
-                    { label: 'Criterio de cierre', value: '(Placeholder) ≤24h en 100% de casos incluyendo especiales.' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="border border-amber-200 bg-amber-50 rounded-xl p-3">
-                      <p className="text-xs text-amber-700 mb-0.5" style={{ fontWeight: 600 }}>{label}</p>
-                      <p className="text-xs text-slate-600">{value}</p>
-                    </div>
-                  ))}
-                  {(decision === 'No-Go' || decision === 'Pivote') && [
-                    { label: 'Supuesto invalidado', value: '(Placeholder) TI no puede sostener ≤24h para casos especiales sin proceso diferenciado.' },
-                    { label: 'Qué mantener', value: '(Placeholder) El formulario como interfaz · el sheet de seguimiento · la colaboración con TI.' },
-                    { label: 'Siguiente pregunta crítica', value: '(Placeholder) ¿TI puede pre-aprobar accesos por perfil de cargo antes del primer día?' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="border border-red-100 bg-red-50 rounded-xl p-3">
-                      <p className="text-xs text-red-600 mb-0.5" style={{ fontWeight: 600 }}>{label}</p>
-                      <p className="text-xs text-slate-600">{value}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {!iaPlanLoading && (
-              <div className="flex gap-3 px-6 pb-5">
-                <button onClick={() => setShowIAPlanOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50" style={{ fontWeight: 500 }}>Cancelar</button>
-                <button onClick={() => { setPlanAplicado(true); setShowIAPlanOverlay(false); toast.success('Plan aplicado a la pestaña "Plan"'); }}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>Aplicar plan</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_S4_AI_TalkTrack */}
-      {showIATalkOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-violet-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Generar talk track — IA</h3>
-              </div>
-              <button onClick={() => setShowIATalkOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4">
-              {iaTalkLoading ? <LoadingSpinner label="Generando guion de 60–90 seg…" /> : (
-                <div className="space-y-3">
-                  {audiencia && <div className="flex items-center gap-2 p-2.5 bg-violet-50 border border-violet-100 rounded-xl text-xs text-violet-700"><Sparkles size={11} />Adaptado para: <span style={{ fontWeight: 600 }}>{audiencia}</span></div>}
+              <SectionCard title="Siguiente paso organizacional" description="Aqui defines como la iniciativa sale del sandbox hacia una decision real. Este es el ultimo paso del Step 4." icon={Mail}>
+                <div className="space-y-4">
                   <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
-                    <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>BORRADOR · 75 seg aproximados</p>
-                    <p className="text-sm text-slate-700 leading-relaxed italic">"(Placeholder) Hola, soy Ana de RRHH. Identificamos que nuevos empleados tardaban hasta 3 semanas en tener accesos TI. Diseñamos un formulario digital que automatiza la solicitud. Lo probamos con 5 personas: el 80% tuvo accesos en menos de 24 horas. El NPS fue de 82. Hay un punto pendiente: los accesos especiales necesitan un proceso diferenciado. Pero la dirección está probada. Recomendamos escalar a todos los ingresos desde abril. Para eso necesitamos su aprobación y un SLA formal con TI. ¿Seguimos adelante?"</p>
-                  </div>
-                </div>
-              )}
-            </div>
-            {!iaTalkLoading && (
-              <div className="flex gap-3 px-6 pb-5">
-                <button onClick={() => setShowIATalkOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50" style={{ fontWeight: 500 }}>Cancelar</button>
-                <button onClick={() => {
-                  setTalkTrack('(Placeholder) "Hola, soy Ana de RRHH. Identificamos que nuevos empleados tardaban hasta 3 semanas en tener accesos TI. Diseñamos un formulario digital que automatiza la solicitud. Lo probamos con 5 personas: el 80% tuvo accesos en menos de 24 horas. NPS: 82. Recomendamos escalar desde abril. Necesitamos: aprobación + SLA formal con TI. ¿Seguimos?"');
-                  setShowIATalkOverlay(false); toast.success('Talk track aplicado');
-                }}
-                  className="flex-1 bg-violet-600 hover:bg-violet-700 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>Aplicar</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_UploadPDF */}
-      {showUploadPDFOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Download size={15} className="text-indigo-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Subir deck final (PDF)</h3>
-              </div>
-              <button onClick={() => setShowUploadPDFOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <p className="text-xs text-slate-500">Sube el PDF exportado desde tu PPT o herramienta de presentación.</p>
-              <div
-                onDragOver={e => { e.preventDefault(); setUploadDragOver(true); }}
-                onDragLeave={() => setUploadDragOver(false)}
-                onDrop={e => { e.preventDefault(); setUploadDragOver(false); }}
-                className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${uploadDragOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 hover:border-indigo-300'}`}>
-                <Download size={24} className="text-slate-300 mx-auto mb-2" />
-                <p className="text-sm text-slate-500 mb-1">Arrastra el PDF aquí</p>
-                <p className="text-xs text-slate-400">o elige un archivo</p>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>Nombre del archivo</label>
-                <input value={uploadFileInput} onChange={e => setUploadFileInput(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-              <p className="text-xs text-amber-600">⚠ PDF, máx. 30 MB (modo demo). Evita incluir datos personales sensibles en el documento.</p>
-            </div>
-            <div className="flex gap-3 px-6 pb-5">
-              <button onClick={() => setShowUploadPDFOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50" style={{ fontWeight: 500 }}>Cancelar</button>
-              <button onClick={() => {
-                setPdfFileName(uploadFileInput || 'Deck-final.pdf');
-                setPdfState('uploaded');
-                setShowUploadPDFOverlay(false);
-                toast.success('PDF subido. Ahora analiza con IA.');
-              }}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                Subir PDF
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Overlay_PDFPreview */}
-      {showPDFPreviewOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <FileText size={15} className="text-slate-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>{pdfFileName}</h3>
-                <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full" style={{ fontWeight: 600 }}>{pdfVersion}</span>
-              </div>
-              <button onClick={() => setShowPDFPreviewOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            {/* Preview placeholder */}
-            <div className="p-6">
-              <div className="grid grid-cols-3 gap-3">
-                {SLIDES_EJECUTIVO.map(slide => (
-                  <div key={slide.n} className="border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="bg-indigo-600 px-2 py-1.5">
-                      <p className="text-xs text-indigo-200" style={{ fontWeight: 500 }}>Lámina {slide.n}</p>
-                      <p className="text-xs text-white truncate" style={{ fontWeight: 600 }}>{slide.titulo}</p>
-                    </div>
-                    <div className="p-2 bg-white min-h-[60px]">
-                      {slide.bullets.slice(0, 1).map((b, i) => (
-                        <div key={i} className="text-xs text-slate-400 leading-tight">{b}</div>
+                    <p className="text-sm text-slate-800 mb-3" style={{ fontWeight: 600 }}>
+                      Secuencia de cierre
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      {[
+                        {
+                          step: '1',
+                          title: 'Elegir tipo de cierre',
+                          done: nextStepTypeSelected,
+                        },
+                        {
+                          step: '2',
+                          title: 'Preparar borrador de convocatoria',
+                          done: inviteSubject.trim().length > 10 && inviteBody.trim().length > 40,
+                        },
+                        {
+                          step: '3',
+                          title: 'Registrar siguiente paso real',
+                          done: meetingOwner.trim().length > 2 && meetingStatus !== 'Pendiente',
+                        },
+                        {
+                          step: '4',
+                          title: 'Finalizar Step 4',
+                          done: stepFinalized,
+                        },
+                      ].map((item) => (
+                        <div key={item.step} className="border border-slate-200 rounded-xl p-3 bg-white">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs text-indigo-600" style={{ fontWeight: 700 }}>
+                              Paso {item.step}
+                            </span>
+                            <span className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center ${item.done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                              {item.done ? '✓' : '·'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-700">{item.title}</p>
+                        </div>
                       ))}
                     </div>
                   </div>
-                ))}
-              </div>
-              <p className="text-xs text-slate-400 text-center mt-3 italic">(Placeholder) Vista previa del deck. En producción mostraría el PDF real.</p>
-            </div>
-            <div className="px-6 pb-5 flex gap-3">
-              <button onClick={() => setShowPDFPreviewOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50" style={{ fontWeight: 500 }}>Cerrar</button>
-              <button onClick={() => { setShowPDFPreviewOverlay(false); toast.success('Descargar PDF (modo demo)'); }}
-                className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-xl px-4 py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                <Download size={13} /> Descargar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Overlay_AddDemo (desde Step 4C) */}
-      {showAddDemoCOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Play size={15} className="text-emerald-500" />
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Agregar demo del prototipo</h3>
-              </div>
-              <button onClick={() => setShowAddDemoCOverlay(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              {/* Tipo */}
-              <div>
-                <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>Tipo de demo</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {([
-                    { key: 'Link demo', label: 'Link (Figma/staging)', icon: Play },
-                    { key: 'Video', label: 'Video (Loom/Drive)', icon: Video },
-                    { key: 'Capturas', label: 'Capturas', icon: Image },
-                    { key: 'Registro de uso', label: 'Registro de uso', icon: ClipboardList },
-                  ] as const).map(({ key, label, icon: Icon }) => (
-                    <button key={key} onClick={() => setNuevoDemoC(p => ({ ...p, formato: key }))}
-                      className={`flex items-center gap-2 p-2.5 rounded-xl border-2 transition-colors text-left ${nuevoDemoC.formato === key ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <Icon size={13} className={nuevoDemoC.formato === key ? 'text-emerald-500' : 'text-slate-400'} />
-                      <span className="text-xs text-slate-700" style={{ fontWeight: nuevoDemoC.formato === key ? 600 : 400 }}>{label}</span>
+                  <div>
+                    <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>
+                      Como se movera esta decision
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        'Reunion con sponsor',
+                        'Presentacion a gerencia',
+                        'Demo Day',
+                        'Solo dejar recomendacion / aprendizajes',
+                      ] as NextStepType[]).map((item) => (
+                      <button
+                        key={item}
+                        onClick={() => setNextStepType(item)}
+                        className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                          nextStepType === item
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                        }`}
+                        style={{ fontWeight: nextStepType === item ? 600 : 400 }}
+                      >
+                        {item}
+                      </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">
+                      Elige el canal segun el tipo de decision: 1:1 para destrabar rapido, gerencia/comite para aprobacion formal, Demo Day para visibilidad o aprendizajes documentados para un cierre sin reunion.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <TextInput label="Asunto" value={inviteSubject} onChange={setInviteSubject} placeholder="Asunto del correo" />
+                    <TextInput label="A quien invitar" value={inviteRecipients} onChange={setInviteRecipients} placeholder="Correos o nombres" />
+                    <TextArea label="Resumen breve del logro" value={inviteSummary} onChange={setInviteSummary} placeholder="Resume el logro principal" />
+                    <TextArea label="Objetivo de la reunion" value={meetingObjective} onChange={setMeetingObjective} placeholder="Explica la decision que buscas mover" />
+                    <div className="md:col-span-2">
+                      <TextArea label="Cuerpo editable" value={inviteBody} onChange={setInviteBody} placeholder="Escribe el correo base de Starteria" rows={5} />
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                    <p className="text-sm text-slate-800 mb-3" style={{ fontWeight: 600 }}>
+                      Registro de reunion
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <TextInput label="Fecha tentativa o confirmada" value={meetingDate} onChange={setMeetingDate} placeholder="AAAA-MM-DD" />
+                      <TextInput label="Sponsor / encargado" value={meetingOwner} onChange={setMeetingOwner} placeholder="Nombre" />
+                      <TextInput label="Rol o area" value={meetingRole} onChange={setMeetingRole} placeholder="Rol o area" />
+                      <div>
+                        <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>
+                          Estado
+                        </label>
+                        <select
+                          value={meetingStatus}
+                          onChange={(event) => setMeetingStatus(event.target.value as MeetingStatus)}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          {(['Pendiente', 'Invitado', 'Agendado', 'Confirmado'] as MeetingStatus[]).map((item) => (
+                            <option key={item} value={item}>
+                              {item}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={handlePrepareInvitation} className="text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors inline-flex items-center gap-2" style={{ fontWeight: 500 }}>
+                      <MessageSquare size={12} /> Preparar invitacion
                     </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>URL / archivo (placeholder)</label>
-                <input value={nuevoDemoC.url} onChange={e => setNuevoDemoC(p => ({ ...p, url: e.target.value }))}
-                  placeholder="https://... o nombre del archivo"
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>¿Qué demuestra? (1 línea)</label>
-                <input value={nuevoDemoC.queDemuesta} onChange={e => setNuevoDemoC(p => ({ ...p, queDemuesta: e.target.value }))}
-                  placeholder="Ej. Que el formulario es funcional y el proceso tarda menos de 10 min."
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>Decisión que soporta</label>
-                <select value={nuevoDemoC.audiencia} onChange={e => setNuevoDemoC(p => ({ ...p, audiencia: e.target.value }))}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  <option value="">Seleccionar…</option>
-                  {['Go', 'Iterar', 'No-Go', 'Pivote', 'N/A'].map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <p className="text-xs text-amber-600">⚠ Evita incluir datos personales sensibles en el demo.</p>
-            </div>
-            <div className="flex gap-3 px-6 pb-5">
-              <button onClick={() => setShowAddDemoCOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50" style={{ fontWeight: 500 }}>Cancelar</button>
-              <button disabled={!nuevoDemoC.queDemuesta.trim()}
-                onClick={() => {
-                  setDemos(p => [...p, { ...nuevoDemoC, id: Date.now().toString() }]);
-                  setNuevoDemoC({ formato: 'Link demo', url: '', queDemuesta: '', audiencia: '' });
-                  setShowAddDemoCOverlay(false);
-                  toast.success('Demo agregada al Step 4C');
-                }}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                Guardar demo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                    <button
+                      onClick={handleSendInvitation}
+                      className="text-xs border border-slate-200 bg-white hover:bg-slate-100 rounded-xl px-3 py-2 transition-colors inline-flex items-center gap-2"
+                      style={{ fontWeight: 500 }}
+                    >
+                      <Mail size={12} /> Enviar invitacion
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!stepCanBeFinalized) {
+                          toast.error('Todavia faltan minimos reales para finalizar Step 4.');
+                          return;
+                        }
+                        setStepFinalized(true);
+                        if (meetingStatus === 'Pendiente') {
+                          setMeetingStatus('Invitado');
+                        }
+                        toast.success('Step 4 finalizado y siguiente paso definido.');
+                      }}
+                      disabled={!stepCanBeFinalized}
+                      className={`text-xs rounded-xl px-3 py-2 transition-colors ${
+                        stepCanBeFinalized
+                          ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      }`}
+                      style={{ fontWeight: 600 }}
+                    >
+                      Finalizar y dejar siguiente paso definido
+                    </button>
+                  </div>
 
-      {/* Modal: Enviar a revisión IA */}
-      {showSendModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
-            <h3 className="text-slate-900 mb-2" style={{ fontWeight: 600 }}>Enviar Step 4 a revisión IA</h3>
-            <p className="text-sm text-slate-500 mb-4">Se enviará: Narrativa · Demo · Evidencias seleccionadas · Deck · Plan · Talk track.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowSendModal(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50" style={{ fontWeight: 500 }}>Cancelar</button>
-              <button onClick={() => { setShowSendModal(false); toast.success('Enviado a revisión IA'); setTimeout(() => setHasFeedback(true), 1200); }}
-                className="flex-1 bg-violet-600 text-white rounded-xl py-2.5 text-sm hover:bg-violet-700 transition-colors" style={{ fontWeight: 500 }}>Enviar</button>
-            </div>
-          </div>
-        </div>
-      )}
+                  {!stepCanBeFinalized ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-xs text-amber-800 mb-1" style={{ fontWeight: 700 }}>
+                        Antes de finalizar
+                      </p>
+                      <div className="space-y-1 text-xs text-amber-700">
+                        {!presentationReady ? <p>Completa suficientemente la presentacion de impacto.</p> : null}
+                        {!planReady ? <p>Define el plan segun la decision tomada.</p> : null}
+                        {!mentorReviewed ? <p>Registra la validacion final del mentor.</p> : null}
+                        {!nextStepTypeSelected ? <p>Elige el tipo de cierre organizacional.</p> : null}
+                      </div>
+                    </div>
+                  ) : null}
 
-      {/* Modal: Agendar sesión de cierre */}
-      {showMentorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <div>
-                <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Sesión de cierre</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Sesión final para presentar y cerrar el programa.</p>
-              </div>
-              <button onClick={() => setShowMentorModal(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}><Calendar size={11} className="inline mr-1 text-slate-400" />Fecha</label>
-                  <input type="date" value={mentorDate} onChange={e => setMentorDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  {stepFinalized ? (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <StatusChip status="Completado" size="sm" />
+                        <p className="text-sm text-emerald-800" style={{ fontWeight: 600 }}>
+                          Step 4 cerrado
+                        </p>
+                      </div>
+                      <p className="text-sm text-emerald-700 mb-3">
+                        La iniciativa ya tiene un siguiente paso organizacional definido y puede salir del sandbox hacia una decision real.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-emerald-900">
+                        <p><span style={{ fontWeight: 600 }}>Presentacion:</span> lista para presentar</p>
+                        <p><span style={{ fontWeight: 600 }}>Plan:</span> definido segun {closureType.toLowerCase()}</p>
+                        <p><span style={{ fontWeight: 600 }}>Mentor:</span> {mentorStatus}</p>
+                        <p><span style={{ fontWeight: 600 }}>Siguiente paso:</span> {nextStepType}</p>
+                        <p><span style={{ fontWeight: 600 }}>Estado:</span> {meetingStatus}</p>
+                        <p><span style={{ fontWeight: 600 }}>Responsable / destinatario:</span> {meetingOwner}</p>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-                <div>
-                  <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}><Clock size={11} className="inline mr-1 text-slate-400" />Hora</label>
-                  <select value={mentorTime} onChange={e => setMentorTime(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <option value="">Seleccionar…</option>
-                    {['09:00', '09:30', '10:00', '10:30', '11:00', '14:00', '14:30', '15:00', '16:00', '17:00'].map(h => <option key={h} value={h}>{h} hrs</option>)}
-                  </select>
+              </SectionCard>
+
+              <SectionCard title="Cierre del Step 4" description="Distingue minimos obligatorios de recomendaciones extra." icon={CheckCircle2}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border border-slate-200 rounded-xl p-4">
+                    <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 700 }}>
+                      Obligatorio
+                    </p>
+                    <div className="space-y-2">
+                      {[
+                        ['Presentacion con contenido suficiente', presentationReady],
+                        ['Demo o evidencia cargada', demoReady],
+                        ['Plan definido segun decision', planReady],
+                        ['Practica realizada', practiceReady],
+                        ['Mentor reviso', mentorReviewed],
+                        ['Tipo de cierre organizacional seleccionado', nextStepTypeSelected],
+                        ['Step 4 finalizado con siguiente paso definido', stepFinalized],
+                      ].map(([label, done]) => (
+                        <div key={String(label)} className="flex items-center gap-2 text-sm">
+                          <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center ${done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                            {done ? '✓' : '·'}
+                          </span>
+                          <span className={done ? 'text-slate-700' : 'text-slate-500'}>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="border border-slate-200 rounded-xl p-4">
+                    <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 700 }}>
+                      Recomendado
+                    </p>
+                    <div className="space-y-2">
+                      {[
+                        ['PDF analizado con IA', pdfFeedbackReady],
+                        ['Mentor aprobo para presentar', mentorApproved],
+                        ['Reunion confirmada', meetingStatus === 'Confirmado'],
+                      ].map(([label, done]) => (
+                        <div key={String(label)} className="flex items-center gap-2 text-sm">
+                          <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center ${done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                            {done ? '✓' : '·'}
+                          </span>
+                          <span className={done ? 'text-slate-700' : 'text-slate-500'}>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>Mentor</label>
-                <select className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  <option>Ana García · Innovación & Procesos</option>
-                </select>
-              </div>
+                <div className={`mt-4 rounded-xl p-4 ${
+                  stepReady
+                    ? 'bg-emerald-50 border border-emerald-100'
+                    : 'bg-amber-50 border border-amber-100'
+                }`}>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <StatusChip status={stepReady ? 'Completado' : 'Pendiente'} size="sm" />
+                    <p className={`text-sm ${stepReady ? 'text-emerald-700' : 'text-amber-700'}`}>
+                      {stepReady
+                        ? 'El step ya esta listo como cierre ejecutivo y accionable.'
+                        : 'Todavia faltan minimos reales antes de cerrar este step.'}
+                    </p>
+                  </div>
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Cierre ejecutivo de la iniciativa" description="Este es el cierre fuerte del proyecto para dejarlo listo para decision ejecutiva." icon={Download}>
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <StatusChip status={executiveDecisionReady ? 'Completado' : 'Pendiente'} size="sm" />
+                      <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                        Estado del cierre ejecutivo
+                      </p>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-2">
+                      Marca primero la iniciativa como lista para decision ejecutiva. Cuando ya tengas la decision confirmada y el siguiente paso acordado, finaliza la iniciativa para dejar registro del cierre.
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                      <span className={`px-2 py-1 rounded-full ${executiveDecisionReady ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                        Preparada para decidir
+                      </span>
+                      <span className={`px-2 py-1 rounded-full ${isProjectClosed ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                        Iniciativa {isProjectClosed ? 'finalizada' : 'abierta'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        if (!stepFinalized) {
+                          toast.error('Primero finaliza Step 4 y deja el siguiente paso definido.');
+                          return;
+                        }
+                        setExecutiveDecisionReady(true);
+                        toast.success('Iniciativa marcada como lista para decision ejecutiva.');
+                      }}
+                      disabled={!stepFinalized}
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors ${
+                        stepFinalized
+                          ? 'bg-slate-900 hover:bg-slate-800 text-white'
+                          : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      }`}
+                      style={{ fontWeight: 600 }}
+                    >
+                      <CheckCircle2 size={14} /> Marcar listo para decision ejecutiva
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!initiativeCanBeFinalized) {
+                          toast.error('Primero deja la iniciativa lista para decision ejecutiva antes de finalizarla.');
+                          return;
+                        }
+                        setShowFinalizeInitiativeConfirm(true);
+                      }}
+                      disabled={!initiativeCanBeFinalized || isProjectClosed}
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors ${
+                        initiativeCanBeFinalized && !isProjectClosed
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-emerald-50 text-emerald-300 border border-emerald-100 cursor-not-allowed'
+                      }`}
+                      style={{ fontWeight: 700 }}
+                    >
+                      <CheckCircle2 size={14} /> Finalizar iniciativa
+                    </button>
+                    <button
+                      onClick={() => downloadTextFile('starteria-cierre-ejecutivo.txt', buildFinalSummary())}
+                      className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm border border-slate-200 bg-white hover:bg-slate-100 transition-colors"
+                      style={{ fontWeight: 500 }}
+                    >
+                      <Download size={14} /> Descargar resumen final
+                    </button>
+                    <button
+                      onClick={() => copyText(buildFinalSummary(), 'Resumen ejecutivo copiado.')}
+                      className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm border border-slate-200 bg-white hover:bg-slate-100 transition-colors"
+                      style={{ fontWeight: 500 }}
+                    >
+                      <Copy size={14} /> Copiar resumen
+                    </button>
+                  </div>
+
+                  {!initiativeCanBeFinalized ? (
+                    <p className="text-xs text-slate-500">
+                      {executiveDecisionReady
+                        ? 'Cuando la decision quede confirmada y el siguiente paso acordado, podras finalizar la iniciativa.'
+                        : 'El boton final se habilita cuando el Step 4 ya este completo y la iniciativa quede marcada como lista para decision ejecutiva.'}
+                    </p>
+                  ) : null}
+                  {initiativeCanBeFinalized && !isProjectClosed ? (
+                    <p className="text-xs text-slate-500">
+                      Cuando ya tengas la decision confirmada y el siguiente paso acordado, finaliza la iniciativa para dejar registro del cierre.
+                    </p>
+                  ) : null}
+
+                  <div className={`rounded-xl p-4 ${
+                    isProjectClosed
+                      ? 'bg-emerald-50 border border-emerald-100'
+                      : 'bg-slate-50 border border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-2 flex-wrap mb-3">
+                      <StatusChip status={isProjectClosed ? 'Finalizado' : 'Pendiente'} size="sm" />
+                      <StatusChip status={project.status} size="sm" />
+                      <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                        Resumen general de cierre
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-700">
+                      <p><span style={{ fontWeight: 600 }}>Problema:</span> {presentation.problem}</p>
+                      <p><span style={{ fontWeight: 600 }}>Hipotesis / solucion:</span> {presentation.proposal}</p>
+                      <p><span style={{ fontWeight: 600 }}>Experimento:</span> {presentation.tests}</p>
+                      <p><span style={{ fontWeight: 600 }}>Resultados:</span> {presentation.results}</p>
+                      <p><span style={{ fontWeight: 600 }}>Decision tomada:</span> {getDecisionSummary(decision)}</p>
+                      <p><span style={{ fontWeight: 600 }}>Resultado a mover:</span> {meetingOutcome}</p>
+                      <p><span style={{ fontWeight: 600 }}>Plan:</span> {closureType}</p>
+                      <p><span style={{ fontWeight: 600 }}>Mentor:</span> {mentorStatus}</p>
+                      <p><span style={{ fontWeight: 600 }}>Siguiente paso:</span> {nextStepType || 'Pendiente'}</p>
+                      <p><span style={{ fontWeight: 600 }}>Instancia objetivo:</span> {meetingOwner}</p>
+                      <p><span style={{ fontWeight: 600 }}>Estado organizacional:</span> {meetingStatus}</p>
+                      <p><span style={{ fontWeight: 600 }}>Presentacion:</span> {pdfName}</p>
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+
+              {showFinalizeInitiativeConfirm ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
+                  <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-100">
+                      <h3 className="text-base text-slate-900" style={{ fontWeight: 700 }}>
+                        Finalizar iniciativa
+                      </h3>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Esto dejará registrada la iniciativa como cerrada y lista como cierre final del proyecto.
+                      </p>
+                    </div>
+                    <div className="px-5 py-4">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <StatusChip status={project.status} size="sm" />
+                        <span>Estado actual del proyecto</span>
+                      </div>
+                    </div>
+                    <div className="px-5 pb-5 flex gap-3">
+                      <button
+                        onClick={() => setShowFinalizeInitiativeConfirm(false)}
+                        className="flex-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 py-2.5 text-sm text-slate-600 transition-colors"
+                        style={{ fontWeight: 500 }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!projectId) return;
+                          const updatedSteps = project.steps.map((step) =>
+                            step.number === 4
+                              ? { ...step, status: 'Aprobado' as const, progress: 100 }
+                              : step
+                          );
+                          updateProject(projectId, {
+                            status: 'Finalizado',
+                            steps: updatedSteps,
+                          });
+                          setShowFinalizeInitiativeConfirm(false);
+                          toast.success('La iniciativa fue finalizada correctamente.');
+                        }}
+                        className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2.5 text-sm text-white transition-colors"
+                        style={{ fontWeight: 600 }}
+                      >
+                        Confirmar cierre
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
-            <div className="flex gap-3 px-6 pb-5">
-              <button onClick={() => setShowMentorModal(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50" style={{ fontWeight: 500 }}>Cancelar</button>
-              <button onClick={() => { setShowMentorModal(false); setSessionBooked(true); toast.success('Sesión de cierre agendada. ¡Proyecto completado!', { description: 'El equipo será notificado.' }); }}
-                disabled={!mentorDate || !mentorTime}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                Confirmar sesión
-              </button>
-            </div>
-          </div>
+          ) : null}
         </div>
-      )}
+      </div>
     </div>
   );
 }

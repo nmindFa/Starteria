@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   ArrowLeft, CheckCircle2, Lock, Send, Calendar, ChevronRight,
@@ -14,16 +14,8 @@ import { BannerPorDefinir } from '../components/BannerPorDefinir';
 import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
 import { EvidenceUploader } from '../components/EvidenceUploader';
 import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
-import { Step1CaptureSynthesisModule } from '../components/step1-capture-synthesis/Step1CaptureSynthesisModule';
-import { buildCaptureModuleContext, buildStep1ModuleViewModels, calculateStep1Progress, getStep1CaptureMissing } from '../components/step1-architecture/step1Completion';
-import { normalizeCaptureSynthesisState, syncCaptureSynthesisWithResearch } from '../components/step1-architecture/step1Legacy';
-import { STEP1_MODULES } from '../components/step1-architecture/step1ModuleConfig';
-import { Step1ResearchModuleV2 } from '../components/step1-research-v2/Step1ResearchModuleV2';
-import { buildInitialResearchV2State, buildResearchFrontSuggestions, buildResearchObjective } from '../components/step1-research-v2/researchObjectiveBuilder';
-import { ResearchModuleAContext, Step1ResearchModuleV2State } from '../components/step1-research-v2/step1ResearchV2.types';
-import { Step1CaptureLegacyRestrictions, Step1CaptureLegacySynthesis, Step1CaptureLegacyValidation, Step1ModuleId } from '../components/step1-architecture/step1Architecture.types';
 
-type ModuleId = Step1ModuleId;
+type ModuleId = 'A' | 'B' | 'C' | 'D' | 'S';
 
 interface ModuleASISData {
   casoReal: string;
@@ -32,7 +24,6 @@ interface ModuleASISData {
   quiebreDetalle: string;
   quiebre: string;
   consecuencia: string;
-  consequenceTags: Array<'operativa' | 'economica' | 'humana' | 'estrategica'>;
   causaInmediata: string;
   evidenciaTipo: '' | 'dato' | 'ticket' | 'testimonio' | 'benchmark';
   evidenciaNota: string;
@@ -54,7 +45,6 @@ interface PerfilEntrevista {
   id: string;
   nombre: string;
   porQue: string;
-  temas?: { id: string; texto: string; preguntas: string[] }[];
 }
 
 interface ModuleBData {
@@ -62,11 +52,6 @@ interface ModuleBData {
   temas: TemaInvestigacion[];
   perfiles: PerfilEntrevista[];
   guiaGenerada: boolean;
-  modalidad: '' | 'desk' | 'entrevistas' | 'ambas';
-  deskTemas: string;
-  objetivos: { texto: string; priorizado?: boolean }[];
-  version: 'legacy' | 'v2';
-  researchV2: Step1ResearchModuleV2State;
 }
 
 interface ModuleCData {
@@ -123,12 +108,6 @@ interface EvidenciaA {
   fuente: string;
 }
 
-interface Step1AiAnalysisState {
-  generatedText: string;
-  draftText: string;
-  isEditing: boolean;
-}
-
 const MOCK_FEEDBACK_IA = {
   status: 'Iterar' as const,
   summary: 'El análisis AS-IS está bien documentado y las métricas tienen baseline definido. Sin embargo, faltan los actores clave y hay inconsistencias en las restricciones.',
@@ -147,109 +126,6 @@ const MOCK_FEEDBACK_IA = {
   ],
   contradictions: ['Módulo B dice impacto "crítico" pero Módulo C señala riesgo "bajo". Revisa la consistencia.'],
   timestamp: '2025-02-19T09:00:00Z',
-};
-
-const ACTIVE_STEP1_FEEDBACK = {
-  ...MOCK_FEEDBACK_IA,
-  summary: 'El analisis inicial esta bien documentado y el plan de investigacion tiene una base clara. Aun falta consolidar mejor las capturas y cerrar la sintesis final del Step 1.',
-  missing: [
-    'Falta consolidar al menos una captura con hallazgo claro en el Modulo C',
-    'No se identifico una evidencia que respalde el aprendizaje principal',
-    'La sintesis final aun no explica con claridad si el problema se mantiene o se ajusta',
-  ],
-  actions: [
-    'Consolida al menos una captura completa con notas y hallazgo',
-    'Agrega una evidencia que demuestre el aprendizaje principal',
-    'Aclara en la sintesis final si el problema se mantiene, se ajusta o se reformula',
-    'Verifica que la consecuencia descrita sea consistente con las metricas de impacto',
-  ],
-  questions: [
-    'Que patron aparece de forma repetida entre las capturas?',
-    'Cual es la frecuencia real de medicion de tus metricas?',
-    'El quiebre identificado es el verdadero o hay uno upstream que lo causa?',
-  ],
-  contradictions: ['Modulo B habla de un impacto alto, pero la sintesis final aun no refleja ese nivel de urgencia. Revisa la consistencia.'],
-};
-
-const STEP1_CONSEQUENCE_OPTIONS = [
-  { id: 'operativa', label: 'Operativa' },
-  { id: 'economica', label: 'Economica' },
-  { id: 'humana', label: 'Humana' },
-  { id: 'estrategica', label: 'Estrategica' },
-] as const;
-
-type Step1ConsequenceId = (typeof STEP1_CONSEQUENCE_OPTIONS)[number]['id'];
-
-const normalizeStep1ConsequenceTags = (value: unknown): Step1ConsequenceId[] => {
-  const validIds = new Set<Step1ConsequenceId>(STEP1_CONSEQUENCE_OPTIONS.map(option => option.id));
-  const normalizedValues = Array.isArray(value)
-    ? value
-    : typeof value === 'string' && value.trim()
-    ? [value]
-    : [];
-
-  return normalizedValues.filter((item): item is Step1ConsequenceId =>
-    typeof item === 'string' && validIds.has(item as Step1ConsequenceId),
-  );
-};
-
-const STEP1_RESEARCH_MODULE_B_VERSION: 'legacy' | 'v2' = 'v2';
-
-const buildResearchModuleAContext = (
-  asisData: ModuleASISData,
-  lecturaConsolidada: string,
-  actoresProceso: string,
-): ResearchModuleAContext => ({
-  casoReal: asisData.casoReal,
-  quiebre: asisData.quiebre,
-  consecuencia: asisData.consecuencia,
-  causaInmediata: asisData.causaInmediata,
-  lecturaConsolidada,
-  actoresProceso,
-});
-
-const syncLegacyModuleBFromV2 = (
-  current: ModuleBData,
-  researchV2: Step1ResearchModuleV2State,
-): ModuleBData => {
-  const selectedProfileMap = new Map<string, PerfilEntrevista>();
-
-  researchV2.fronts.forEach(front => {
-    front.sources
-      .filter(source => source.type === 'perfil' && front.selectedSourceIds.includes(source.id))
-      .forEach(source => {
-        selectedProfileMap.set(source.id, {
-          id: source.id,
-          nombre: source.label,
-          porQue: source.detail,
-        });
-      });
-  });
-
-  const temas = researchV2.fronts.map(front => ({
-    id: front.id,
-    titulo: front.title,
-    preguntaClave: front.learningGoal,
-    via: front.sourceMode === 'perfil' ? 'entrevistas' : front.sourceMode,
-    perfilesIds: front.sources
-      .filter(source => source.type === 'perfil' && front.selectedSourceIds.includes(source.id))
-      .map(source => source.id),
-    fuente: front.sources
-      .filter(source => source.type === 'data' && front.selectedSourceIds.includes(source.id))
-      .map(source => source.label)
-      .join(', '),
-    preguntas: front.guides.flatMap(guide => guide.questions).slice(0, 3),
-  })) as TemaInvestigacion[];
-
-  return {
-    ...current,
-    version: 'v2',
-    researchV2,
-    objetivoGeneral: researchV2.objective.draft,
-    temas,
-    perfiles: Array.from(selectedProfileMap.values()),
-    guiaGenerada: researchV2.fronts.some(front => front.guides.length > 0),
-  };
 };
 
 
@@ -293,7 +169,6 @@ export function Step1Page() {
     evidenciaNota: 'Promedio de 18 días en incorporación según registros de RRHH 2024.',
     alcance: 'durante',
     corteAlcance: '',
-    consequenceTags: ['operativa', 'economica', 'humana'],
   });
 
   const [bData, setBData] = useState<ModuleBData>({
@@ -328,22 +203,10 @@ export function Step1Page() {
       },
     ],
     perfiles: [
-      { id: 'p1', nombre: 'Coordinadora de RRHH', porQue: 'Ejecuta el proceso y tiene contacto directo con el quiebre', temas: [] },
+      { id: 'p1', nombre: 'Coordinadora de RRHH', porQue: 'Ejecuta el proceso y tiene contacto directo con el quiebre' },
       { id: 'p2', nombre: 'Jefe de TI', porQue: 'Responsable del handoff y priorización de solicitudes de acceso' },
     ],
     guiaGenerada: false,
-    modalidad: '',
-    deskTemas: '',
-    objetivos: [],
-    version: STEP1_RESEARCH_MODULE_B_VERSION,
-    researchV2: buildInitialResearchV2State({
-      casoReal: 'El proceso de incorporacion de nuevos empleados en TechCorp involucra multiples areas y hoy dura entre 15 y 21 dias.',
-      quiebre: 'Paso 2 - Alta en sistemas de TI',
-      consecuencia: 'El empleado no puede trabajar productivamente durante 7 a 10 dias porque no tiene accesos ni herramientas.',
-      causaInmediata: 'TI recibe solicitudes por correo informal sin priorizacion formal ni tiempo objetivo definido.',
-      lecturaConsolidada: 'El reto ocurre en el alta en sistemas de TI dentro del proceso de onboarding y hoy genera impacto directo en productividad y experiencia.',
-      actoresProceso: 'RRHH, TI, Area receptora, Empleado nuevo',
-    }),
   });
 
   const [cData, setCData] = useState<ModuleCData>({
@@ -382,13 +245,6 @@ export function Step1Page() {
     razonPivot: '',
     version: 1,
   });
-  const [captureSynthesisData, setCaptureSynthesisData] = useState(() => normalizeCaptureSynthesisState({
-    researchState: bData.researchV2,
-    legacyRestrictions: cData,
-    legacyValidation: dData,
-    legacySynthesis: sintesisData,
-  }));
-  const [moduleAdjustments, setModuleAdjustments] = useState({ research: false, capture: false });
 
   // ── Módulo A — nuevos estados (rediseño Step1A) ──────────────────────────
   const [step0Collapsed, setStep0Collapsed] = useState(false);
@@ -399,11 +255,6 @@ export function Step1Page() {
   ]);
   const [iaModAState, setIaModAState] = useState<'idle' | 'loading' | 'done'>('idle');
   const [fichaConfirmada, setFichaConfirmada] = useState(false);
-  const [aiAnalysisState, setAiAnalysisState] = useState<Step1AiAnalysisState>({
-    generatedText: '',
-    draftText: '',
-    isEditing: false,
-  });
 
   const addEvidenciaA = () =>
     setEvidenciasA(p => [...p, { id: Date.now().toString(), tipo: '', desc: '', fuente: '' }]);
@@ -421,16 +272,7 @@ export function Step1Page() {
 
   const bloque1Ok = asisData.casoReal.trim().length > 0 && asisData.pasos.filter(p => p.trim()).length >= 2;
   const bloque2Ok = asisData.quiebreIndex !== null;
-  const legacyConsequenceTag = (asisData as ModuleASISData & { consequenceTag?: unknown }).consequenceTag;
-  const selectedConsequenceTags = normalizeStep1ConsequenceTags(
-    Array.isArray(asisData.consequenceTags) || typeof asisData.consequenceTags === 'string'
-      ? asisData.consequenceTags
-      : legacyConsequenceTag,
-  );
-  const selectedConsequenceLabels = STEP1_CONSEQUENCE_OPTIONS
-    .filter(option => selectedConsequenceTags.includes(option.id))
-    .map(option => option.label);
-  const bloque3Ok = selectedConsequenceTags.length > 0 && asisData.consecuencia.trim().length > 0 && asisData.causaInmediata.trim().length > 0;
+  const bloque3Ok = asisData.consecuencia.trim().length > 0 && asisData.causaInmediata.trim().length > 0;
   const listoParaIA = bloque1Ok && bloque2Ok && bloque3Ok;
 
   // Lectura consolidada derivada del estado real — sin textos placeholder
@@ -447,18 +289,13 @@ export function Step1Page() {
     const procesoCorto = asisData.casoReal
       ? asisData.casoReal.split(' ').slice(0, 8).join(' ') + (asisData.casoReal.split(' ').length > 8 ? '…' : '')
       : 'el proceso descrito';
-    const consequenceSummary = selectedConsequenceLabels.length > 0
-      ? selectedConsequenceLabels.join(', ')
-      : 'sin impactos marcados';
     const sustentoLabel = nivelSustento === 'solido'
       ? 'sólido'
       : nivelSustento === 'debil'
       ? 'inicial — suficiente para avanzar con cautela'
       : 'aún débil — conviene reforzarlo en el Módulo B';
-    return `El reto ocurre en "${pasoQuiebre}" dentro del proceso: ${procesoCorto}. La causa directa es que ${causaCorta}. Como resultado, ${consecuenciaCorta}. Los impactos marcados son ${consequenceSummary}. El sustento disponible es ${sustentoLabel}.`;
+    return `El reto ocurre en "${pasoQuiebre}" dentro del proceso: ${procesoCorto}. La causa directa es que ${causaCorta}. Como resultado, ${consecuenciaCorta}. El sustento disponible es ${sustentoLabel}.`;
   })();
-
-  const researchModuleAContext = buildResearchModuleAContext(asisData, lecturaConsolidada, actoresProceso);
 
   // Temas prioritarios para investigar — derivados del contexto real del módulo
   const temasPrioritarios = [
@@ -484,69 +321,7 @@ export function Step1Page() {
     },
   ];
 
-  const analysisSignature = JSON.stringify({
-    casoReal: asisData.casoReal,
-    pasos: asisData.pasos,
-    quiebreIndex: asisData.quiebreIndex,
-    consecuencia: asisData.consecuencia,
-    causaInmediata: asisData.causaInmediata,
-    actoresProceso,
-  });
-  const researchSignature = JSON.stringify({
-    objective: bData.researchV2.objective,
-    fronts: bData.researchV2.fronts,
-  });
-  const captureSignature = JSON.stringify(captureSynthesisData);
-  const analysisSignatureRef = useRef(analysisSignature);
-  const researchSignatureRef = useRef(researchSignature);
-  const captureSignatureRef = useRef(captureSignature);
-
-  const moduloBIniciado =
-    bData.researchV2.objective.draft.trim().length > 0 ||
-    bData.researchV2.fronts.some(front => front.title.trim().length > 0 || front.selectedSourceIds.length > 0);
-  const moduloCIniciado =
-    captureSynthesisData.captures.some(capture => capture.notes.trim().length > 0 || capture.finding.trim().length > 0) ||
-    captureSynthesisData.evidences.length > 0 ||
-    captureSynthesisData.organizedInsights.some(item => item.trim().length > 0) ||
-    captureSynthesisData.finalSummary.trim().length > 0 ||
-    Boolean(captureSynthesisData.finalDecision);
-
-  useEffect(() => {
-    setCaptureSynthesisData(prev => syncCaptureSynthesisWithResearch(prev, bData.researchV2));
-  }, [bData.researchV2]);
-
-  useEffect(() => {
-    if (analysisSignatureRef.current === analysisSignature) return;
-    analysisSignatureRef.current = analysisSignature;
-    setModuleAdjustments(prev => ({
-      research: moduloBIniciado ? true : prev.research,
-      capture: moduloCIniciado ? true : prev.capture,
-    }));
-  }, [analysisSignature, moduloBIniciado, moduloCIniciado]);
-
-  useEffect(() => {
-    if (researchSignatureRef.current === researchSignature) return;
-    researchSignatureRef.current = researchSignature;
-    setModuleAdjustments(prev => ({
-      research: false,
-      capture: moduloCIniciado ? true : prev.capture,
-    }));
-  }, [researchSignature, moduloCIniciado]);
-
-  useEffect(() => {
-    if (captureSignatureRef.current === captureSignature) return;
-    captureSignatureRef.current = captureSignature;
-    setModuleAdjustments(prev => ({ ...prev, capture: false }));
-  }, [captureSignature]);
-
-  const saveState = useAutosave([asisData, evidenciasA, aiAnalysisState, bData, captureSynthesisData, moduleAdjustments]);
-
-  const updateResearchV2 = (updater: (prev: Step1ResearchModuleV2State) => Step1ResearchModuleV2State) => {
-    setBData(prev => {
-      const nextResearchV2 = updater(prev.researchV2);
-      return syncLegacyModuleBFromV2(prev, nextResearchV2);
-    });
-  };
+  const saveState = useAutosave([asisData, bData, cData, dData, sintesisData]);
 
   if (!project || !step) return <div className="p-6"><p className="text-slate-500">Proyecto o Step no encontrado.</p></div>;
 
@@ -574,37 +349,6 @@ export function Step1Page() {
   // ── Módulo B helpers — defined before `modules` to avoid temporal dead zone ──
 
   const getModuloBMissing = () => {
-    if (bData.version === 'v2') {
-      const missing: string[] = [];
-      if (!bData.researchV2.objective.draft.trim()) {
-        missing.push('Define el objetivo general de investigacion');
-      }
-
-      const validFronts = bData.researchV2.fronts.filter(front =>
-        front.title.trim() && front.whyItMatters.trim() && front.learningGoal.trim(),
-      );
-      if (validFronts.length < 3) {
-        missing.push(`Define al menos 3 frentes de investigacion alineados (llevas ${validFronts.length})`);
-      }
-
-      const frontsWithoutSources = bData.researchV2.fronts.filter(front =>
-        front.title.trim() && front.selectedSourceIds.length === 0,
-      ).length;
-      if (frontsWithoutSources > 0) {
-        missing.push(`${frontsWithoutSources} frente(s) aun no tienen fuente seleccionada`);
-      }
-
-      const frontsWithoutGuides = bData.researchV2.fronts.filter(front => {
-        if (!front.title.trim() || front.selectedSourceIds.length === 0) return false;
-        return front.selectedSourceIds.some(sourceId => !front.guides.some(guide => guide.sourceId === sourceId));
-      }).length;
-      if (frontsWithoutGuides > 0) {
-        missing.push(`${frontsWithoutGuides} frente(s) aun no tienen guia generada para todas sus fuentes`);
-      }
-
-      return missing;
-    }
-
     const m: string[] = [];
     if (!bData.objetivoGeneral.trim()) m.push('Define el objetivo general de la investigación');
     const temasConTitulo = bData.temas.filter(t => t.titulo.trim()).length;
@@ -638,8 +382,8 @@ export function Step1Page() {
   const modules: { id: ModuleId; label: string; shortName: string; unlocked: boolean; completed: boolean }[] = [
     { id: 'A', label: 'Módulo A: Análisis inicial', shortName: 'A · Análisis inicial', unlocked: true, completed: fichaConfirmada || (bloque1Ok && bloque2Ok && bloque3Ok) },
     { id: 'B', label: 'Módulo B: Investigación de campo', shortName: 'B · Investigación', unlocked: true, completed: moduloBListo() },
-    { id: 'C', label: 'Módulo C: Restricciones', shortName: 'C · Restricciones', unlocked: true, completed: semaforo === 'verde' },
-    { id: 'D', label: 'Módulo D: Actores y validación', shortName: 'D · Validación', unlocked: semaforo !== 'rojo', completed: moduloDListo() },
+    { id: 'C', label: 'Módulo C: Evidencia y decisión', shortName: 'C · Evidencia y decisión', unlocked: true, completed: moduloDListo() },
+    { id: 'D', label: 'Módulo D: Actores y validación', shortName: 'D · Validación', unlocked: moduloDListo(), completed: false },
     { id: 'S', label: 'Síntesis + Revisión de rumbo', shortName: 'Síntesis', unlocked: false, completed: false },
   ];
 
@@ -651,168 +395,10 @@ export function Step1Page() {
 
   const sendToIA = () => {
     setSendingIA(true);
-    setTimeout(() => {
-      if (projectId && project) {
-        updateProject(projectId, {
-          status: 'SesiÃ³n experto pendiente',
-          steps: project.steps.map(item =>
-            item.number === 1
-              ? {
-                  ...item,
-                  status: 'SesiÃ³n experto pendiente',
-                  progress: 100,
-                  feedbackIA: {
-                    ...ACTIVE_STEP1_FEEDBACK,
-                    status: 'Aprobado',
-                    summary: 'La IA confirma que el Step 1 ya tiene base suficiente. Ahora falta la validacion final de mentor para habilitar el siguiente step.',
-                    missing: [],
-                    actions: ['Define la via de validacion con mentor y consigue su aprobacion final del Step 1.'],
-                    questions: [],
-                    contradictions: [],
-                    timestamp: new Date().toISOString(),
-                  },
-                  mentorSession: item.mentorSession?.result === 'Aprobado' ? item.mentorSession : null,
-                }
-              : item,
-          ),
-        });
-      }
-      setSendingIA(false);
-      setHasFeedback(true);
-      setShowFeedback(true);
-    }, 2000);
+    setTimeout(() => { setSendingIA(false); setHasFeedback(true); setShowFeedback(true); }, 2000);
   };
 
   const canSend = modules.slice(0, 4).every(m => m.completed) || true; // for demo
-  const moduloACompletado = fichaConfirmada || (bloque1Ok && bloque2Ok && bloque3Ok);
-  const moduloBCompletado = moduloBListo();
-  const captureSynthesisMissing = getStep1CaptureMissing(captureSynthesisData);
-  const moduloCCompletado = captureSynthesisMissing.length === 0;
-  const captureModuleContext = buildCaptureModuleContext(
-    lecturaConsolidada,
-    bData.researchV2.objective.draft,
-    bData.researchV2.fronts
-      .filter(front => front.title.trim())
-      .map(front => ({
-        id: front.id,
-        title: front.title,
-        learningGoal: front.learningGoal,
-        sourceLabels: front.sources
-          .filter(source => front.selectedSourceIds.includes(source.id))
-          .map(source => source.label),
-        guideCount: front.guides.length,
-      })),
-  );
-  const step1Modules = buildStep1ModuleViewModels({
-    moduleDefinitions: STEP1_MODULES,
-    analysisCompleted: moduloACompletado,
-    researchCompleted: moduloBCompletado,
-    captureCompleted: moduloCCompletado,
-    researchNeedsAdjustment: moduleAdjustments.research,
-    captureNeedsAdjustment: moduleAdjustments.capture,
-  });
-  const step1Progress = calculateStep1Progress(step1Modules);
-  const canSendStep1 = step1Modules.every(module => module.completed);
-  const step1FeedbackReady = Boolean(step?.feedbackIA?.status === 'Aprobado');
-  const step1MentorApproved = Boolean(step?.mentorSession?.result === 'Aprobado');
-  const step1MentorMode = step?.mentorSession?.mode;
-  const mentorValidationPending = step1FeedbackReady && !step1MentorApproved;
-  const step1ClosureState = !canSendStep1
-    ? 'en_trabajo'
-    : !step1FeedbackReady
-    ? 'listo_revision_ia'
-    : !step1MentorApproved
-    ? 'listo_validacion_mentor'
-    : 'aprobado_mentor';
-  const reviewCtaLabel = !canSendStep1
-    ? 'Completa los campos requeridos para avanzar'
-    : !step1FeedbackReady
-    ? 'Step 1 listo - Enviar a validacion IA'
-    : step1MentorApproved
-    ? 'Step 1 aprobado por mentor'
-    : 'Gestionar validacion final de mentor';
-  const reviewCtaHint = !canSendStep1
-    ? ''
-    : !step1FeedbackReady
-    ? 'La IA revisa el cierre minimo del Step 1 antes de pasar a la validacion final.'
-    : step1MentorApproved
-    ? 'El Step 1 ya cuenta con validacion IA y aprobacion final de mentor.'
-    : step1MentorMode === 'meeting'
-    ? 'La validacion IA ya esta lista. Ahora falta la reunion y aprobacion final del mentor.'
-    : step1MentorMode === 'async_review'
-    ? 'La validacion IA ya esta lista. Ahora falta la aprobacion directa del mentor.'
-    : 'La validacion IA ya esta lista. Elige la via de validacion final con mentor.';
-
-  const openStep1Closure = () => {
-    if (!canSendStep1) return;
-    setShowSendModal(true);
-  };
-
-  const updateStep1MentorValidation = (
-    updates: NonNullable<typeof step>['mentorSession'],
-    stepStatus: 'SesiÃ³n experto pendiente' | 'Aprobado' | 'Ajustado' = 'SesiÃ³n experto pendiente',
-  ) => {
-    if (!projectId || !project) return;
-
-    updateProject(projectId, {
-      currentStep: stepStatus === 'Aprobado' ? Math.max(project.currentStep, 2) : project.currentStep,
-      status: stepStatus === 'Aprobado' ? 'Paso aprobado' : 'SesiÃ³n experto pendiente',
-      steps: project.steps.map(item => {
-        if (item.number === 1) {
-          return {
-            ...item,
-            status: stepStatus,
-            mentorSession: updates,
-          };
-        }
-
-        if (item.number === 2 && stepStatus === 'Aprobado') {
-          return {
-            ...item,
-            status: item.status === 'Bloqueado' ? 'En progreso' : item.status,
-          };
-        }
-
-        return item;
-      }),
-    });
-  };
-
-  const startMentorValidation = (mode: 'meeting' | 'async_review') => {
-    const baseSession = {
-      id: step?.mentorSession?.id || `step1-mentor-${Date.now()}`,
-      mentor: step?.mentorSession?.mentor || 'Mentor asignado',
-      mode,
-      status: mode === 'meeting' ? 'Pendiente agendar' as const : 'Pendiente revisión' as const,
-      comments: mode === 'meeting'
-        ? 'Pendiente la reunion final de mentor para cerrar el Step 1.'
-        : 'Pendiente la evaluacion y aprobacion directa del mentor.',
-    };
-
-    updateStep1MentorValidation(baseSession, 'SesiÃ³n experto pendiente');
-    setShowSendModal(false);
-    if (mode === 'meeting') {
-      setShowSessionModal(true);
-    }
-  };
-
-  const registerMentorOutcome = (result: 'Aprobado' | 'Iterar') => {
-    if (!step?.mentorSession) return;
-
-    updateStep1MentorValidation(
-      {
-        ...step.mentorSession,
-        status: 'Realizada',
-        result,
-        comments: result === 'Aprobado'
-          ? 'El mentor valida que el problema, la evidencia y la decision del Step 1 permiten avanzar.'
-          : 'El mentor pide ajustar el cierre del Step 1 antes de avanzar.',
-      },
-      result === 'Aprobado' ? 'Aprobado' : 'Ajustado',
-    );
-    setShowSendModal(false);
-    setShowSessionModal(false);
-  };
 
   const getModuloAMissing = () => {
     const m: string[] = [];
@@ -880,7 +466,7 @@ export function Step1Page() {
     const newId = Date.now().toString();
     setBData(p => ({
       ...p,
-      perfiles: [...p.perfiles, { id: newId, nombre: '', porQue: '', temas: [] }],
+      perfiles: [...p.perfiles, { id: newId, nombre: '', porQue: '' }],
     }));
     setExpandedPerfilId(newId);
   };
@@ -900,20 +486,6 @@ export function Step1Page() {
   const sugerirObjetivoIA = () => {
     setIaLoadingB(true);
     setTimeout(() => {
-      if (bData.version === 'v2') {
-        updateResearchV2(prev => ({
-          ...prev,
-          objective: {
-            ...buildResearchObjective(researchModuleAContext),
-            draft: prev.objective.draft,
-            suggestedDraft: buildResearchObjective(researchModuleAContext).suggestedDraft,
-            status: 'revisar',
-          },
-        }));
-        setIaLoadingB(false);
-        return;
-      }
-
       const pasoQuiebre = asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex]
         ? asisData.pasos[asisData.quiebreIndex]
         : 'el paso quiebre';
@@ -928,15 +500,6 @@ export function Step1Page() {
   const sugerirTemasIA = () => {
     setIaLoadingB(true);
     setTimeout(() => {
-      if (bData.version === 'v2') {
-        updateResearchV2(prev => ({
-          ...prev,
-          fronts: buildResearchFrontSuggestions(researchModuleAContext),
-        }));
-        setIaLoadingB(false);
-        return;
-      }
-
       const pasoQ = asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex]
         ? asisData.pasos[asisData.quiebreIndex].toLowerCase()
         : 'el paso quiebre';
@@ -1012,10 +575,10 @@ export function Step1Page() {
           </button>
           <h2 className="text-sm text-slate-900 mt-2" style={{ fontWeight: 600 }}>Paso 1</h2>
           <p className="text-xs text-slate-500">Claridad en el desafío</p>
-          <div className="mt-2"><ProgressBar value={step1Progress} size="sm" /></div>
+          <div className="mt-2"><ProgressBar value={step.progress} size="sm" /></div>
         </div>
 
-        {step1Modules.map(mod => (
+        {modules.map(mod => (
           <button
             key={mod.id}
             onClick={() => mod.unlocked && setActiveModule(mod.id)}
@@ -1027,9 +590,7 @@ export function Step1Page() {
             }`}
             style={{ fontWeight: activeModule === mod.id ? 600 : 400 }}
           >
-            {mod.status === 'requires_adjustment' ? (
-              <AlertTriangle size={14} className="text-amber-500 shrink-0" />
-            ) : mod.completed ? (
+            {mod.completed ? (
               <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
             ) : !mod.unlocked ? (
               <Lock size={13} className="text-slate-300 shrink-0" />
@@ -1439,46 +1000,32 @@ export function Step1Page() {
                   {/* 3a. Consecuencia */}
                   <div>
                     <label className="block text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>
-                      Que consecuencia tiene este reto? <span className="text-red-500">*</span>
+                      ¿Qué consecuencia tiene este reto? <span className="text-red-500">*</span>
                     </label>
                     <p className="text-xs text-slate-400 mb-2">
-                      Marca todos los impactos que hoy genera este reto. Puedes seleccionar mas de uno si aplica.
+                      <span style={{ fontWeight: 600 }}>Consecuencia</span> = qué pasa cuando el reto ocurre y a quién afecta. No el síntoma, sino el impacto concreto.
                     </p>
-                    <div className="flex gap-2 mb-3 flex-wrap">
-                      {STEP1_CONSEQUENCE_OPTIONS.map(option => {
-                        const selected = selectedConsequenceTags.includes(option.id);
-                        return (
-                          <button
-                            key={option.id}
-                            onClick={() => setAsisData(prev => ({
-                              ...prev,
-                              consequenceTags: (() => {
-                                const currentTags = normalizeStep1ConsequenceTags(
-                                  Array.isArray(prev.consequenceTags) || typeof prev.consequenceTags === 'string'
-                                    ? prev.consequenceTags
-                                    : (prev as ModuleASISData & { consequenceTag?: unknown }).consequenceTag,
-                                );
-                                return selected
-                                  ? currentTags.filter(tag => tag !== option.id)
-                                  : [...currentTags, option.id];
-                              })(),
-                            }))}
-                            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${selected ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                            style={{ fontWeight: 500 }}
-                          >
-                            {option.label}
-                          </button>
-                        );
-                      })}
+                    <div className="flex gap-2 mb-2 flex-wrap">
+                      {(['Operativa', 'Económica', 'Humana', 'Estratégica'] as const).map(tipo => (
+                        <button key={tipo}
+                          onClick={() => setAsisData(p => ({ ...p, alcance: (tipo === 'Operativa' ? 'durante' : tipo === 'Económica' ? 'después' : tipo === 'Humana' ? 'antes' : 'transversal') as typeof p.alcance }))}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                            (tipo === 'Operativa' && asisData.alcance === 'durante') ||
+                            (tipo === 'Económica' && asisData.alcance === 'después') ||
+                            (tipo === 'Humana' && asisData.alcance === 'antes') ||
+                            (tipo === 'Estratégica' && asisData.alcance === 'transversal')
+                              ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                          }`} style={{ fontWeight: 500 }}>{tipo}</button>
+                      ))}
                     </div>
                     <textarea
                       value={asisData.consecuencia}
                       onChange={e => setAsisData(p => ({ ...p, consecuencia: e.target.value }))}
                       rows={2}
-                      placeholder="Ej. El empleado no puede trabajar durante 7 a 10 dias, generando costos de productividad y frustracion."
+                      placeholder="Ej. El empleado no puede trabajar durante 7–10 días, generando costos de productividad y frustración."
                       className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
                     />
-                    <p className="text-xs text-slate-400 mt-1">Describe el impacto concreto. No listes causas todavia.</p>
+                    <p className="text-xs text-slate-400 mt-1">No listes causas todavía — solo qué pasa como resultado del quiebre.</p>
                   </div>
 
                   {/* 3b. Causa inmediata */}
@@ -1500,84 +1047,79 @@ export function Step1Page() {
                   </div>
 
                   {/* 3c. Evidencias (multi-item) */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
                       <div>
-                        <label className="block text-sm text-slate-700" style={{ fontWeight: 500 }}>Evidencia que sustenta este reto</label>
-                        <p className="text-xs text-slate-400 mt-0.5">Aqui puedes escribir datos o evidencia breve, y tambien subir archivos o pegar links que respalden el problema.</p>
+                        <label className="block text-sm text-slate-700" style={{ fontWeight: 500 }}>Evidencia disponible</label>
+                        <p className="text-xs text-slate-400 mt-0.5">No necesita ser perfecta. Lo que ya tienes cuenta.</p>
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
                         nivelSustento === 'solido' ? 'bg-emerald-100 text-emerald-700' :
                         nivelSustento === 'debil' ? 'bg-amber-100 text-amber-700' :
                         'bg-slate-100 text-slate-500'
                       }`} style={{ fontWeight: 600 }}>
-                        {nivelSustento === 'solido' ? 'Evidencia solida' : nivelSustento === 'debil' ? 'Evidencia inicial' : 'Sin evidencia'}
+                        {nivelSustento === 'solido' ? '●●● Evidencia sólida' : nivelSustento === 'debil' ? '●● Evidencia débil' : '● Sin evidencia'}
                       </span>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
-                      <div>
-                        <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>1. Escribe datos, numeros o evidencia cualitativa breve</p>
-                        <p className="text-xs text-slate-400 mb-3">Registra aqui lo que ya sabes del problema, aunque todavia sea parcial.</p>
-                        {nivelSustento === 'sin' && (
-                          <p className="text-xs text-slate-400 italic mb-3">Sin evidencia ingresada todavia. La IA lo considerara en el nivel de sustento.</p>
-                        )}
-                        <div className="space-y-2">
-                          {evidenciasA.map((ev) => (
-                            <div key={ev.id} className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
-                              <div className="flex items-start justify-between gap-2">
-                                <select
-                                  value={ev.tipo}
-                                  onChange={e => updateEvidenciaA(ev.id, { tipo: e.target.value as EvidenciaA['tipo'] })}
-                                  className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 text-slate-700 bg-slate-50"
-                                >
-                                  <option value="">Tipo de evidencia...</option>
-                                  <option value="dato">Dato o numero</option>
-                                  <option value="ticket">Ticket o incidente</option>
-                                  <option value="testimonio">Testimonio breve</option>
-                                  <option value="benchmark">Referencia externa</option>
-                                  <option value="observacion">Observacion directa</option>
-                                </select>
-                                {evidenciasA.length > 1 && (
-                                  <button onClick={() => removeEvidenciaA(ev.id)} className="text-slate-300 hover:text-red-400 transition-colors shrink-0"><X size={14} /></button>
-                                )}
-                              </div>
-                              <input
-                                value={ev.desc}
-                                onChange={e => updateEvidenciaA(ev.id, { desc: e.target.value })}
-                                placeholder={
-                                  ev.tipo === 'dato' ? 'Ej. 18 dias promedio segun registros de RRHH 2024' :
-                                  ev.tipo === 'ticket' ? 'Ej. 47 tickets de sin accesos en el ultimo trimestre' :
-                                  ev.tipo === 'testimonio' ? 'Ej. Una coordinadora reporta dos semanas sin accesos' :
-                                  ev.tipo === 'benchmark' ? 'Ej. En Empresa X el proceso dura 2 dias con portal self-service' :
-                                  'Describe que demuestra esta evidencia en una o dos lineas'
-                                }
-                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                              />
-                              <input
-                                value={ev.fuente}
-                                onChange={e => updateEvidenciaA(ev.id, { fuente: e.target.value })}
-                                placeholder="Fuente opcional: informe, sistema, persona o documento"
-                                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 transition-all bg-slate-50"
-                              />
-                            </div>
-                          ))}
+                    {nivelSustento === 'sin' && (
+                      <p className="text-xs text-slate-400 italic mb-2">Sin evidencia ingresada. La IA lo considerará en el nivel de sustento — no bloquea el análisis.</p>
+                    )}
+                    <div className="space-y-2">
+                      {evidenciasA.map((ev) => (
+                        <div key={ev.id} className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <select
+                              value={ev.tipo}
+                              onChange={e => updateEvidenciaA(ev.id, { tipo: e.target.value as EvidenciaA['tipo'] })}
+                              className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 text-slate-700 bg-slate-50"
+                            >
+                              <option value="">Tipo de evidencia…</option>
+                              <option value="dato">📊 Dato / número</option>
+                              <option value="ticket">🎫 Ticket / incidente</option>
+                              <option value="testimonio">💬 Testimonio</option>
+                              <option value="benchmark">📌 Ref. externa</option>
+                              <option value="observacion">👁 Observación directa</option>
+                            </select>
+                            {evidenciasA.length > 1 && (
+                              <button onClick={() => removeEvidenciaA(ev.id)} className="text-slate-300 hover:text-red-400 transition-colors shrink-0"><X size={14} /></button>
+                            )}
+                          </div>
+                          <input
+                            value={ev.desc}
+                            onChange={e => updateEvidenciaA(ev.id, { desc: e.target.value })}
+                            placeholder={
+                              ev.tipo === 'dato' ? 'Ej. 18 días promedio — Registros RRHH Q4 2024' :
+                              ev.tipo === 'ticket' ? 'Ej. 47 tickets "sin accesos" en el último trimestre' :
+                              ev.tipo === 'testimonio' ? 'Ej. «Tardamos más de 2 semanas en dar accesos» — Coord. RRHH' :
+                              ev.tipo === 'benchmark' ? 'Ej. En Empresa X el proceso dura 2 días con portal self-service' :
+                              'Describe qué demuestra esta evidencia (1–2 líneas)'
+                            }
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                          />
+                          <input
+                            value={ev.fuente}
+                            onChange={e => updateEvidenciaA(ev.id, { fuente: e.target.value })}
+                            placeholder="Fuente (opcional): informe, sistema, persona…"
+                            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300 transition-all bg-slate-50"
+                          />
                         </div>
-                        <button onClick={addEvidenciaA}
-                          className="mt-3 flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 px-3 py-2 border border-dashed border-indigo-200 rounded-xl hover:border-indigo-400 transition-colors w-full justify-center"
-                          style={{ fontWeight: 500 }}>
-                          <Plus size={12} /> Agregar evidencia escrita
-                        </button>
-                      </div>
-                      <div className="border-t border-slate-200 pt-4">
-                        <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>2. Tambien puedes subir archivos o pegar links</p>
-                        <p className="text-xs text-slate-400 mb-3">Usa este espacio si ya tienes capturas, reportes, documentos o links que ayuden a sustentar el problema.</p>
-                        <EvidenceUploader />
-                      </div>
+                      ))}
+                    </div>
+                    <button onClick={addEvidenciaA}
+                      className="mt-2 flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 px-3 py-2 border border-dashed border-indigo-200 rounded-xl hover:border-indigo-400 transition-colors w-full justify-center"
+                      style={{ fontWeight: 500 }}>
+                      <Plus size={12} /> Agregar evidencia
+                    </button>
+                    <div className="mt-2">
+                      <EvidenceUploader />
                     </div>
                   </div>
                 </div>
               </div>
 
+              {/* ════════════════════════════════════
+                  ANÁLISIS IA (al cierre del módulo)
+              ════════════════════════════════════ */}
               <div className="border-2 border-violet-200 rounded-xl overflow-hidden">
                 <div className="px-4 py-3 bg-violet-50 border-b border-violet-100 flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
@@ -1608,14 +1150,7 @@ export function Step1Page() {
                         disabled={!listoParaIA}
                         onClick={() => {
                           setIaModAState('loading');
-                          setTimeout(() => {
-                            setAiAnalysisState({
-                              generatedText: lecturaConsolidada,
-                              draftText: lecturaConsolidada,
-                              isEditing: false,
-                            });
-                            setIaModAState('done');
-                          }, 1800);
+                          setTimeout(() => setIaModAState('done'), 1800);
                         }}
                         className={`flex items-center gap-2 mx-auto text-sm px-6 py-2.5 rounded-xl transition-colors ${listoParaIA ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
                         style={{ fontWeight: 500 }}>
@@ -1641,44 +1176,7 @@ export function Step1Page() {
                           <span className="text-xs text-indigo-400 uppercase tracking-wide" style={{ fontWeight: 700, letterSpacing: '0.06em' }}>Resumen de claridad del problema</span>
                           <span className="text-xs px-2 py-0.5 bg-indigo-600 text-white rounded-full" style={{ fontWeight: 600 }}>Módulo A · completado</span>
                         </div>
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-3 flex-wrap">
-                            <div className="flex flex-wrap gap-2">
-                              {selectedConsequenceLabels.map(label => (
-                                <span key={label} className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700" style={{ fontWeight: 600 }}>{label}</span>
-                              ))}
-                            </div>
-                            <button
-                              onClick={() => setAiAnalysisState(prev => ({ ...prev, isEditing: !prev.isEditing }))}
-                              className="text-xs text-indigo-600 hover:text-indigo-800 px-2.5 py-1.5 bg-white border border-indigo-200 rounded-lg transition-colors"
-                              style={{ fontWeight: 500 }}
-                            >
-                              {aiAnalysisState.isEditing ? 'Cerrar edicion' : 'Editar analisis'}
-                            </button>
-                          </div>
-                          {!aiAnalysisState.isEditing ? (
-                            <p className="text-sm text-indigo-900 leading-relaxed">{aiAnalysisState.draftText || lecturaConsolidada}</p>
-                          ) : (
-                            <div className="space-y-2">
-                              <textarea
-                                value={aiAnalysisState.draftText}
-                                onChange={event => setAiAnalysisState(prev => ({ ...prev, draftText: event.target.value }))}
-                                rows={5}
-                                className="w-full border border-indigo-200 rounded-xl px-4 py-3 text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                              />
-                              <div className="flex items-center justify-between gap-3 flex-wrap text-xs text-indigo-700">
-                                <p>{aiAnalysisState.generatedText && aiAnalysisState.generatedText !== aiAnalysisState.draftText ? 'Analisis ajustado manualmente sobre la base generada por IA.' : 'Puedes ajustar redaccion, agregar informacion o quitar lo que no aplique.'}</p>
-                                <button
-                                  onClick={() => setAiAnalysisState(prev => ({ ...prev, draftText: prev.generatedText || lecturaConsolidada, isEditing: false }))}
-                                  className="text-xs text-indigo-600 hover:text-indigo-800 px-2.5 py-1.5 bg-indigo-100 rounded-lg transition-colors"
-                                  style={{ fontWeight: 500 }}
-                                >
-                                  Restaurar version IA
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <p className="text-sm text-indigo-900 leading-relaxed">{lecturaConsolidada}</p>
                       </div>
 
                       {/* ── B. TEMAS PRIORITARIOS — sección hero ── */}
@@ -1791,7 +1289,7 @@ export function Step1Page() {
 
               {/* ════════════════════════════════════
                   FICHA CONSOLIDADA
-              ═══════���════════════════════════════ */}
+              ════════════════════════════════════ */}
               {fichaConfirmada && (
                 <div className="border-2 border-indigo-200 rounded-xl overflow-hidden">
                   {/* Header */}
@@ -1911,25 +1409,7 @@ export function Step1Page() {
           {/* ══════════════════════════════════════════════════════════════
               MODULE B: INVESTIGACIÓN DE CAMPO — nueva arquitectura
           ══════════════════════════════════════════════════════════════ */}
-          {activeModule === 'B' && bData.version === 'v2' && (
-            <Step1ResearchModuleV2
-              context={researchModuleAContext}
-              fichaConfirmada={fichaConfirmada}
-              state={bData.researchV2}
-              iaLoading={iaLoadingB}
-              statusLabel={moduleAdjustments.research ? 'Requiere ajuste' : moduloBListo() ? 'Completado' : 'En progreso'}
-              missing={getModuloBMissing()}
-              onChange={updateResearchV2}
-              onOpenIA={openIAPanel}
-              onOpenMentor={() => setShowMentorModal(true)}
-              onSuggestObjective={sugerirObjetivoIA}
-              onSuggestFronts={sugerirTemasIA}
-              onGoToModuleA={() => setActiveModule('A')}
-              onNext={() => moduloBListo() && setActiveModule('C')}
-            />
-          )}
-
-          {activeModule === 'B' && bData.version === 'legacy' && (
+          {activeModule === 'B' && (
             <div className="space-y-6">
 
               {/* ── Header ── */}
@@ -2512,7 +1992,7 @@ export function Step1Page() {
                       <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
                         <div className="flex items-center gap-2 mb-2">
                           <AlertCircle size={14} className="text-amber-500" />
-                          <p className="text-xs text-amber-800" style={{ fontWeight: 600 }}>Para avanzar a Restricciones, completa:</p>
+                          <p className="text-xs text-amber-800" style={{ fontWeight: 600 }}>Para avanzar a Evidencia y decisión, completa:</p>
                         </div>
                         <ul className="space-y-1">
                           {missing.map((m, i) => (
@@ -2531,13 +2011,14 @@ export function Step1Page() {
                       style={{ fontWeight: 500 }}
                     >
                       {listo
-                        ? <>Módulo B listo → Ir a Restricciones <ChevronRight size={15} /></>
+                        ? <>Módulo B listo → Ir a Evidencia y decisión <ChevronRight size={15} /></>
                         : <><Lock size={14} /> Completa los campos requeridos para avanzar</>}
                     </button>
                   </div>
                 );
               })()}
 
+            
               {/* ════════════════════════════════════════
                   5. GUÍA DE ENTREVISTA (condicional)
               ════════════════════════════════════════ */}
@@ -2576,7 +2057,7 @@ export function Step1Page() {
                           <button
                             onClick={() => {
                               const guia = bData.perfiles.map(p => {
-                                const temas = (p.temas || []).map(t => {
+                                const temas = p.temas.map(t => {
                                   const qs = t.preguntas.filter(q => q.trim()).map((q, i) => `  ${i + 1}. ${q}`).join('\n');
                                   return `  TEMA: ${t.texto}\n${qs}`;
                                 }).join('\n\n');
@@ -2630,7 +2111,7 @@ export function Step1Page() {
                           </div>
 
                           <div className="pl-7 space-y-3">
-                            {(perfil.temas || []).map((tema, tIdx) => (
+                            {perfil.temas.map((tema, tIdx) => (
                               <div key={tema.id} className="border border-slate-200 rounded-xl overflow-hidden">
                                 <div className="px-3 py-2 bg-slate-50 border-b border-slate-100">
                                   <p className="text-xs text-slate-700" style={{ fontWeight: 600 }}>Tema {tIdx + 1}: {tema.texto || 'Sin título'}</p>
@@ -2653,7 +2134,7 @@ export function Step1Page() {
                                 </div>
                               </div>
                             ))}
-                            {(!perfil.temas || perfil.temas.length === 0) && (
+                            {perfil.temas.length === 0 && (
                               <p className="text-xs text-slate-300 italic">Este perfil no tiene temas definidos.</p>
                             )}
                           </div>
@@ -2730,7 +2211,7 @@ export function Step1Page() {
                       <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
                         <div className="flex items-center gap-2 mb-2">
                           <AlertCircle size={14} className="text-amber-500" />
-                          <p className="text-xs text-amber-800" style={{ fontWeight: 600 }}>Para avanzar a Restricciones, completa:</p>
+                          <p className="text-xs text-amber-800" style={{ fontWeight: 600 }}>Para avanzar a Evidencia y decisión, completa:</p>
                         </div>
                         <ul className="space-y-1">
                           {missing.map((m, i) => (
@@ -2749,7 +2230,7 @@ export function Step1Page() {
                       style={{ fontWeight: 500 }}
                     >
                       {listo
-                        ? <>Módulo B listo → Ir a Restricciones <ChevronRight size={15} /></>
+                        ? <>Módulo B listo → Ir a Evidencia y decisión <ChevronRight size={15} /></>
                         : <><Lock size={14} /> Completa los campos requeridos para avanzar</>}
                     </button>
                   </div>
@@ -2758,95 +2239,15 @@ export function Step1Page() {
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════
-              MODULE C: RESTRICCIONES — MVP ágil
-          ══════════════════════════════════════════════════════════════ */}
-          {activeModule === 'C' && (
-            <Step1CaptureSynthesisModule
-              context={captureModuleContext}
-              state={captureSynthesisData}
-              statusLabel={moduleAdjustments.capture ? 'Requiere ajuste' : moduloCCompletado ? 'Completado' : 'En progreso'}
-              missing={captureSynthesisMissing}
-              reviewCtaLabel={reviewCtaLabel}
-              reviewCtaHint={reviewCtaHint}
-              onChange={setCaptureSynthesisData}
-              onOpenIA={openIAPanel}
-              onOpenMentor={() => setShowMentorModal(true)}
-              onOpenReview={openStep1Closure}
-            />
-          )}
-
-          {activeModule === 'C' && (
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                  <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Cierre final del Step 1</p>
-                  <p className="text-xs text-slate-500 mt-1">La narrativa de cierre es: evidencia y sintesis listas, validacion IA completada y aprobacion final de mentor antes de habilitar el siguiente step.</p>
-                </div>
-                <span className={`text-xs px-2.5 py-1 rounded-full ${
-                  step1ClosureState === 'en_trabajo'
-                    ? 'bg-slate-100 text-slate-700'
-                    : step1ClosureState === 'listo_revision_ia'
-                    ? 'bg-violet-100 text-violet-700'
-                    : step1ClosureState === 'listo_validacion_mentor'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-emerald-100 text-emerald-700'
-                }`} style={{ fontWeight: 700 }}>
-                  {step1ClosureState === 'en_trabajo'
-                    ? 'En trabajo'
-                    : step1ClosureState === 'listo_revision_ia'
-                    ? 'Listo para validacion IA'
-                    : step1ClosureState === 'listo_validacion_mentor'
-                    ? 'Listo para validacion de mentor'
-                    : 'Aprobado por mentor'}
-                </span>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-4">
-                {[
-                  { label: '1. Investigacion y sintesis', done: canSendStep1, desc: 'El Modulo C ya tiene base minima para cerrar.' },
-                  { label: '2. Validacion IA', done: step1FeedbackReady, desc: 'La IA deja el Step 1 listo para revision final.' },
-                  { label: '3. Validacion de mentor', done: step1MentorApproved, desc: step1MentorMode === 'meeting' ? 'Cierre por reunion con mentor.' : step1MentorMode === 'async_review' ? 'Cierre por evaluacion directa del mentor.' : 'Elige la via de validacion final.' },
-                  { label: '4. Habilitar Step 2', done: step1MentorApproved, desc: 'Solo se desbloquea cuando mentor aprueba.' },
-                ].map(item => (
-                  <div key={item.label} className={`rounded-xl border p-3 ${item.done ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
-                    <p className={`text-xs ${item.done ? 'text-emerald-700' : 'text-slate-700'}`} style={{ fontWeight: 700 }}>{item.label}</p>
-                    <p className={`text-xs mt-1 ${item.done ? 'text-emerald-700' : 'text-slate-500'}`}>{item.desc}</p>
-                  </div>
-                ))}
-              </div>
-
-              {step1ClosureState === 'listo_validacion_mentor' && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
-                  <p className="text-xs text-amber-800" style={{ fontWeight: 700 }}>Validacion final de mentor pendiente</p>
-                  <p className="text-sm text-amber-700">La validacion de mentor confirma que el problema quedo bien definido, que la evidencia es suficiente, que la decision tomada tiene sentido y que el equipo puede avanzar al siguiente step.</p>
-                  <p className="text-xs text-amber-700">
-                    {step1MentorMode === 'meeting'
-                      ? 'Via elegida: reunion con mentor. Aun falta el ok final del mentor despues de la sesion.'
-                      : step1MentorMode === 'async_review'
-                      ? 'Via elegida: evaluacion directa del mentor. Aun falta su aprobacion final.'
-                      : 'Aun falta elegir si el cierre se validara por reunion con mentor o por evaluacion directa.'}
-                  </p>
-                </div>
-              )}
-
-              {step1MentorApproved && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-xs text-emerald-800" style={{ fontWeight: 700 }}>Step 1 aprobado por mentor</p>
-                  <p className="text-sm text-emerald-700 mt-1">La IA y el mentor ya validaron el cierre del Step 1. El siguiente step queda habilitado para continuar.</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {false && activeModule === 'C' && (
+          {/* Bloque legado desactivado: antigua versión de Módulo C */}
+          {activeModule === 'C' && false && (
             <div className="space-y-6">
 
               {/* ── Header ── */}
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo C: Restricciones</h1>
+                    <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo C (legado desactivado)</h1>
                     <StatusChip status={semaforo === 'verde' ? 'Completado' : semaforo === 'rojo' ? 'Bloqueado' : 'En progreso'} size="sm" />
                   </div>
                   <p className="text-sm text-slate-500 max-w-lg">
@@ -3162,7 +2563,7 @@ export function Step1Page() {
 
               {/* ════════════════════════════════════════
                   BOTÓN DE AVANCE
-              ══════════════════════════════════════��═ */}
+              ════════════════════════════════════════ */}
               <button
                 onClick={() => semaforo !== 'rojo' && setActiveModule('D')}
                 disabled={semaforo === 'rojo'}
@@ -3187,19 +2588,23 @@ export function Step1Page() {
           {/* ══════════════════════════════════════════════════════════════
               MODULE D: ACTORES Y VALIDACIÓN EN CAMPO
           ══════════════════════════════════════════════════════════════ */}
-          {false && activeModule === 'D' && (
+          {(activeModule === 'C' || activeModule === 'D') && (
             <div className="space-y-6">
 
               {/* ── Header ── */}
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo D · Actores y validación en campo</h1>
+                    <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>
+                      {activeModule === 'C' ? 'Módulo C: Evidencia y decisión' : 'Módulo D · Actores y validación en campo'}
+                    </h1>
                     <StatusChip status={moduloDListo() ? 'Completado' : 'En progreso'} size="sm" />
                   </div>
-                  <p className="text-sm text-slate-500 max-w-lg">
-                    Busca evidencia real con personas y/o datos. Al final decidimos si el reto se mantiene o se ajusta.
-                  </p>
+                    <p className="text-sm text-slate-500 max-w-lg">
+                      {activeModule === 'C'
+                        ? 'Reúne evidencia por frente y fuente, interpreta qué confirma del problema y define una decisión sustentada para el Step 2.'
+                        : 'Revisa la validación con actores clave antes de cerrar el Step 1 y pasar a síntesis.'}
+                    </p>
                 </div>
                 <div className="flex gap-2 shrink-0 ml-3">
                   <button onClick={openIAPanel} className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 px-2.5 py-1.5 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors" style={{ fontWeight: 500 }}>
@@ -3713,7 +3118,9 @@ export function Step1Page() {
               {dData.decisionReto && (
                 <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
                   <div className="px-5 py-4 bg-slate-50 border-b border-slate-100">
-                    <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Resumen generado — Módulo D</p>
+                    <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                      Resumen generado — {activeModule === 'C' ? 'Módulo C' : 'Módulo D'}
+                    </p>
                     <p className="text-xs text-slate-400 mt-0.5">Se actualiza automáticamente con lo que registraste.</p>
                   </div>
                   <div className="p-5 space-y-3">
@@ -3808,7 +3215,9 @@ export function Step1Page() {
                       <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
                         <div className="flex items-center gap-2 mb-2">
                           <AlertCircle size={14} className="text-amber-500" />
-                          <p className="text-xs text-amber-800" style={{ fontWeight: 600 }}>Completa estos campos para ir a Síntesis:</p>
+                          <p className="text-xs text-amber-800" style={{ fontWeight: 600 }}>
+                            {activeModule === 'C' ? 'Completa estos campos para continuar a Módulo D:' : 'Completa estos campos para ir a Síntesis:'}
+                          </p>
                         </div>
                         <ul className="space-y-1">
                           {missing.map((m, i) => <li key={i} className="text-xs text-amber-700">· {m}</li>)}
@@ -3816,12 +3225,14 @@ export function Step1Page() {
                       </div>
                     )}
                     <button
-                      onClick={() => listo && setActiveModule('S')}
+                      onClick={() => listo && setActiveModule(activeModule === 'C' ? 'D' : 'S')}
                       disabled={!listo}
                       className={`w-full rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors ${listo ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
                       style={{ fontWeight: 500 }}
                     >
-                      {listo ? <>Módulo D listo → Ir a Síntesis <ChevronRight size={15} /></> : <><Lock size={14} /> Completa los campos requeridos para avanzar</>}
+                      {listo
+                        ? <>{activeModule === 'C' ? 'Módulo C listo → Ir a Módulo D' : 'Módulo D listo → Ir a Síntesis'} <ChevronRight size={15} /></>
+                        : <><Lock size={14} /> Completa los campos requeridos para avanzar</>}
                     </button>
                   </div>
                 );
@@ -3830,7 +3241,7 @@ export function Step1Page() {
           )}
 
           {/* Module S: Síntesis + Pivot Check */}
-          {false && activeModule === 'S' && (
+          {activeModule === 'S' && (
             <div className="space-y-5">
               <div>
                 <h1 className="text-xl text-slate-900 mb-1" style={{ fontWeight: 700 }}>Síntesis y Pivot Check</h1>
@@ -3841,7 +3252,8 @@ export function Step1Page() {
                 <p style={{ fontWeight: 600 }}>Ancla del desafío (de tus módulos anteriores):</p>
                 <p><span style={{ fontWeight: 500 }}>Quiebre:</span> {asisData.quiebre || '—'}</p>
                 <p><span style={{ fontWeight: 500 }}>Obj. investigación:</span> {bData.objetivos.find(o => o.priorizado)?.texto?.slice(0, 70) || '—'}</p>
-                <p><span style={{ fontWeight: 500 }}>Visto bueno:</span> {cData.vistoBueno || '—'} · Semáforo: {semaforo}</p>
+                <p><span style={{ fontWeight: 500 }}>Fuentes con evidencia:</span> {dData.fuentes.filter(f => f.rolNombre.trim()).length} · Evidencias: {dData.evidencias.length}</p>
+                <p><span style={{ fontWeight: 500 }}>Decisión preliminar:</span> {dData.decisionReto ? (dData.decisionReto === 'mantiene' ? 'Se mantiene' : dData.decisionReto === 'ajusta' ? 'Se ajusta' : 'Cambia') : 'Pendiente'}</p>
               </div>
 
               <div>
@@ -3902,11 +3314,11 @@ export function Step1Page() {
 
               {/* IA Feedback */}
               {hasFeedback && (
-                <FeedbackIAPanel feedback={ACTIVE_STEP1_FEEDBACK} onIterate={() => setActiveModule('A')} />
+                <FeedbackIAPanel feedback={MOCK_FEEDBACK_IA} onIterate={() => setActiveModule('A')} />
               )}
 
               {/* Mentor session */}
-              {hasFeedback && ACTIVE_STEP1_FEEDBACK.status === 'Aprobado' && (
+              {hasFeedback && MOCK_FEEDBACK_IA.status === 'Aprobado' && (
                 <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
                   <p className="text-sm text-amber-800 mb-1" style={{ fontWeight: 600 }}>Sesión con experto obligatoria</p>
                   <p className="text-xs text-amber-600 mb-3">La IA aprobó el Step 1. Ahora debes agendar la sesión con tu mentor para obtener la aprobación final y desbloquear el Step 2.</p>
@@ -3924,91 +3336,30 @@ export function Step1Page() {
       {showSendModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
-            {!step1FeedbackReady ? (
-              <>
-                <h3 className="text-slate-900 mb-2" style={{ fontWeight: 600 }}>¿Listo para enviar a validación IA?</h3>
-                <p className="text-sm text-slate-500 mb-4">La IA revisará todos los módulos del Step 1 y confirmará si el cierre tiene base suficiente antes de pasar a la validación final de mentor.</p>
-                <div className="space-y-2 mb-5">
-                  {step1Modules.map(m => (
-                    <div key={m.id} className={`flex items-center gap-2 text-sm ${m.completed ? 'text-emerald-700' : 'text-amber-700'}`}>
-                      {m.completed ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                      {m.label}
-                      {!m.completed && <span className="text-xs text-amber-500">incompleto</span>}
-                    </div>
-                  ))}
+            <h3 className="text-slate-900 mb-2" style={{ fontWeight: 600 }}>¿Listo para enviar a revisión IA?</h3>
+            <p className="text-sm text-slate-500 mb-4">La IA revisará todos los módulos del Paso 1 y te dará un análisis estructurado. Asegúrate de que todo esté completo.</p>
+            <div className="space-y-2 mb-5">
+              {modules.slice(0, 4).map(m => (
+                <div key={m.id} className={`flex items-center gap-2 text-sm ${m.completed ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {m.completed ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                  {m.label}
+                  {!m.completed && <span className="text-xs text-amber-500">incompleto</span>}
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setShowSendModal(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => { setShowSendModal(false); sendToIA(); }}
-                    disabled={sendingIA || !canSendStep1}
-                    className="flex-1 bg-violet-600 hover:bg-violet-700 text-white rounded-xl py-2.5 text-sm transition-colors disabled:opacity-50"
-                    style={{ fontWeight: 500 }}
-                  >
-                    {sendingIA ? 'Enviando…' : 'Enviar a IA'}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h3 className="text-slate-900 mb-2" style={{ fontWeight: 600 }}>Validación final de mentor</h3>
-                <p className="text-sm text-slate-500 mb-4">La IA ya dejó el Step 1 listo. Ahora falta la validación final del mentor para confirmar que el problema quedó bien definido, que la evidencia es suficiente y que el equipo puede avanzar al siguiente step.</p>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2 mb-4">
-                  <p className="text-xs text-slate-700" style={{ fontWeight: 700 }}>Estado actual del cierre</p>
-                  <p className="text-sm text-slate-700">
-                    {step1MentorApproved
-                      ? 'Aprobado por mentor. El Step 2 ya puede habilitarse.'
-                      : step1MentorMode === 'meeting'
-                      ? 'Pendiente reunión y aprobación final del mentor.'
-                      : step1MentorMode === 'async_review'
-                      ? 'Pendiente evaluación y aprobación directa del mentor.'
-                      : 'Falta elegir la vía de validación final con mentor.'}
-                  </p>
-                </div>
-
-                {!step1MentorMode && !step1MentorApproved && (
-                  <div className="space-y-3 mb-4">
-                    <button onClick={() => startMentorValidation('meeting')} className="w-full text-left rounded-xl border border-amber-200 bg-amber-50 p-4 hover:bg-amber-100 transition-colors">
-                      <p className="text-sm text-amber-900" style={{ fontWeight: 700 }}>Validar por reunión con mentor</p>
-                      <p className="text-xs text-amber-700 mt-1">Usa esta vía si necesitan conversación, preguntas o validación conjunta antes de avanzar.</p>
-                    </button>
-                    <button onClick={() => startMentorValidation('async_review')} className="w-full text-left rounded-xl border border-indigo-200 bg-indigo-50 p-4 hover:bg-indigo-100 transition-colors">
-                      <p className="text-sm text-indigo-900" style={{ fontWeight: 700 }}>Enviar para evaluación directa</p>
-                      <p className="text-xs text-indigo-700 mt-1">Usa esta vía si el mentor puede revisar y aprobar el cierre sin reunión.</p>
-                    </button>
-                  </div>
-                )}
-
-                {mentorValidationPending && (
-                  <div className="space-y-3 mb-4">
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <p className="text-xs text-slate-700" style={{ fontWeight: 700 }}>Vía elegida</p>
-                      <p className="text-sm text-slate-800 mt-1">{step1MentorMode === 'meeting' ? 'Reunión con mentor' : 'Evaluación directa del mentor'}</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {step1MentorMode === 'meeting'
-                          ? 'Queda visible que el Step 1 está pendiente de la sesión y del ok final del mentor.'
-                          : 'Queda visible que el Step 1 está pendiente de revisión y aprobación directa del mentor.'}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => registerMentorOutcome('Iterar')} className="rounded-xl border border-slate-200 text-slate-700 py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>
-                        Requiere ajustes
-                      </button>
-                      <button onClick={() => registerMentorOutcome('Aprobado')} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                        Registrar aprobación
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <button onClick={() => setShowSendModal(false)} className="w-full border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>
-                  Cerrar
-                </button>
-              </>
-            )}
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowSendModal(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>
+                Cancelar
+              </button>
+              <button
+                onClick={() => { setShowSendModal(false); sendToIA(); }}
+                disabled={sendingIA}
+                className="flex-1 bg-violet-600 hover:bg-violet-700 text-white rounded-xl py-2.5 text-sm transition-colors disabled:opacity-50"
+                style={{ fontWeight: 500 }}
+              >
+                {sendingIA ? 'Enviando…' : 'Enviar'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -4025,20 +3376,11 @@ export function Step1Page() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
             <h3 className="text-slate-900 mb-2" style={{ fontWeight: 600 }}>Agendar sesión con mentor</h3>
-            <p className="text-sm text-slate-500 mb-4">Esta reunión sirve para la validación final del Step 1: confirmar que el problema quedó claro, que la evidencia es suficiente y que el equipo puede avanzar.</p>
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-4">
-              <p className="text-xs text-amber-800" style={{ fontWeight: 700 }}>Estado del cierre</p>
-              <p className="text-sm text-amber-700 mt-1">El Step 1 queda listo para validación de mentor, pero el siguiente step seguirá bloqueado hasta registrar la aprobación final.</p>
-            </div>
+            <p className="text-sm text-slate-500 mb-4">El equipo de Startería confirmará la disponibilidad de tu mentor y te enviará el enlace de la reunión.</p>
             <BannerPorDefinir title="Integración de agendamiento" question="¿Se usa Calendly, Google Calendar u otro sistema? Definir el flujo exacto de agendamiento." />
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <button onClick={() => setShowSessionModal(false)} className="border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>
-                Cerrar
-              </button>
-              <button onClick={() => registerMentorOutcome('Aprobado')} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                Registrar aprobación
-              </button>
-            </div>
+            <button onClick={() => setShowSessionModal(false)} className="mt-4 w-full border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>
+              Cerrar
+            </button>
           </div>
         </div>
       )}
@@ -4063,7 +3405,7 @@ export function Step1Page() {
                 <p className="text-sm text-slate-500">Analizando tu Módulo A…</p>
               </div>
             ) : (
-              <FeedbackIAPanel feedback={ACTIVE_STEP1_FEEDBACK} onIterate={() => { setShowIAPanel(false); setActiveModule('A'); }} />
+              <FeedbackIAPanel feedback={MOCK_FEEDBACK_IA} onIterate={() => { setShowIAPanel(false); setActiveModule('A'); }} />
             )}
           </div>
         </div>
@@ -4071,5 +3413,3 @@ export function Step1Page() {
     </div>
   );
 }
-
-

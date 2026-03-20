@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router';
+import { Outlet, useNavigate, useLocation, matchPath } from 'react-router';
 import {
   LayoutDashboard, FolderOpen, Users, BarChart3, User, HelpCircle,
   LogOut, Menu, X, ChevronRight, Bell, Settings, Zap, CreditCard
@@ -10,11 +10,11 @@ const ROLE_LABELS: Record<string, string> = {
   owner: 'Participante',
   mentor: 'Mentor',
   admin: 'Administrador',
-  leader: 'Líder invitado',
+  sponsor: 'Sponsor',
 };
 
 export function AppLayout() {
-  const { user, logout, setUserRole, currentProject, isAuthenticated } = useApp();
+  const { user, logout, setUserRole, currentProject, isAuthenticated, canAccessProject } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -22,12 +22,45 @@ export function AppLayout() {
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/auth', { replace: true });
+      return;
     }
-  }, [isAuthenticated]);
+
+    if (user?.role !== 'sponsor') return;
+
+    const blockedStaticPaths = ['/projects/new', '/mentor', '/admin'];
+    if (blockedStaticPaths.some(path => location.pathname === path || location.pathname.startsWith(path + '/'))) {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+
+    const projectHomeMatch = matchPath('/projects/:projectId', location.pathname);
+    const stepMatch = matchPath('/projects/:projectId/step/:stepId', location.pathname);
+    const evidenceMatch = matchPath('/projects/:projectId/evidencias', location.pathname);
+
+    if (stepMatch?.params.projectId && !canAccessProject(stepMatch.params.projectId, 'step')) {
+      navigate(`/projects/${stepMatch.params.projectId}`, { replace: true });
+      return;
+    }
+
+    if (evidenceMatch?.params.projectId && !canAccessProject(evidenceMatch.params.projectId, 'evidence')) {
+      navigate(`/projects/${evidenceMatch.params.projectId}`, { replace: true });
+      return;
+    }
+
+    if (
+      projectHomeMatch?.params.projectId &&
+      !stepMatch &&
+      !evidenceMatch &&
+      !canAccessProject(projectHomeMatch.params.projectId, 'overview')
+    ) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, user?.role, location.pathname, navigate, canAccessProject]);
 
   if (!isAuthenticated) return null;
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+  const canOpenProjectSteps = user?.role !== 'sponsor';
 
   const ownerLinks = [
     { icon: LayoutDashboard, label: 'Mis proyectos', path: '/dashboard' },
@@ -48,12 +81,12 @@ export function AppLayout() {
     { icon: User, label: 'Mi perfil', path: '/perfil' },
   ];
 
-  const leaderLinks = [
-    { icon: FolderOpen, label: 'Proyectos asignados', path: '/dashboard' },
+  const sponsorLinks = [
+    { icon: FolderOpen, label: 'Iniciativas patrocinadas', path: '/dashboard' },
     { icon: User, label: 'Mi perfil', path: '/perfil' },
   ];
 
-  const links = user?.role === 'mentor' ? mentorLinks : user?.role === 'admin' ? adminLinks : user?.role === 'leader' ? leaderLinks : ownerLinks;
+  const links = user?.role === 'mentor' ? mentorLinks : user?.role === 'admin' ? adminLinks : user?.role === 'sponsor' ? sponsorLinks : ownerLinks;
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -99,24 +132,32 @@ export function AppLayout() {
           <div className="flex gap-1 mt-2">
             {/* Paso 0 dot */}
             <button
-              onClick={() => navigate(`/projects/${currentProject.id}/step/0`)}
+              onClick={() => {
+                if (!canOpenProjectSteps) return;
+                navigate(`/projects/${currentProject.id}/step/0`);
+              }}
               title="Paso 0: Punto de partida"
+              disabled={!canOpenProjectSteps}
               className={`w-4 h-1.5 rounded-full transition-colors ${
                 currentProject.step0Status === 'Completado' ? 'bg-emerald-500' :
                 currentProject.step0Status === 'En progreso' ? 'bg-indigo-400' :
                 'bg-slate-200'
-              }`}
+              } ${!canOpenProjectSteps ? 'cursor-not-allowed opacity-60' : ''}`}
             />
             {currentProject.steps.map(s => (
               <button
                 key={s.number}
-                onClick={() => navigate(`/projects/${currentProject.id}/step/${s.number}`)}
+                onClick={() => {
+                  if (!canOpenProjectSteps) return;
+                  navigate(`/projects/${currentProject.id}/step/${s.number}`);
+                }}
                 title={`Paso ${s.number}: ${s.name}`}
+                disabled={!canOpenProjectSteps}
                 className={`flex-1 h-1.5 rounded-full transition-colors ${
                   s.status === 'Aprobado' ? 'bg-emerald-500' :
                   s.status === 'En progreso' || s.status === 'Enviado' || s.status === 'Feedback IA' || s.status === 'Ajustado' || s.status === 'Sesión experto pendiente' ? 'bg-indigo-500' :
                   'bg-slate-200'
-                }`}
+                } ${!canOpenProjectSteps ? 'cursor-not-allowed opacity-60' : ''}`}
               />
             ))}
           </div>
@@ -147,7 +188,7 @@ export function AppLayout() {
       <div className="px-3 py-3 border-t border-slate-100">
         <p className="text-xs text-slate-400 px-1 mb-1.5" style={{ fontWeight: 600 }}>VER COMO (demo)</p>
         <div className="grid grid-cols-2 gap-1">
-          {(['owner', 'mentor', 'admin', 'leader'] as const).map(r => (
+          {(['owner', 'mentor', 'admin', 'sponsor'] as const).map(r => (
             <button
               key={r}
               onClick={() => setUserRole(r)}

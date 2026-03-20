@@ -715,7 +715,7 @@ export function Step0Page() {
                               <div className="flex items-start gap-2.5 p-3.5 bg-slate-100 border border-slate-200 rounded-xl">
                                 <FileText size={14} className="text-slate-400 shrink-0 mt-0.5" />
                                 <p className="text-xs text-slate-500">
-                                  Aún no tienes un análisis. Genera uno para descargarlo o compartirlo con tu líder o sponsor.
+                                  Aún no tienes un análisis. Genera uno para descargarlo o compartirlo con tu sponsor.
                                 </p>
                               </div>
                             )}
@@ -821,7 +821,7 @@ export function Step0Page() {
 
                           {/* Microcopy para compartir */}
                           <p className="text-xs text-indigo-500" style={{ fontWeight: 500 }}>
-                            💡 Descarga el resumen para compartir con tu líder o sponsor antes de la conversación.
+                            💡 Descarga el resumen para compartir con tu sponsor antes de la conversación.
                           </p>
                         </div>
                       )}
