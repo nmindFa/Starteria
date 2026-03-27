@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: starteria-db
+  namespace: starteria
+  labels:
+    app: starteria-db
+spec:
+  selector:
+    app: starteria-db
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: 5432
+  type: ClusterIP

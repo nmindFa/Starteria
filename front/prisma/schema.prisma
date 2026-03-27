@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  owner
+  mentor
+  admin
+  leader
+}
+
+enum ProjectStatus {
+  DRAFT
+  IN_PROGRESS
+  AI_REVIEW
+  ITERATION
+  EXPERT_SESSION_PENDING
+  STEP_APPROVED
+  COMPLETED
+}
+
+enum StepStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  AI_FEEDBACK
+  ADJUSTED
+  EXPERT_SESSION_PENDING
+  APPROVED
+  BLOCKED
+}
+
+enum ModuleStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+  SUBMITTED
+  AI_FEEDBACK
+  ADJUSTED
+  APPROVED
+}
+
+enum Step0Status {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum RunStatus {
+  DRAFT
+  RUNNING
+  CLOSED
+  REVIEW_CHANGES
+}
+
+enum EvidenceStatus {
+  UPLOADED
+  VERIFIED
+  REJECTED
+}
+
+enum EvidenceType {
+  IMAGE
+  PDF
+  VIDEO
+  LINK
+  OTHER
+}
+
+enum TeamRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum TeamMemberStatus {
+  ACTIVE
+  PENDING
+}
+
+enum SessionStatus {
+  PENDING_SCHEDULE
+  SCHEDULED
+  COMPLETED
+}
+
+enum SessionResult {
+  APPROVED
+  ITERATE
+  BLOCKED
+}
+
+enum FeedbackStatus {
+  APPROVED
+  ITERATE
+  BLOCKED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum HelpRequestStatus {
+  PENDING
+  ANSWERED
+  CLOSED
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String
+  passwordHash        String
+  role                Role
+  initials            String
+  skills              String[]
+  bio                 String?
+  avatarUrl           String?
+  isActive            Boolean   @default(true)
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  cohortId            String?
+  cohort              Cohort?   @relation(fields: [cohortId], references: [id])
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  projects         Project[]
+  teamMemberships  TeamMember[]
+  mentorSessions   MentorSession[]
+  evidence         Evidence[]
+  refreshTokens    RefreshToken[]
+  auditLogs        AuditLog[]
+  helpRequests     HelpRequest[]    @relation("HelpRequester")
+  mentorHelpRequests HelpRequest[]  @relation("HelpMentor")
+
+  @@index([email])
+  @@index([role])
+  @@index([cohortId])
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  name          String
+  description   String?
+  status        ProjectStatus @default(DRAFT)
+  currentStep   Int           @default(0)
+  step0Status   Step0Status   @default(NOT_STARTED)
+  step0Data     Json?
+  mentorCredits Int           @default(3)
+  riskLevel     RiskLevel?
+  isArchived    Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  lastModified  DateTime      @updatedAt
+
+  ownerId  String
+  owner    User    @relation(fields: [ownerId], references: [id])
+  cohortId String?
+  cohort   Cohort? @relation(fields: [cohortId], references: [id])
+
+  steps          Step[]
+  evidence       Evidence[]
+  teamMembers    TeamMember[]
+  mentorSessions MentorSession[]
+  helpRequests   HelpRequest[]
+
+  @@index([ownerId])
+  @@index([cohortId])
+  @@index([status])
+}
+
+model Step {
+  id        String     @id @default(cuid())
+  projectId String
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number    Int
+  name      String
+  status    StepStatus @default(BLOCKED)
+  progress  Int        @default(0)
+  stepData  Json?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  modules    Module[]
+  runs       Run[]
+  feedbackIA FeedbackIA[]
+  mentorSession MentorSession?
+
+  @@unique([projectId, number])
+  @@index([projectId])
+}
+
+model Module {
+  id        String       @id @default(cuid())
+  stepId    String
+  step      Step         @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  moduleId  String
+  name      String
+  status    ModuleStatus @default(BLOCKED)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([stepId, moduleId])
+  @@index([stepId])
+}
+
+model FeedbackIA {
+  id             String         @id @default(cuid())
+  stepId         String
+  step           Step           @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  status         FeedbackStatus
+  summary        String
+  goodPoints     String[]
+  missing        String[]
+  actions        String[]
+  questions      String[]
+  contradictions String[]
+  createdAt      DateTime       @default(now())
+
+  @@index([stepId])
+}
+
+model MentorSession {
+  id           String         @id @default(cuid())
+  projectId    String
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stepId       String         @unique
+  step         Step           @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  stepNumber   Int
+  mentorId     String
+  mentor       User           @relation(fields: [mentorId], references: [id])
+  date         DateTime?
+  status       SessionStatus  @default(PENDING_SCHEDULE)
+  result       SessionResult?
+  comments     String?
+  rubricScores Json?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([projectId])
+  @@index([mentorId])
+  @@index([stepId])
+}
+
+model Evidence {
+  id         String         @id @default(cuid())
+  projectId  String
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name       String
+  type       EvidenceType
+  size       String?
+  url        String?
+  storageKey String?
+  stepRef    Int
+  moduleRef  String?
+  ownerId    String
+  owner      User           @relation(fields: [ownerId], references: [id])
+  status     EvidenceStatus @default(UPLOADED)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([projectId])
+  @@index([ownerId])
+  @@index([stepRef])
+}
+
+model TeamMember {
+  id        String           @id @default(cuid())
+  projectId String
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  role      TeamRole         @default(VIEWER)
+  status    TeamMemberStatus @default(PENDING)
+  invitedAt DateTime         @default(now())
+  joinedAt  DateTime?
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model Run {
+  id           String    @id @default(cuid())
+  stepId       String
+  step         Step      @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  name         String
+  status       RunStatus @default(DRAFT)
+  metrics      Json?
+  learningCard Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([stepId])
+}
+
+model Cohort {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  startDate   DateTime
+  endDate     DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  projects Project[]
+  users    User[]
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  family    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tokenHash])
+  @@index([family])
+  @@index([userId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+}
+
+model HelpRequest {
+  id        String            @id @default(cuid())
+  projectId String
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation("HelpRequester", fields: [userId], references: [id])
+  mentorId  String?
+  mentor    User?             @relation("HelpMentor", fields: [mentorId], references: [id])
+  message   String
+  response  String?
+  status    HelpRequestStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([mentorId])
+  @@index([status])
+}

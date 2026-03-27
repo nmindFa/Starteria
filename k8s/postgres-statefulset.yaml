@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: starteria-db
+  namespace: starteria
+  labels:
+    app: starteria-db
+spec:
+  serviceName: starteria-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: starteria-db
+  template:
+    metadata:
+      labels:
+        app: starteria-db
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: "starteria_db"
+        - name: POSTGRES_USER
+          value: "starteria"
+        - name: POSTGRES_PASSWORD
+          value: "fab67f6041e7eeee60aa040cf5a094b9"
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi

@@ -1,0 +1,69 @@
+# ============================================================================
+# Stage 1: Build
+# ============================================================================
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install build dependencies needed for native modules (bcrypt)
+RUN apk add --no-cache python3 make g++
+
+# Copy package manifests and install ALL dependencies (including devDependencies
+# needed for build: typescript, prisma CLI, tsx, @types/*)
+COPY front/package.json front/package-lock.json ./
+
+RUN npm ci
+
+# Copy Prisma schema and generate the Prisma client
+COPY front/prisma ./prisma/
+RUN npx prisma generate
+
+# Copy the backend TypeScript config and source code
+COPY front/tsconfig.backend.json ./tsconfig.backend.json
+COPY backend ./backend/
+
+# Compile TypeScript to JavaScript
+RUN npx tsc -p tsconfig.backend.json
+
+# ============================================================================
+# Stage 2: Production runtime
+# ============================================================================
+FROM node:20-alpine AS production
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Install runtime-only native dependencies (bcrypt needs rebuild in clean image)
+RUN apk add --no-cache python3 make g++
+
+# Copy package manifests and install production dependencies only
+COPY front/package.json front/package-lock.json ./
+
+RUN npm ci --omit=dev && \
+    npm cache clean --force
+
+# Remove build tools after native modules are compiled
+RUN apk del python3 make g++
+
+# Copy Prisma schema and regenerate client for production (ensures correct
+# binary target for the runtime image)
+COPY front/prisma ./prisma/
+RUN npx prisma generate
+
+# Copy compiled JavaScript from the build stage
+COPY --from=builder /app/dist/backend ./dist/backend/
+
+# Create a non-root user for security
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -S appuser -u 1001 -G appgroup
+
+USER appuser
+
+EXPOSE 3001
+
+# Health check against the /api/health endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:3001/api/health || exit 1
+
+CMD ["node", "dist/backend/server.js"]

@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared-tunnel
+  namespace: starteria
+  labels:
+    app: cloudflared-tunnel
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: cloudflared-tunnel
+  template:
+    metadata:
+      labels:
+        app: cloudflared-tunnel
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2000"
+    spec:
+      containers:
+      - name: cloudflared
+        image: cloudflare/cloudflared:latest
+        args:
+          - "tunnel"
+          - "--config"
+          - "/etc/cloudflared/config.yaml"
+          - "run"
+        env:
+        - name: TUNNEL_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: cloudflared-token
+              key: token
+        ports:
+        - name: metrics
+          containerPort: 2000
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "250m"
+            memory: "256Mi"
+        readinessProbe:
+          tcpSocket:
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 11
+        livenessProbe:
+          tcpSocket:
+            port: metrics
+          initialDelaySeconds: 60
+          periodSeconds: 120
+          timeoutSeconds: 10
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 10"]
+        volumeMounts:
+        - name: config
+          mountPath: /etc/cloudflared
+      volumes:
+      - name: config
+        configMap:
+          name: cloudflared-config
+      terminationGracePeriodSeconds: 120

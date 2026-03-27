@@ -1,0 +1,135 @@
+{
+  "running": true,
+  "startedAt": "2026-03-24T09:31:39.800Z",
+  "workers": {
+    "map": {
+      "runCount": 101,
+      "successCount": 101,
+      "failureCount": 0,
+      "averageDurationMs": 1.1980198019801984,
+      "lastRun": "2026-03-24T09:30:43.990Z",
+      "nextRun": "2026-03-24T09:45:43.990Z",
+      "isRunning": false
+    },
+    "audit": {
+      "runCount": 103,
+      "successCount": 3,
+      "failureCount": 100,
+      "averageDurationMs": 1774.6601941747572,
+      "lastRun": "2026-03-24T09:31:31.152Z",
+      "nextRun": "2026-03-24T09:41:31.152Z",
+      "isRunning": false
+    },
+    "optimize": {
+      "runCount": 76,
+      "successCount": 1,
+      "failureCount": 75,
+      "averageDurationMs": 1874.2894736842106,
+      "lastRun": "2026-03-24T09:17:44.809Z",
+      "nextRun": "2026-03-24T09:35:39.801Z",
+      "isRunning": false
+    },
+    "consolidate": {
+      "runCount": 50,
+      "successCount": 50,
+      "failureCount": 0,
+      "averageDurationMs": 1.0200000000000002,
+      "lastRun": "2026-03-24T09:11:09.948Z",
+      "nextRun": "2026-03-24T09:41:09.948Z",
+      "isRunning": false
+    },
+    "testgaps": {
+      "runCount": 60,
+      "successCount": 0,
+      "failureCount": 60,
+      "averageDurationMs": 0,
+      "lastRun": "2026-03-11T00:23:55.548Z",
+      "nextRun": "2026-03-24T09:39:39.801Z",
+      "isRunning": false
+    },
+    "predict": {
+      "runCount": 0,
+      "successCount": 0,
+      "failureCount": 0,
+      "averageDurationMs": 0,
+      "isRunning": false
+    },
+    "document": {
+      "runCount": 0,
+      "successCount": 0,
+      "failureCount": 0,
+      "averageDurationMs": 0,
+      "isRunning": false
+    }
+  },
+  "config": {
+    "autoStart": false,
+    "logDir": "/home/orlando/fabio/Dashboardstarteria/.claude-flow/logs",
+    "stateFile": "/home/orlando/fabio/Dashboardstarteria/.claude-flow/daemon-state.json",
+    "maxConcurrent": 2,
+    "workerTimeoutMs": 300000,
+    "resourceThresholds": {
+      "maxCpuLoad": 2,
+      "minFreeMemoryPercent": 20
+    },
+    "workers": [
+      {
+        "type": "map",
+        "intervalMs": 900000,
+        "offsetMs": 0,
+        "priority": "normal",
+        "description": "Codebase mapping",
+        "enabled": true
+      },
+      {
+        "type": "audit",
+        "intervalMs": 600000,
+        "offsetMs": 120000,
+        "priority": "critical",
+        "description": "Security analysis",
+        "enabled": true
+      },
+      {
+        "type": "optimize",
+        "intervalMs": 900000,
+        "offsetMs": 240000,
+        "priority": "high",
+        "description": "Performance optimization",
+        "enabled": true
+      },
+      {
+        "type": "consolidate",
+        "intervalMs": 1800000,
+        "offsetMs": 360000,
+        "priority": "low",
+        "description": "Memory consolidation",
+        "enabled": true
+      },
+      {
+        "type": "testgaps",
+        "intervalMs": 1200000,
+        "offsetMs": 480000,
+        "priority": "normal",
+        "description": "Test coverage analysis",
+        "enabled": true
+      },
+      {
+        "type": "predict",
+        "intervalMs": 600000,
+        "offsetMs": 0,
+        "priority": "low",
+        "description": "Predictive preloading",
+        "enabled": false
+      },
+      {
+        "type": "document",
+        "intervalMs": 3600000,
+        "offsetMs": 0,
+        "priority": "low",
+        "description": "Auto-documentation",
+        "enabled": false
+      }
+    ]
+  },
+  "savedAt": "2026-03-24T09:31:39.801Z"
+}

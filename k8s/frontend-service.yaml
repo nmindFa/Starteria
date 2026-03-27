@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: starteria-frontend
+  namespace: starteria
+  labels:
+    app: starteria-frontend
+spec:
+  selector:
+    app: starteria-frontend
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP

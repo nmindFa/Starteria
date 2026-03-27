@@ -1,0 +1,24 @@
+import { Router } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { ProjectController } from './project.controller';
+import { ProjectService } from './project.service';
+import { validate } from '../../shared/middleware/validate';
+import { createProjectSchema, updateProjectSchema, updateStep0Schema } from './project.schemas';
+
+import { authenticate } from '../auth/auth.middleware';
+
+const prisma = new PrismaClient();
+const service = new ProjectService(prisma);
+const controller = new ProjectController(service);
+
+export const projectRouter = Router();
+
+projectRouter.use(authenticate);
+
+projectRouter.get('/', controller.list);
+projectRouter.post('/', validate(createProjectSchema), controller.create);
+projectRouter.get('/:id', controller.getById);
+projectRouter.patch('/:id', validate(updateProjectSchema), controller.update);
+projectRouter.delete('/:id', controller.archive);
+projectRouter.get('/:id/step0', controller.getStep0);
+projectRouter.patch('/:id/step0', validate(updateStep0Schema), controller.updateStep0);
