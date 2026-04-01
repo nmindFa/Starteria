@@ -34,11 +34,11 @@ const IMPACTA_OPTIONS = [
 ];
 
 const PARTE_PROCESO_OPTIONS: { value: Exclude<ParteProcesoType, ''>; label: string }[] = [
-  { value: 'antes', label: 'Antes' },
-  { value: 'durante', label: 'Durante' },
-  { value: 'despues', label: 'Después' },
-  { value: 'transversal', label: 'Transversal' },
-  { value: 'otra', label: 'Otra' },
+  { value: 'antes', label: 'Antes de iniciar el proceso' },
+  { value: 'durante', label: 'Durante la operación o ejecución' },
+  { value: 'despues', label: 'En el seguimiento o cierre' },
+  { value: 'transversal', label: 'Se siente de forma transversal' },
+  { value: 'otra', label: 'En la coordinación entre áreas o atención' },
 ];
 
 const IMPACTO_3M_OPTIONS: { value: Exclude<Impacto3mesesType, ''>; label: string }[] = [
@@ -54,16 +54,16 @@ const IMPACTO_3M_OPTIONS: { value: Exclude<Impacto3mesesType, ''>; label: string
 const RESPALDO_OPTIONS: { value: Exclude<RespaldoType, ''>; label: string }[] = [
   { value: 'datos', label: 'Datos internos' },
   { value: 'testimonios', label: 'Testimonios' },
-  { value: 'benchmark', label: 'Referencia externa' },
-  { value: 'hipotesis', label: 'Aún es hipótesis' },
+  { value: 'benchmark', label: 'Benchmark o referencias externas' },
+  { value: 'hipotesis', label: 'Aún es una hipótesis y necesito validarla' },
   { value: 'otro', label: 'Otro' },
 ];
 
 const SI_MINIMO_OPTIONS = [
-  'Reunión 30 min con el decisor correcto',
-  'Asignar Sponsor + Responsable',
+  'Reunión de 30 min con la persona correcta',
+  'Asignar sponsor o responsable',
   'Acceso a datos',
-  'Permiso para piloto 7–10 días',
+  'Permiso para un piloto corto',
   'Tiempo de personas clave',
   'Presupuesto pequeño',
   'Otro',
@@ -134,8 +134,10 @@ export function Step0Page() {
   const [saved, setSaved] = useState(false);
   const [iaAnalysisState, setIaAnalysisState] = useState<'idle' | 'loading' | 'done'>('idle');
   const [copyMsg, setCopyMsg] = useState(false);
+  const [deliveryEmail, setDeliveryEmail] = useState('');
 
   const saveState = useAutosave([form]);
+  const firstName = form.nombreParticipante.trim().split(/\s+/)[0];
 
   if (!project) {
     return (
@@ -184,11 +186,11 @@ export function Step0Page() {
 
   const getMissingForAnalysis = () => {
     const missing: { label: string }[] = [];
-    if (!form.quePasaQueQuieres.trim()) missing.push({ label: 'Qué está pasando (Sección 3)' });
-    if (form.impacta.length === 0) missing.push({ label: 'A quién impacta (Sección 4)' });
-    if (!form.parteProceso) missing.push({ label: 'Parte del proceso (Sección 5)' });
-    if (!form.impacto3meses) missing.push({ label: 'Impacto a 3 meses (Sección 6)' });
-    if (!form.respaldo) missing.push({ label: 'Respaldo disponible (Sección 7)' });
+    if (!form.quePasaQueQuieres.trim()) missing.push({ label: 'Qué está pasando (Sección 4)' });
+    if (form.impacta.length === 0) missing.push({ label: 'A quién impacta (Sección 5)' });
+    if (!form.parteProceso) missing.push({ label: 'Dónde se nota más el reto (Sección 6)' });
+    if (!form.impacto3meses) missing.push({ label: 'Impacto principal a 3 meses (Sección 7)' });
+    if (!form.respaldo) missing.push({ label: 'Respaldo actual (Sección 8)' });
     return missing;
   };
 
@@ -202,7 +204,7 @@ export function Step0Page() {
   const handleDescargarPDF = () => {
     // Simulación de descarga PDF
     const lines = [
-      'STARTERÍA — Análisis de Punto de Partida',
+      'STARTERÍA — Resumen inicial de la iniciativa',
       `Proyecto: ${project?.name}`,
       `Participante: ${form.nombreParticipante} · ${form.rolArea}`,
       '---',
@@ -255,42 +257,46 @@ export function Step0Page() {
 
   // ─── Ficha data ─────────────────────────────────────────────────────────────
 
-  const fichaRows = [
-    { label: 'Nombre', value: form.nombreParticipante || '—' },
-    { label: 'Rol / Área', value: form.rolArea || '—' },
+  const previewBlocks = [
     {
-      label: 'Origen',
-      value: ORIGEN_OPTIONS.find(o => o.value === form.origen)?.label || '—',
+      title: 'Quién impulsa esta iniciativa',
+      value:
+        form.nombreParticipante || form.rolArea
+          ? [form.nombreParticipante, form.rolArea].filter(Boolean).join(' · ')
+          : 'Completa tu nombre y rol para personalizar esta ficha.',
+      filled: !!form.nombreParticipante.trim() && !!form.rolArea.trim(),
     },
     {
-      label: 'Qué está pasando',
-      value: form.quePasaQueQuieres
-        ? form.quePasaQueQuieres.length > 90
-          ? form.quePasaQueQuieres.slice(0, 90) + '…'
-          : form.quePasaQueQuieres
-        : '—',
-    },
-    { label: 'Impacta a', value: form.impacta.length > 0 ? form.impacta.join(', ') : '—' },
-    {
-      label: 'Parte del proceso',
-      value: PARTE_PROCESO_OPTIONS.find(o => o.value === form.parteProceso)?.label || '—',
+      title: 'Qué está pasando',
+      value: form.quePasaQueQuieres || 'Describe con tus palabras qué está pasando o qué quieres lograr.',
+      filled: !!form.quePasaQueQuieres.trim(),
     },
     {
-      label: 'Impacto a 3 meses',
-      value: IMPACTO_3M_OPTIONS.find(o => o.value === form.impacto3meses)?.label || '—',
+      title: 'A quién impacta',
+      value: form.impacta.length > 0 ? form.impacta.join(', ') : 'Marca los grupos que hoy sienten este reto más directamente.',
+      filled: form.impacta.length > 0,
     },
     {
-      label: 'Respaldo disponible',
-      value: RESPALDO_OPTIONS.find(o => o.value === form.respaldo)?.label || '—',
+      title: 'Qué pasa si no se mueve',
+      value: IMPACTO_3M_OPTIONS.find(o => o.value === form.impacto3meses)?.label || 'Define el impacto principal de no abordarlo en los próximos 3 meses.',
+      filled: !!form.impacto3meses,
     },
     {
-      label: 'Sí mínimo',
+      title: 'Qué respaldo existe',
+      value: RESPALDO_OPTIONS.find(o => o.value === form.respaldo)?.label || 'Indica qué sustento tienes hoy para mover esta conversación.',
+      filled: !!form.respaldo,
+    },
+    {
+      title: 'Qué apoyo mínimo se necesita',
       value:
         form.siMinimo.length > 0
-          ? form.siMinimo[0] + (form.siMinimo.length > 1 ? ` +${form.siMinimo.length - 1} más` : '')
-          : '—',
+          ? form.siMinimo.join(', ')
+          : 'Identifica el primer destrabe real que te permitiría mover la propuesta.',
+      filled: form.siMinimo.length > 0,
     },
   ];
+
+  const previewCompletedCount = previewBlocks.filter(block => block.filled).length;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -323,8 +329,11 @@ export function Step0Page() {
                 <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>
                   Punto de partida
                 </h1>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  Aterriza tu iniciativa en 5–7 minutos. Esto te ayuda a conseguir respaldo y avanzar.
+                <p className="text-sm text-slate-500 mt-1 max-w-2xl">
+                  Ordena lo que ya sabes sobre esta iniciativa para construir una primera base clara, compartible y con sentido para avanzar.
+                </p>
+                <p className="text-sm text-slate-500 mt-2 max-w-2xl">
+                  No necesitas tener todas las respuestas. Este paso te ayudará a darle forma inicial a tu propuesta y a preparar una mejor conversación con quien pueda respaldarla.
                 </p>
               </div>
 
@@ -352,34 +361,18 @@ export function Step0Page() {
               <section className="space-y-4 pb-8">
                 <div>
                   <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                    Sección 1 — Quién eres
+                    Antes de empezar, ¿cómo te llamas?
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Esto ayuda a tu mentor a darte acompañamiento más preciso.
+                    Usaremos tu nombre para personalizar esta ficha y el resumen de salida.
                   </p>
                 </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
-                    Nombre completo <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    value={form.nombreParticipante}
-                    onChange={e => setForm(p => ({ ...p, nombreParticipante: e.target.value }))}
-                    placeholder="Tu nombre completo"
-                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
-                    Rol y área <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    value={form.rolArea}
-                    onChange={e => setForm(p => ({ ...p, rolArea: e.target.value }))}
-                    placeholder="Ej. Gerente de Operaciones · Logística"
-                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                  />
-                </div>
+                <input
+                  value={form.nombreParticipante}
+                  onChange={e => setForm(p => ({ ...p, nombreParticipante: e.target.value }))}
+                  placeholder="Tu nombre completo"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                />
               </section>
 
               <div className="h-px bg-slate-100 mb-8" />
@@ -388,10 +381,30 @@ export function Step0Page() {
               <section className="space-y-4 pb-8">
                 <div>
                   <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                    Sección 2 — Origen de la iniciativa
+                    {firstName ? `Hola, ${firstName}. ¿Desde qué rol y área nos escribes?` : 'Hola. ¿Desde qué rol y área nos escribes?'}
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    ¿Desde dónde nace tu iniciativa hoy?
+                    Esto ayuda a entender desde qué parte de la empresa estás viendo esta iniciativa.
+                  </p>
+                </div>
+                <input
+                  value={form.rolArea}
+                  onChange={e => setForm(p => ({ ...p, rolArea: e.target.value }))}
+                  placeholder="Ej. Ejecutivo comercial / Ventas"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                />
+              </section>
+
+              <div className="h-px bg-slate-100 mb-8" />
+
+              {/* ─── Sección 3 ─── */}
+              <section className="space-y-4 pb-8">
+                <div>
+                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                    {firstName ? `Genial, ${firstName}. Para ubicarnos: ¿desde dónde nace tu iniciativa hoy?` : 'Para ubicarnos: ¿desde dónde nace tu iniciativa hoy?'}
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    No define tu proyecto para siempre. Solo nos ayuda a entender desde qué punto partes hoy.
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -422,18 +435,17 @@ export function Step0Page() {
 
               <div className="h-px bg-slate-100 mb-8" />
 
-              {/* ─── Sección 3 ─── */}
+              {/* ─── Sección 4 ─── */}
               <section className="space-y-4 pb-8">
                 <div>
                   <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                    Sección 3 — Qué está pasando
+                    Cuéntamelo con tus palabras: ¿qué está pasando o qué quieres lograr?
                   </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    No necesitas redactarlo perfecto. Escribe lo que hoy sabes.
+                  </p>
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
-                    Cuéntanos qué está pasando o qué quieres lograr (en simple){' '}
-                    <span className="text-red-500">*</span>
-                  </label>
                   <textarea
                     value={form.quePasaQueQuieres}
                     onChange={e => setForm(p => ({ ...p, quePasaQueQuieres: e.target.value }))}
@@ -453,21 +465,24 @@ export function Step0Page() {
 
               <div className="h-px bg-slate-100 mb-8" />
 
-              {/* ─── Sección 4 ─── */}
+              {/* ─── Sección 5 ─── */}
               <section className="space-y-4 pb-8">
                 <div>
                   <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                    Sección 4 — A quién impacta
+                    ¿A quién impacta más directamente este reto?
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    ¿A quién impacta directamente? Puedes elegir más de uno.
+                    Elige hasta 3 grupos.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {IMPACTA_OPTIONS.map(opt => (
                     <button
                       key={opt}
-                      onClick={() => toggleMulti('impacta', opt)}
+                      onClick={() => {
+                        if (!form.impacta.includes(opt) && form.impacta.length >= 3) return;
+                        toggleMulti('impacta', opt);
+                      }}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm transition-all ${
                         form.impacta.includes(opt)
                           ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
@@ -484,22 +499,22 @@ export function Step0Page() {
 
               <div className="h-px bg-slate-100 mb-8" />
 
-              {/* ─── Sección 5 ─── */}
+              {/* ─── Sección 6 ─── */}
               <section className="space-y-4 pb-8">
                 <div>
                   <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                    Sección 5 — Parte del proceso
+                    ¿En qué momento se nota más este reto?
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    ¿En qué parte del proceso se manifiesta principalmente?
+                    Más adelante, en el Paso 1, vas a profundizar mejor el proceso. Aquí solo queremos una primera ubicación.
                   </p>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {PARTE_PROCESO_OPTIONS.map(opt => (
                     <button
                       key={opt.value}
                       onClick={() => setForm(p => ({ ...p, parteProceso: opt.value }))}
-                      className={`px-3 py-2.5 rounded-xl border text-sm transition-all ${
+                      className={`px-3 py-3 rounded-xl border text-sm text-left transition-all ${
                         form.parteProceso === opt.value
                           ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
                           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
@@ -510,26 +525,18 @@ export function Step0Page() {
                     </button>
                   ))}
                 </div>
-                {form.parteProceso === 'transversal' && (
-                  <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                    <Info size={14} className="text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-700">
-                      Luego te ayudaremos a elegir una etapa principal para poder pilotear.
-                    </p>
-                  </div>
-                )}
               </section>
 
               <div className="h-px bg-slate-100 mb-8" />
 
-              {/* ─── Sección 6 ─── */}
+              {/* ─── Sección 7 ─── */}
               <section className="space-y-4 pb-8">
                 <div>
                   <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                    Sección 6 — Impacto a 3 meses
+                    Si esto no se aborda en los próximos 3 meses, ¿cuál sería el impacto más importante?
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Si esto no se aborda en los próximos 3 meses, ¿cuál sería el impacto más importante?
+                    Elige el impacto principal, aunque hoy sea una estimación.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -558,14 +565,14 @@ export function Step0Page() {
 
               <div className="h-px bg-slate-100 mb-8" />
 
-              {/* ─── Sección 7 ─── */}
+              {/* ─── Sección 8 ─── */}
               <section className="space-y-4 pb-8">
                 <div>
                   <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                    Sección 7 — Respaldo disponible
+                    Para moverlo con criterio: ¿qué respaldo tienes hoy?
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    ¿Con qué respaldo cuentas hoy?
+                    Elige el respaldo más claro que ya tienes hoy.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -594,70 +601,96 @@ export function Step0Page() {
 
               <div className="h-px bg-slate-100 mb-8" />
 
-              {/* ─── Sección 8 ─── */}
+              {/* ─── Sección 9 ─── */}
+              <section className="space-y-4 pb-8">
+                <div>
+                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                    Para que esto avance y no se quede solo en una idea: ¿quién debería escuchar o saber de esto? ¿Y por qué?
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Ej. Gerente de Operaciones, porque puede habilitar un piloto con dos áreas.
+                  </p>
+                </div>
+                <textarea
+                  value={form.quienEscuchar}
+                  onChange={e => setForm(p => ({ ...p, quienEscuchar: e.target.value }))}
+                  rows={2}
+                  placeholder="Ej. La líder de Operaciones, porque puede priorizar el piloto y ayudar a destrabar la coordinación con otras áreas."
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none"
+                />
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
+                  <p className="text-xs text-indigo-700">
+                    Una iniciativa interna gana fuerza cuando una persona clave entiende el problema, ve su impacto y ayuda a destrabar el siguiente paso.
+                  </p>
+                </div>
+              </section>
+
+              <div className="h-px bg-slate-100 mb-8" />
+
+              {/* ─── Sección 10 ─── */}
+              <section className="space-y-4 pb-8">
+                <div>
+                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+                    ¿Cuál es el “sí” mínimo que necesitas para mover esta propuesta?
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Piensa en el primer destrabe real, no en todo lo ideal.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {SI_MINIMO_OPTIONS.map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => toggleMulti('siMinimo', opt)}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm text-left transition-all ${
+                        form.siMinimo.includes(opt)
+                          ? 'border-indigo-400 bg-indigo-50 text-indigo-800'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all ${
+                          form.siMinimo.includes(opt)
+                            ? 'border-indigo-500 bg-indigo-500'
+                            : 'border-slate-300'
+                        }`}
+                      >
+                        {form.siMinimo.includes(opt) && (
+                          <span className="text-white" style={{ fontSize: '10px' }}>✓</span>
+                        )}
+                      </span>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <p className="text-xs text-slate-600">
+                    <span style={{ fontWeight: 600 }}>¿Por qué importa esto?</span>{' '}
+                    Este paso busca asegurar el primer respaldo real para que tu iniciativa no se quede solo en una buena intención.
+                  </p>
+                </div>
+              </section>
+
+              <div className="h-px bg-slate-100 mb-8" />
+
+              {/* ─── Sección 11 ─── */}
               <section className="space-y-4 pb-4">
                 <div>
                   <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                    Sección 8 — Alineación mínima para empezar
+                    ¿A qué correo te envío el one-pager listo para presentar?
                   </h2>
-                  <p className="text-xs text-indigo-600 mt-0.5" style={{ fontWeight: 500 }}>
-                    Este es el paso más crítico. Sin respaldo, tu iniciativa no avanza.
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Te enviaremos un resumen claro con lo que acabas de construir para que puedas revisarlo o compartirlo.
                   </p>
                 </div>
-
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
-                    ¿Quién debería escuchar esto primero y por qué?
-                  </label>
-                  <textarea
-                    value={form.quienEscuchar}
-                    onChange={e => setForm(p => ({ ...p, quienEscuchar: e.target.value }))}
-                    rows={2}
-                    placeholder="Ej. La Gerente de Operaciones, porque aprueba cambios que afectan a más de un área."
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-slate-700 mb-2" style={{ fontWeight: 500 }}>
-                    ¿Cuál es el "sí mínimo" que necesitas para empezar?{' '}
-                    <span className="text-slate-400 text-xs">(Puedes elegir más de uno)</span>
-                  </label>
-                  <div className="space-y-2">
-                    {SI_MINIMO_OPTIONS.map(opt => (
-                      <button
-                        key={opt}
-                        onClick={() => toggleMulti('siMinimo', opt)}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm text-left transition-all ${
-                          form.siMinimo.includes(opt)
-                            ? 'border-indigo-400 bg-indigo-50 text-indigo-800'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                        }`}
-                      >
-                        <span
-                          className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all ${
-                            form.siMinimo.includes(opt)
-                              ? 'border-indigo-500 bg-indigo-500'
-                              : 'border-slate-300'
-                          }`}
-                        >
-                          {form.siMinimo.includes(opt) && (
-                            <span className="text-white" style={{ fontSize: '10px' }}>✓</span>
-                          )}
-                        </span>
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                    <p className="text-xs text-slate-600">
-                      <span style={{ fontWeight: 600 }}>¿Por qué importa esto?</span>{' '}
-                      Si no tienes este "sí mínimo", tu iniciativa probablemente no avance.
-                      Este paso busca asegurar el primer respaldo real.
-                    </p>
-                  </div>
-                </div>
+                <input
+                  type="email"
+                  value={deliveryEmail}
+                  onChange={e => setDeliveryEmail(e.target.value)}
+                  placeholder="tu.correo@empresa.com"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                />
 
                 <BannerPorDefinir
                   title="Gating del Paso 0"
@@ -679,14 +712,14 @@ export function Step0Page() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h2 className="text-sm text-slate-900" style={{ fontWeight: 700 }}>
-                            Análisis por IA experta
+                            Base inicial para conversar con sponsor o líder
                           </h2>
                           <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700" style={{ fontWeight: 600 }}>
                             Intraemprendimiento
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Una IA con experiencia en iniciativas internas resume tu punto de partida y te sugiere cómo avanzar.
+                          Aquí vas a convertir lo que escribiste en una base corta, clara y útil para compartir o seguir refinando.
                         </p>
                       </div>
                     </div>
@@ -702,7 +735,7 @@ export function Step0Page() {
                                 <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
                                 <div>
                                   <p className="text-xs text-amber-800 mb-1.5" style={{ fontWeight: 600 }}>
-                                    Te falta completar {missing.length} {missing.length === 1 ? 'campo' : 'campos'} para generar el análisis:
+                                    Completa {missing.length} {missing.length === 1 ? 'campo' : 'campos'} más para generar una primera base clara:
                                   </p>
                                   <ul className="space-y-0.5">
                                     {missing.map((m, i) => (
@@ -715,7 +748,7 @@ export function Step0Page() {
                               <div className="flex items-start gap-2.5 p-3.5 bg-slate-100 border border-slate-200 rounded-xl">
                                 <FileText size={14} className="text-slate-400 shrink-0 mt-0.5" />
                                 <p className="text-xs text-slate-500">
-                                  Aún no tienes un análisis. Genera uno para descargarlo o compartirlo con tu sponsor.
+                                  Cuando completes lo mínimo, podrás generar un resumen breve para revisarlo o compartirlo con quien pueda respaldar esta iniciativa.
                                 </p>
                               </div>
                             )}
@@ -727,7 +760,7 @@ export function Step0Page() {
                                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl text-sm transition-colors"
                                 style={{ fontWeight: 500 }}
                               >
-                                <Sparkles size={14} /> Generar análisis
+                                <Sparkles size={14} /> Generar resumen inicial
                               </button>
 
                               <div className="relative group">
@@ -753,7 +786,7 @@ export function Step0Page() {
                       {iaAnalysisState === 'loading' && (
                         <div className="flex flex-col items-center justify-center py-8 gap-3">
                           <Loader2 size={28} className="text-indigo-500 animate-spin" />
-                          <p className="text-sm text-slate-600" style={{ fontWeight: 500 }}>Analizando…</p>
+                          <p className="text-sm text-slate-600" style={{ fontWeight: 500 }}>Ordenando tu base inicial…</p>
                           <p className="text-xs text-slate-400">Revisando tu punto de partida con criterios de intraemprendimiento</p>
                         </div>
                       )}
@@ -763,8 +796,17 @@ export function Step0Page() {
                         <div className="space-y-4">
                           <div className="flex items-center gap-2">
                             <CheckCircle2 size={15} className="text-emerald-500" />
-                            <p className="text-xs text-emerald-700" style={{ fontWeight: 600 }}>Análisis generado</p>
-                            <span className="text-xs text-slate-400">· La IA revisó tu punto de partida</span>
+                            <p className="text-xs text-emerald-700" style={{ fontWeight: 600 }}>Resumen inicial listo</p>
+                            <span className="text-xs text-slate-400">· Ya tienes una base clara para conversar</span>
+                          </div>
+
+                          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                            <p className="text-sm text-emerald-900" style={{ fontWeight: 600 }}>
+                              Esta iniciativa ya tiene una base clara para abrir conversación con sponsor, líder o mentor.
+                            </p>
+                            <p className="text-xs text-emerald-700 mt-1">
+                              No está perfecta ni cerrada, pero sí lo suficientemente aterrizada para sostener una conversación útil y avanzar con mejor criterio.
+                            </p>
                           </div>
 
                           {/* Bullets del análisis */}
@@ -793,7 +835,7 @@ export function Step0Page() {
                               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-sm transition-colors"
                               style={{ fontWeight: 500 }}
                             >
-                              <Download size={14} /> Descargar PDF
+                              <Download size={14} /> Descargar resumen
                             </button>
                             <button
                               onClick={handleCopyAnalisis}
@@ -815,13 +857,13 @@ export function Step0Page() {
                           <div className="flex items-start gap-2 pt-1">
                             <Info size={12} className="text-slate-300 shrink-0 mt-0.5" />
                             <p className="text-xs text-slate-400">
-                              La IA te ayuda a ordenar ideas. La validación final la hace un mentor.
+                              La IA te ayuda a ordenar lo que ya sabes. La validación final la hacen las conversaciones y el trabajo posterior.
                             </p>
                           </div>
 
                           {/* Microcopy para compartir */}
                           <p className="text-xs text-indigo-500" style={{ fontWeight: 500 }}>
-                            💡 Descarga el resumen para compartir con tu sponsor antes de la conversación.
+                            Usa este resumen como primer one-pager para compartir el contexto con sponsor o liderazgo.
                           </p>
                         </div>
                       )}
@@ -836,11 +878,11 @@ export function Step0Page() {
             <div className="hidden lg:block w-72 shrink-0">
               <div className="sticky top-4 space-y-3">
 
-                {/* Ficha card */}
+                {/* Preview card */}
                 <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                   <div className="bg-indigo-600 px-4 py-3.5">
                     <p className="text-xs text-indigo-300" style={{ fontWeight: 600, letterSpacing: '0.04em' }}>
-                      TU FICHA INICIAL
+                      PREVIEW DEL RESUMEN
                     </p>
                     <p className="text-white text-sm mt-0.5" style={{ fontWeight: 600 }}>
                       {project.name}
@@ -848,14 +890,14 @@ export function Step0Page() {
                   </div>
 
                   <div className="p-4 space-y-3">
-                    {fichaRows.map((row, i) => (
+                    {previewBlocks.map((row, i) => (
                       <div key={i}>
                         <p className="text-xs text-slate-400" style={{ fontWeight: 600, letterSpacing: '0.03em' }}>
-                          {row.label.toUpperCase()}
+                          {row.title.toUpperCase()}
                         </p>
                         <p
                           className={`text-xs mt-0.5 ${
-                            row.value === '—' ? 'text-slate-300 italic' : 'text-slate-700'
+                            row.filled ? 'text-slate-700' : 'text-slate-400'
                           }`}
                         >
                           {row.value}
@@ -867,26 +909,26 @@ export function Step0Page() {
                   {/* Progress bar */}
                   <div className="px-4 pb-4">
                     <div className="flex justify-between items-center mb-1.5">
-                      <p className="text-xs text-slate-400">Completado</p>
-                      <p className="text-xs text-indigo-600" style={{ fontWeight: 600 }}>{progress}%</p>
+                      <p className="text-xs text-slate-400">Bloques completos</p>
+                      <p className="text-xs text-indigo-600" style={{ fontWeight: 600 }}>{previewCompletedCount}/6</p>
                     </div>
                     <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                        style={{ width: `${progress}%` }}
+                        style={{ width: `${(previewCompletedCount / 6) * 100}%` }}
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* Próximo paso sugerido */}
-                {progress >= 50 && (
+                {previewCompletedCount >= 3 && (
                   <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
                     <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 600 }}>
-                      Próximo paso sugerido
+                      Ya tienes una base conversable
                     </p>
                     <p className="text-xs text-emerald-600">
-                      Agenda una conversación de 30 min con la persona que mencionaste. Lleva esta ficha como agenda.
+                      Ya puedes usar esta ficha para conversar con sponsor, líder o mentor con más claridad y criterio.
                     </p>
                   </div>
                 )}

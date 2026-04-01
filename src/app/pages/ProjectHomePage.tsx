@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   ArrowLeft, Lock, CheckCircle2, ChevronRight, Users, AlertTriangle,
-  FileText, Clock, History, Plus, X, ChevronDown, UserPlus,
+  FileText, Clock, History, X, ChevronDown, UserPlus,
   Sparkles, Calendar, MessageSquare, ClipboardList,
 } from 'lucide-react';
 import { createTeamMember, useApp } from '../context/AppContext';
@@ -32,6 +32,14 @@ const TOUCHPOINT_LABELS = {
   step4: 'Step 4 · Presentación final',
 } as const;
 
+const INTRO_STEP_SUMMARY = [
+  { number: '0', title: 'Punto de partida', description: 'Ordena el contexto inicial.' },
+  { number: '1', title: 'Claridad en el desafío', description: 'Entiende mejor el problema.' },
+  { number: '2', title: 'Diseñar solución', description: 'Explora opciones y define una prueba.' },
+  { number: '3', title: 'Probar en pequeño', description: 'Valida con evidencia antes de escalar.' },
+  { number: '4', title: 'Presentar propuesta', description: 'Organiza aprendizajes y sustenta mejor.' },
+] as const;
+
 export function ProjectHomePage() {
   const { projectId } = useParams();
   const { projects, setCurrentProject, user, updateProject, getProjectMember, canAccessProject, markSponsorInvitationSent, acceptSponsorInvitation, updateSponsorTouchpoint, addSponsorComment } = useApp();
@@ -46,6 +54,7 @@ export function ProjectHomePage() {
   const [sponsorEmail, setSponsorEmail] = useState('');
   const [sponsorError, setSponsorError] = useState<string | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [alignmentCopied, setAlignmentCopied] = useState(false);
 
   const project = projects.find(p => p.id === projectId);
   if (!project) return (
@@ -256,57 +265,57 @@ export function ProjectHomePage() {
   const totalModules = project.steps.reduce((acc, s) => acc + s.modules.length, 0);
   const overallProgress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
   const sponsorMembers = project.team.filter(member => member.role === 'Sponsor');
-  const pendingSponsors = sponsorMembers.filter(member => member.status !== 'Activo');
   const sponsorSlotsLeft = Math.max(0, 2 - sponsorMembers.length);
   const canManageSponsors = user?.role === 'owner' || user?.role === 'admin';
-  const step2 = project.steps.find(step => step.number === 2);
-  const step4 = project.steps.find(step => step.number === 4);
-  const nextSponsorIntervention =
-    project.step0Status !== 'Completado'
-      ? 'Step 0 · Alineamiento inicial'
-      : step2 && ['En progreso', 'Enviado', 'Feedback IA', 'Ajustado', 'SesiÃ³n experto pendiente', 'Aprobado'].includes(step2.status)
-        ? 'Cierre Step 2 · RevisiÃ³n estratÃ©gica'
-        : step4 && step4.status !== 'Bloqueado' && step4.status !== 'No iniciado'
-          ? 'Step 4 · PresentaciÃ³n final'
-          : 'Seguimiento general';
-
-  const sponsorMilestones = [
-    {
-      id: 'step0',
-      title: 'Step 0 · Alineamiento inicial',
-      state: project.step0Status === 'Completado'
-        ? sponsorMembers.length === 0
-          ? 'Definir sponsor'
-          : pendingSponsors.length > 0
-            ? 'InvitaciÃ³n pendiente'
-            : 'Sponsor listo'
-        : 'Pendiente Step 0',
-      description: project.step0Status === 'Completado'
-        ? 'Comparte el contexto inicial y confirma si el sponsor acompaÃ±arÃ¡ la iniciativa desde el arranque.'
-        : 'Completa el punto de partida para convocar una reuniÃ³n de entendimiento.',
-    },
-    {
-      id: 'step2',
-      title: 'Cierre Step 2 · RevisiÃ³n estratÃ©gica',
-      state: step2 && ['En progreso', 'Enviado', 'Feedback IA', 'Ajustado', 'SesiÃ³n experto pendiente', 'Aprobado'].includes(step2.status)
-        ? sponsorMembers.length > 0
-          ? 'Listo para convocar'
-          : 'Sin sponsor asignado'
-        : 'AÃºn no corresponde',
-      description: 'El sponsor revisa si el problema ya estÃ¡ bien definido, acotado y justificado antes de seguir.',
-    },
-    {
-      id: 'step4',
-      title: 'Step 4 · PresentaciÃ³n final',
-      state: step4 && step4.status !== 'Bloqueado' && step4.status !== 'No iniciado'
-        ? sponsorMembers.length > 0
-          ? 'Convocatoria habilitada'
-          : 'Sin sponsor asignado'
-        : 'Pendiente de avance',
-      description: 'AquÃ­ el sponsor participa en la presentaciÃ³n final y en la decisiÃ³n del siguiente paso organizacional.',
-    },
-  ];
-
+  const firstName = user?.name?.trim().split(/\s+/)[0];
+  const step0Complete = project.step0Status === 'Completado';
+  const step0Data = project.step0Data;
+  const step0ContactHint = project.step0Data?.quienEscuchar?.trim() ?? '';
+  const step0Touchpoint = (project.sponsorTouchpoints ?? []).find(item => item.id === 'step0');
+  const primarySponsorMember = sponsorMembers[0];
+  const step0ActionLabel =
+    step0Complete
+      ? 'Ver Paso 0'
+      : project.step0Status === 'En progreso'
+        ? 'Continuar Paso 0'
+        : 'Empezar Paso 0';
+  const alignmentState =
+    !step0Complete
+      ? 'Pendiente de base inicial'
+      : step0Touchpoint?.status === 'Cerrado'
+        ? 'Reunión realizada'
+        : sponsorMembers.some(member => member.status === 'Enviado')
+          ? 'Invitación enviada'
+          : sponsorMembers.some(member => member.status === 'Pendiente')
+            ? 'Invitación pendiente'
+            : sponsorMembers.some(member => member.status === 'Activo') || !!step0ContactHint
+              ? 'Destinatario definido'
+              : 'Sin destinatario definido';
+  const nextActionLabel = !step0Complete
+    ? 'Empezar Paso 0'
+    : alignmentState === 'Sin destinatario definido'
+      ? 'Definir contacto de alineación'
+      : 'Continuar con alineación';
+  const sponsorSummaryLabel =
+    sponsorMembers.length === 0
+      ? 'Sin sponsor definido'
+      : sponsorMembers.length === 1
+        ? '1 sponsor asignado'
+        : `${sponsorMembers.length} sponsors asignados`;
+  const step0SummaryChips = [
+    step0Data?.origen ? 'Origen definido' : null,
+    (step0Data?.impacta?.length ?? 0) > 0 ? `Impacta a ${step0Data?.impacta?.slice(0, 2).join(', ')}` : null,
+    step0Data?.impacto3meses ? 'Impacto principal identificado' : null,
+    (step0Data?.siMinimo?.length ?? 0) > 0 ? 'Apoyo mínimo definido' : null,
+  ].filter(Boolean) as string[];
+  const alignmentMessage = [
+    `Proyecto: ${project.name}`,
+    step0Data?.quePasaQueQuieres ? `Qué está pasando: ${step0Data.quePasaQueQuieres}` : null,
+    (step0Data?.impacta?.length ?? 0) > 0 ? `A quién impacta: ${step0Data?.impacta?.join(', ')}` : null,
+    step0Data?.impacto3meses ? `Impacto principal: ${step0Data.impacto3meses}` : null,
+    (step0Data?.siMinimo?.length ?? 0) > 0 ? `Apoyo mínimo: ${step0Data?.siMinimo?.join(', ')}` : null,
+    step0ContactHint ? `Contacto clave sugerido: ${step0ContactHint}` : null,
+  ].filter(Boolean).join('\n');
   const addSponsor = () => {
     const email = sponsorEmail.trim().toLowerCase();
     if (!email) return;
@@ -328,6 +337,29 @@ export function ProjectHomePage() {
     setSponsorError(null);
   };
 
+  const openStep0 = () => {
+    setCurrentProject(project);
+    navigate(`/projects/${project.id}/step/0`);
+  };
+
+  const openAlignmentSection = () => {
+    document.getElementById('alignment-next')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handlePrimaryAction = () => {
+    if (!step0Complete) {
+      openStep0();
+      return;
+    }
+    openAlignmentSection();
+  };
+
+  const copyAlignmentSummary = async () => {
+    await navigator.clipboard.writeText(alignmentMessage);
+    setAlignmentCopied(true);
+    window.setTimeout(() => setAlignmentCopied(false), 2000);
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -341,7 +373,7 @@ export function ProjectHomePage() {
       </button>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-2">
+      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div className="flex-1 min-w-0 pr-4">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <StatusChip status={project.status} />
@@ -395,214 +427,279 @@ export function ProjectHomePage() {
         </div>
       )}
 
-      {/* Progress card */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Progreso general</p>
-            <p className="text-xs text-slate-400">{completedModules} de {totalModules} módulos completados</p>
-          </div>
-          <span className="text-2xl text-indigo-600" style={{ fontWeight: 700 }}>{overallProgress}%</span>
+      <div className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6 mb-6">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="rounded-full bg-white px-3 py-1 text-xs text-indigo-700 border border-indigo-100" style={{ fontWeight: 600 }}>
+            {step0Complete
+              ? firstName ? `${firstName}, Paso 0 listo` : 'Paso 0 listo'
+              : firstName ? `${firstName}, bienvenida a tu iniciativa` : 'Bienvenida a tu iniciativa'}
+          </span>
+          <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-500 border border-slate-200" style={{ fontWeight: 600 }}>
+            {step0Complete ? 'Siguiente hito: alineación' : overallProgress > 0 ? `${overallProgress}% de avance` : 'Primer ingreso'}
+          </span>
         </div>
-        <ProgressBar value={overallProgress} showLabel={false} />
+        <h2 className="text-2xl text-slate-900 max-w-3xl" style={{ fontWeight: 700 }}>
+          {step0Complete
+            ? 'Ya tienes una base inicial. Ahora toca alinearla con la persona clave y continuar con el Paso 1.'
+            : 'Convierte este proyecto en una iniciativa clara, probada y lista para presentar.'}
+        </h2>
+        <p className="text-sm text-slate-600 mt-3 max-w-3xl">
+          {step0Complete
+            ? 'Ordenaste el contexto inicial, identificaste impacto y definiste el apoyo mínimo para mover la iniciativa. El siguiente hito es compartir esta base para destrabar el tramo que sigue.'
+            : 'Aquí vas a ordenar el contexto, diseñar una solución, probarla en pequeño y preparar una propuesta con mayor claridad. No necesitas tener todo resuelto desde el inicio.'}
+        </p>
+        <div className="mt-5 flex flex-col sm:flex-row sm:items-center gap-3">
+          <button
+            onClick={handlePrimaryAction}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm text-white hover:bg-indigo-700 transition-colors"
+            style={{ fontWeight: 600 }}
+          >
+            <ClipboardList size={16} /> {nextActionLabel}
+          </button>
+          <button
+            onClick={() => document.getElementById('project-journey')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+            style={{ fontWeight: 600 }}
+          >
+            <ChevronDown size={16} /> {step0Complete ? 'Ver recorrido' : 'Ver cómo funciona'}
+          </button>
+        </div>
+      </div>
 
-        {/* Step dots: 0 + 1–4 */}
-        <div className="flex gap-3 mt-4 overflow-x-auto">
-          {/* Paso 0 */}
-          <div className="flex-none text-center">
-            <div
-              className={`w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-xs border-2 transition-all ${
-                project.step0Status === 'Completado'
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                  : project.step0Status === 'En progreso'
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                  : 'border-slate-200 bg-white text-slate-400'
-              }`}
-              style={{ fontWeight: 700 }}
-            >
-              {project.step0Status === 'Completado' ? '✓' : '0'}
-            </div>
-            <p className="text-xs text-slate-400 hidden sm:block">0</p>
+      <div id="project-journey" className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+        <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+          <div>
+            <h2 className="text-sm text-slate-900" style={{ fontWeight: 600 }}>Recorrido del proyecto</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              {step0Complete
+                ? 'Ya completaste el Paso 0. Ahora toca alinear esta base con la persona clave y continuar con el Paso 1.'
+                : 'Empieza aquí. Completa el Paso 0 para desbloquear el Paso 1 y seguir avanzando por el recorrido completo.'}
+            </p>
           </div>
+          <span className={`rounded-full px-3 py-1 text-xs ${step0Complete ? 'bg-emerald-50 text-emerald-700' : 'bg-indigo-50 text-indigo-700'}`} style={{ fontWeight: 600 }}>
+            {step0Complete ? 'Paso 0 completado' : 'Empieza aquí'}
+          </span>
+        </div>
 
-          {project.steps.map(s => (
-            <div key={s.number} className="flex-1 text-center">
-              <div
-                className={`w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center text-xs border-2 transition-all ${
-                  s.status === 'Aprobado'
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                    : ['En progreso', 'Enviado', 'Feedback IA', 'Ajustado', 'Sesión experto pendiente'].includes(s.status)
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-200 bg-white text-slate-400'
-                }`}
-                style={{ fontWeight: 700 }}
-              >
-                {s.status === 'Aprobado' ? '✓' : s.number}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          {INTRO_STEP_SUMMARY.map(step => (
+            <div
+              key={step.number}
+              className={`rounded-2xl border p-4 ${
+                step0Complete && step.number === '0'
+                  ? 'border-emerald-200 bg-emerald-50'
+                  : step0Complete && step.number === '1'
+                  ? 'border-indigo-200 bg-indigo-50'
+                  : step.number === '0'
+                    ? 'border-indigo-200 bg-indigo-50'
+                  : 'border-slate-200 bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs ${
+                    step0Complete && step.number === '0'
+                      ? 'bg-emerald-600 text-white'
+                      : step0Complete && step.number === '1'
+                        ? 'bg-indigo-600 text-white'
+                      : step.number === '0'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-white text-slate-600 border border-slate-200'
+                  }`}
+                  style={{ fontWeight: 700 }}
+                >
+                  {step.number}
+                </span>
+                {step0Complete && step.number === '0' && (
+                  <span className="text-[11px] text-emerald-700" style={{ fontWeight: 700 }}>Completado</span>
+                )}
+                {step0Complete && step.number === '1' && (
+                  <span className="text-[11px] text-indigo-700" style={{ fontWeight: 700 }}>Siguiente</span>
+                )}
+                {!step0Complete && step.number === '0' && (
+                  <span className="text-[11px] text-indigo-700" style={{ fontWeight: 700 }}>Empieza aquí</span>
+                )}
               </div>
-              <p className="text-xs text-slate-400 hidden sm:block">{s.number}</p>
+              <p className="text-sm text-slate-900" style={{ fontWeight: 600 }}>{step.title}</p>
+              <p className="text-xs text-slate-500 mt-1">{step.description}</p>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-4 mb-6">
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <div className="flex items-start justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-sm text-slate-900" style={{ fontWeight: 600 }}>Sponsors de la iniciativa</h2>
-              <p className="text-xs text-slate-500 mt-1">
-                El sponsor acompaña hitos clave y ve el avance sin editar el trabajo operativo del equipo.
-              </p>
-            </div>
-            <span className="text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-700" style={{ fontWeight: 600 }}>
-              {sponsorMembers.length}/2 sponsors
+      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4 mb-6">
+        <div className={`bg-white rounded-2xl border p-5 ${step0Complete ? 'border-emerald-200 ring-1 ring-emerald-100' : 'border-indigo-200 ring-1 ring-indigo-100'}`}>
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <span className={`px-2.5 py-1 text-xs rounded-full ${step0Complete ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`} style={{ fontWeight: 700 }}>
+              {step0Complete ? 'Paso 0 completado' : 'Comienza aquí'}
+            </span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500" style={{ fontWeight: 600 }}>
+              {project.step0Status}
             </span>
           </div>
+          <h2 className="text-lg text-slate-900" style={{ fontWeight: 700 }}>
+            {step0Complete ? 'Ya tienes una base inicial de tu iniciativa' : 'Paso 0: Punto de partida'}
+          </h2>
+          <p className="text-sm text-slate-600 mt-2">
+            {step0Complete
+              ? 'Ordenaste el contexto inicial, identificaste impacto y definiste el apoyo mínimo para moverla.'
+              : 'En 5–7 minutos vas a ordenar el contexto inicial de tu iniciativa. Esto te ayudará a avanzar con claridad y desbloquear el Paso 1.'}
+          </p>
 
-          {sponsorMembers.length > 0 ? (
-            <div className="space-y-3">
-              {sponsorMembers.map(member => (
-                <div key={member.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                  <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-xs text-indigo-700" style={{ fontWeight: 700 }}>
-                    {member.initials}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-slate-800" style={{ fontWeight: 500 }}>{member.name}</p>
-                    <p className="text-xs text-slate-400 truncate">{member.email}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500">Sponsor</p>
-                    <StatusChip status={member.status} size="sm" />
-                  </div>
-                  </div>
-
-                  {canManageSponsors && member.status === 'Pendiente' && (
-                    <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2">
-                      <p className="text-xs text-slate-500">
-                        La asignación ya existe, pero aún no registraste que la invitación fue enviada por tu canal real.
-                      </p>
-                      <button
-                        onClick={() => markSponsorInvitationSent(project.id, member.email)}
-                        className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors"
-                        style={{ fontWeight: 600 }}
-                      >
-                        Marcar enviada
-                      </button>
-                    </div>
-                  )}
-
-                  {member.status === 'Enviado' && (
-                    <p className="mt-3 text-xs text-indigo-600">
-                      Invitación enviada. Queda pendiente la aceptación formal del sponsor dentro de Startería.
-                    </p>
-                  )}
+          {step0Complete ? (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {step0SummaryChips.map(chip => (
+                <span key={chip} className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700 border border-emerald-100" style={{ fontWeight: 600 }}>
+                  {chip}
+                </span>
+              ))}
+              {step0ContactHint && (
+                <span className="rounded-full bg-slate-50 px-3 py-1 text-xs text-slate-700 border border-slate-200" style={{ fontWeight: 600 }}>
+                  Contacto clave: {step0ContactHint}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+              {[
+                'qué quieres abordar',
+                'por qué importa',
+                'a quién impacta',
+                'qué evidencia ya tienes',
+              ].map(item => (
+                <div key={item} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-xs text-slate-700" style={{ fontWeight: 600 }}>{item}</p>
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm text-slate-600" style={{ fontWeight: 500 }}>Todavía no definiste sponsor.</p>
-              <p className="text-xs text-slate-500 mt-1">
-                Puedes asignarlo desde ahora o hacerlo al cierre del Step 0, cuando ya tengas más claridad sobre el respaldo que necesitas.
-              </p>
-            </div>
           )}
 
-          {canManageSponsors && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>ASIGNAR SPONSOR</p>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={sponsorEmail}
-                  onChange={event => { setSponsorEmail(event.target.value); setSponsorError(null); }}
-                  onKeyDown={event => event.key === 'Enter' && addSponsor()}
-                  placeholder="sponsor@empresa.com"
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <button
-                  onClick={addSponsor}
-                  disabled={sponsorSlotsLeft === 0}
-                  className="bg-indigo-600 text-white rounded-xl px-3 py-2 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <UserPlus size={15} />
-                </button>
-              </div>
-              {sponsorError && <p className="text-xs text-red-600 mt-2">{sponsorError}</p>}
-              {!sponsorError && sponsorSlotsLeft > 0 && (
-                <p className="text-xs text-slate-400 mt-2">
-                  Si la persona ya tiene cuenta, verá esta iniciativa en su dashboard. Si no, quedará como invitación pendiente.
-                </p>
-              )}
-            </div>
+          {!step0Complete && (
+            <button
+              onClick={openStep0}
+              className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm text-white hover:bg-indigo-700 transition-colors"
+              style={{ fontWeight: 600 }}
+            >
+              <ClipboardList size={16} /> Empezar Paso 0
+            </button>
           )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <div className="mb-4">
-            <h2 className="text-sm text-slate-900" style={{ fontWeight: 600 }}>Hitos del sponsor</h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Este seguimiento deja claro cuándo debe intervenir el sponsor y qué tipo de conversación corresponde.
-            </p>
+        <div id="alignment-next" className={`bg-white rounded-2xl border p-5 ${step0Complete ? 'border-indigo-200 ring-1 ring-indigo-100' : 'border-slate-200'}`}>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-sm text-slate-900" style={{ fontWeight: 600 }}>
+                {step0Complete ? 'Siguiente hito: alineación' : 'Sponsor'}
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                {step0Complete
+                  ? 'El Paso 0 ya te da una base suficiente para compartir la iniciativa y destrabar el siguiente tramo.'
+                  : 'Es la persona que acompaña momentos clave del proyecto y ayuda a darle respaldo.'}
+              </p>
+            </div>
+            <span className={`text-xs px-2 py-1 rounded-full ${step0Complete ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-600'}`} style={{ fontWeight: 600 }}>
+              {step0Complete ? alignmentState : sponsorSummaryLabel}
+            </span>
           </div>
 
-          <div className="space-y-3">
-            {(project.sponsorTouchpoints ?? []).map(item => (
-              <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm text-slate-800" style={{ fontWeight: 500 }}>{item.stageLabel} · {item.title}</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {item.date ? `Fecha: ${item.date}` : 'Sin fecha confirmada'} · Acción: {item.actionLabel}
-                    </p>
-                  </div>
-                  <StatusChip status={item.status} size="sm" />
-                </div>
-                {canManageSponsors && (
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_180px] gap-2">
-                    <select
-                      value={item.status}
-                      onChange={event => updateSponsorTouchpoint(project.id, item.id, { status: event.target.value as any })}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      {['Pendiente de convocatoria', 'Revisión solicitada', 'Sesión agendada', 'Comentario enviado', 'Cerrado'].map(status => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="date"
-                      value={item.date ?? ''}
-                      onChange={event => updateSponsorTouchpoint(project.id, item.id, { date: event.target.value })}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
+          {step0Complete ? (
+            <>
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm text-slate-700" style={{ fontWeight: 500 }}>
+                  {alignmentState === 'Sin destinatario definido' && 'Todavía falta definir a quién compartirle esta base.'}
+                  {alignmentState === 'Destinatario definido' && 'Ya tienes una persona clave identificada para abrir esta conversación.'}
+                  {alignmentState === 'Invitación pendiente' && 'Tienes un destinatario listo, pero aún falta registrar el envío de la invitación de alineación.'}
+                  {alignmentState === 'Invitación enviada' && 'La invitación ya fue enviada. El siguiente paso es registrar cuando ocurra la alineación.'}
+                  {alignmentState === 'Reunión realizada' && 'La alineación inicial ya quedó registrada. Ahora puedes continuar con el Paso 1 con mejor contexto compartido.'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {step0ContactHint
+                    ? `Contacto clave definido en Paso 0: ${step0ContactHint}`
+                    : sponsorMembers.length > 0
+                      ? 'Puedes usar el sponsor ya asignado como base para esta conversación.'
+                      : 'Si no tienes sponsor aún, deja explícito quién debería escuchar esto primero y registra la alineación cuando ocurra.'}
+                </p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={copyAlignmentSummary}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm text-white hover:bg-indigo-700 transition-colors"
+                  style={{ fontWeight: 600 }}
+                >
+                  <ClipboardList size={15} /> {alignmentCopied ? 'Resumen copiado' : 'Compartir iniciativa con sponsor'}
+                </button>
+                {canManageSponsors && primarySponsorMember?.status === 'Pendiente' && (
+                  <button
+                    onClick={() => markSponsorInvitationSent(project.id, primarySponsorMember.email)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    style={{ fontWeight: 600 }}
+                  >
+                    Registrar invitación enviada
+                  </button>
                 )}
-                {(project.sponsorComments ?? []).filter(comment => comment.touchpointId === item.id).length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {(project.sponsorComments ?? [])
-                      .filter(comment => comment.touchpointId === item.id)
-                      .map(comment => (
-                        <div key={comment.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                          <p className="text-xs text-slate-700" style={{ fontWeight: 600 }}>{comment.authorName} · {comment.createdAt}</p>
-                          <p className="text-xs text-slate-600 mt-1">{comment.message}</p>
-                        </div>
-                      ))}
-                  </div>
+                {canManageSponsors && step0Touchpoint && step0Touchpoint.status !== 'Cerrado' && alignmentState !== 'Sin destinatario definido' && (
+                  <button
+                    onClick={() => updateSponsorTouchpoint(project.id, 'step0', { status: 'Cerrado' })}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    style={{ fontWeight: 600 }}
+                  >
+                    Registrar reunión realizada
+                  </button>
                 )}
               </div>
-            ))}
-          </div>
 
-          <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50 p-3">
-            <p className="text-xs text-indigo-700" style={{ fontWeight: 600 }}>Próxima intervención</p>
-            <p className="text-sm text-indigo-900 mt-1" style={{ fontWeight: 600 }}>{nextSponsorIntervention}</p>
-            <p className="text-xs text-indigo-700 mt-1">
-              {user?.role === 'sponsor'
-                ? 'Desde aquí puedes seguir la iniciativa y preparar tu siguiente conversación clave.'
-                : 'Usa este bloque para convocar al sponsor en el momento adecuado.'}
-            </p>
-          </div>
+              <p className="text-xs text-slate-400 mt-3">
+                No hay envío automático real desde esta vista. Este botón te ayuda a copiar una base clara para compartirla por tu canal habitual.
+              </p>
+
+              <details className="mt-4 group">
+                <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors" style={{ fontWeight: 600 }}>
+                  Ver detalle de alineación
+                  <ChevronDown size={14} className="text-slate-400 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {canManageSponsors && (
+                    <div className="border-t border-slate-100 pt-3">
+                      <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>ASIGNAR SPONSOR</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          value={sponsorEmail}
+                          onChange={event => { setSponsorEmail(event.target.value); setSponsorError(null); }}
+                          onKeyDown={event => event.key === 'Enter' && addSponsor()}
+                          placeholder="sponsor@empresa.com"
+                          className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <button
+                          onClick={addSponsor}
+                          disabled={sponsorSlotsLeft === 0}
+                          className="bg-indigo-600 text-white rounded-xl px-3 py-2 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <UserPlus size={15} />
+                        </button>
+                      </div>
+                      {sponsorError && <p className="text-xs text-red-600 mt-2">{sponsorError}</p>}
+                      {!sponsorError && sponsorSlotsLeft > 0 && (
+                        <p className="text-xs text-slate-400 mt-2">
+                          Si la persona ya tiene cuenta, verá esta iniciativa en su dashboard. Si no, quedará como invitación pendiente.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </details>
+            </>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm text-slate-700" style={{ fontWeight: 500 }}>
+                No necesitas definirlo ahora.
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                Podrás hacerlo más adelante, cuando tengas mejor aterrizado el contexto.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -618,8 +715,7 @@ export function ProjectHomePage() {
           } ${isSponsorViewer ? 'cursor-not-allowed opacity-90' : 'cursor-pointer hover:border-indigo-200 hover:shadow-sm'}`}
           onClick={() => {
             if (isSponsorViewer) return;
-            setCurrentProject(project);
-            navigate(`/projects/${project.id}/step/0`);
+            openStep0();
           }}
         >
           <div className="p-5">
@@ -660,14 +756,42 @@ export function ProjectHomePage() {
                     {project.step0Status}
                   </span>
                   {project.step0Status !== 'Completado' && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700" style={{ fontWeight: 500 }}>
-                      Requerido para empezar
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700" style={{ fontWeight: 600 }}>
+                      Empieza aquí
+                    </span>
+                  )}
+                  {project.step0Status === 'Completado' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700" style={{ fontWeight: 600 }}>
+                      Base lista
                     </span>
                   )}
                 </div>
                 <p className="text-xs text-slate-500 mb-3">
-                  Aterriza tu iniciativa en 5–7 minutos. Captura el contexto que habilita el inicio estratégico.
+                  {project.step0Status === 'Completado'
+                    ? 'Ya dejaste una base inicial lista para compartir y usar como referencia antes de entrar al Paso 1.'
+                    : 'Ordena el punto de partida en 5 a 7 minutos. Este paso te ayuda a entender qué estás moviendo, por qué importa y qué necesitas aclarar antes de seguir.'}
                 </p>
+
+                {project.step0Status !== 'Completado' && (
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-3 mb-3">
+                    <p className="text-xs text-indigo-900" style={{ fontWeight: 600 }}>
+                      Comienza por aquí y luego se desbloquea el Paso 1.
+                    </p>
+                    <p className="text-xs text-indigo-700 mt-1">
+                      No necesitas tener todas las respuestas hoy. Solo deja una primera base clara para avanzar con menos fricción.
+                    </p>
+                    <button
+                      onClick={event => {
+                        event.stopPropagation();
+                        openStep0();
+                      }}
+                      className="mt-3 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-xs text-white hover:bg-indigo-700 transition-colors"
+                      style={{ fontWeight: 600 }}
+                    >
+                      <ClipboardList size={14} /> {step0ActionLabel}
+                    </button>
+                  </div>
+                )}
 
                 {project.step0Status === 'Completado' && project.step0Data && (
                   <div className="flex flex-wrap gap-1.5">
