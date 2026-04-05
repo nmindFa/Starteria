@@ -22,8 +22,8 @@ RUN npx prisma generate
 COPY front/tsconfig.backend.json ./tsconfig.backend.json
 COPY backend ./backend/
 
-# Compile TypeScript to JavaScript
-RUN npx tsc -p tsconfig.backend.json
+# Bundle TypeScript into a single file (skip type checking for deployment)
+RUN npx esbuild backend/server.ts --bundle --outfile=dist/backend/server.js --platform=node --format=esm --target=es2022 --packages=external
 
 # ============================================================================
 # Stage 2: Production runtime

@@ -53,7 +53,7 @@ set -euo pipefail
 # --- Configuration ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE="starteria"
-CLUSTER_SERVER="hcp-4366dc5f-3eb4-4da7-938c-e929eacc9e9e.spot.rackspace.com"
+CLUSTER_SERVER="hcp-34be98c0-890e-47a9-b5e9-cb2466094274.spot.rackspace.com"
 
 # Colors for output
 RED='\033[0;31m'

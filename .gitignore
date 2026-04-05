@@ -2,3 +2,6 @@
 .claude/
 .claude-flow/metrics/
 backend/docs/
+image copy.png
+k8s/image.png
+docs/*

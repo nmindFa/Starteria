@@ -15,7 +15,6 @@ COPY front/index.html ./
 COPY front/vite.config.ts ./
 COPY front/postcss.config.mjs ./
 COPY front/src/ ./src/
-COPY front/public/ ./public/
 
 # Build the production bundle
 RUN npm run build

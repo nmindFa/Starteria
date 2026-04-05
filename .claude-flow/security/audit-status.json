@@ -4,5 +4,5 @@
   "cvesFixed": 0,
   "totalCves": 3,
   "lastScan": null,
-  "_note": "Run: npx @claude-flow/cli@latest security scan"
+  "_note": "Run: npx ruflo security scan"
 }

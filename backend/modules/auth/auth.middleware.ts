@@ -149,6 +149,7 @@ export function requireProjectAccess(
 
 /**
  * Resolve a user's access level to a project based on role and membership.
+ * Supports the 6-role model: admin, participante, mentor, sponsor, colaborador, viewer.
  */
 function resolveProjectAccess(
   user: { id: string; role: Role },
@@ -157,23 +158,104 @@ function resolveProjectAccess(
     teamMembers: Array<{ userId: string; role: string }>;
   },
 ): 'none' | 'read' | 'write' | 'admin' {
+  // Admin: full access
   if (user.role === 'admin') return 'admin';
 
-  const isOwner = project.teamMembers.some(
-    (m) => m.userId === user.id && m.role === 'OWNER',
-  );
-  if (isOwner) return 'write';
+  // Participante (was owner): write access to own projects
+  if (user.role === 'participante') {
+    const isOwner = project.teamMembers.some(
+      (m) => m.userId === user.id && m.role === 'OWNER',
+    );
+    if (isOwner) return 'write';
+  }
 
+  // Mentor: read access to assigned projects
+  if (user.role === 'mentor') {
+    const isMember = project.teamMembers.some((m) => m.userId === user.id);
+    if (isMember) return 'read';
+  }
+
+  // Sponsor: read access to projects they are assigned to
+  if (user.role === 'sponsor') {
+    const isMember = project.teamMembers.some((m) => m.userId === user.id);
+    if (isMember) return 'read';
+  }
+
+  // Colaborador: write access (module-level restrictions enforced by transition guards)
+  if (user.role === 'colaborador') {
+    const isMember = project.teamMembers.some((m) => m.userId === user.id);
+    if (isMember) return 'write';
+  }
+
+  // Viewer: read-only access
+  if (user.role === 'viewer') {
+    const isMember = project.teamMembers.some((m) => m.userId === user.id);
+    if (isMember) return 'read';
+  }
+
+  // General fallback: any team member gets read
   const isMember = project.teamMembers.some((m) => m.userId === user.id);
-
-  // Mentor role: read access to assigned projects
-  if (user.role === 'mentor' && isMember) return 'read';
-
-  // Leader role: read access to assigned projects
-  if (user.role === 'leader' && isMember) return 'read';
-
-  // General team member: read access
   if (isMember) return 'read';
 
   return 'none';
+}
+
+/**
+ * requireTransitionAuth — Combines structural validation + role authorization + guards.
+ * Must be used after `authenticate`.
+ * Expects req.body to contain { currentStatus, status } for the transition.
+ */
+export function requireTransitionAuth(
+  entity: 'project' | 'step' | 'module',
+): (req: Request, res: Response, next: NextFunction) => Promise<void> {
+  return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) {
+        throw AppError.unauthorized('Autenticacion requerida');
+      }
+
+      const { validateTransitionWithRole } = await import('../projects/state-machine');
+
+      const projectId = req.params.projectId || req.params.id;
+      const stepNumber = req.params.number ? Number(req.params.number) : undefined;
+      const moduleId = req.params.moduleId;
+
+      // Build metadata for guards
+      let metadata;
+      if (projectId) {
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: {
+            teamMembers: {
+              where: { userId: req.user.id },
+              select: { role: true, modulePermissions: true },
+            },
+          },
+        });
+
+        const membership = project?.teamMembers[0];
+        metadata = {
+          isProjectOwner: membership?.role === 'OWNER',
+          isSponsorCheckpointStep: [0, 2, 4].includes(stepNumber ?? -1),
+          colaboradorPermissions: membership?.modulePermissions ?? [],
+        };
+      }
+
+      validateTransitionWithRole({
+        entity,
+        currentStatus: req.body.currentStatus,
+        targetStatus: req.body.status,
+        actorRole: req.user.role,
+        actorId: req.user.id,
+        projectId: projectId || '',
+        stepNumber,
+        moduleId,
+        metadata,
+      });
+
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
 }

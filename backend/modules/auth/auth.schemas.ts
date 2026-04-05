@@ -13,7 +13,7 @@ export const registerSchema = z.object({
     .min(2, 'El nombre debe tener al menos 2 caracteres')
     .max(100, 'El nombre no puede superar 100 caracteres')
     .transform((v) => v.trim()),
-  role: z.enum(['owner', 'mentor', 'admin', 'leader']).default('owner'),
+  role: z.enum(['participante', 'mentor', 'admin', 'sponsor', 'colaborador', 'viewer']).default('participante'),
 });
 
 export const loginSchema = z.object({

@@ -24,8 +24,8 @@ export class AppError extends Error {
     return new AppError(401, message, 'UNAUTHORIZED');
   }
 
-  static forbidden(message = 'Acceso denegado'): AppError {
-    return new AppError(403, message, 'FORBIDDEN');
+  static forbidden(message = 'Acceso denegado', code = 'FORBIDDEN'): AppError {
+    return new AppError(403, message, code);
   }
 
   static notFound(resource = 'Recurso'): AppError {

@@ -1107,7 +1107,7 @@ export function Step1Page() {
                     <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>Módulo A: Análisis inicial del problema</h1>
                     <StatusChip status={fichaConfirmada ? 'Completado' : bloque1Ok && bloque2Ok && bloque3Ok ? 'En progreso' : 'Pendiente'} size="sm" />
                   </div>
-                  <p className="text-sm text-slate-500">Encuadra el proceso, cuándo y por qué ocurre el reto. La IA analiza todo al final.</p>
+                  <p className="text-sm text-slate-500">Aquí vas a aterrizar mejor el reto que quieres abordar. Partiendo de lo que ya capturaste en el Step 0, vas a describir el proceso, ubicar el momento donde aparece la fricción y dejar clara su consecuencia o evidencia.</p>
                 </div>
                 <div className="flex gap-2 shrink-0 ml-3">
                   <div className="relative">
@@ -1121,6 +1121,31 @@ export function Step1Page() {
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-2xl p-5 bg-white space-y-4">
+                <div className="max-w-2xl">
+                  <p className="text-xs text-indigo-600 mb-2" style={{ fontWeight: 700, letterSpacing: '0.05em' }}>ENTRADA AL MÓDULO</p>
+                  <p className="text-sm text-slate-700 leading-relaxed">
+                    Este módulo profundiza lo que ya trajiste en el Step 0. La idea no es mapear un proceso perfecto, sino construir una primera versión clara y útil para entender mejor el problema antes de seguir.
+                  </p>
+                </div>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  {[
+                    { title: 'Dónde ocurre el reto', desc: 'Ubica el proceso y el tramo donde aparece la fricción.' },
+                    { title: 'Cuándo se hace visible', desc: 'Señala el momento exacto en que algo se traba, se demora o se pierde.' },
+                    { title: 'Qué evidencia deja', desc: 'Aclara la consecuencia y las señales que hoy sostienen el reto.' },
+                  ].map((item, index) => (
+                    <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-sm text-slate-800 mb-1" style={{ fontWeight: 600 }}>{item.title}</p>
+                      <p className="text-xs text-slate-500">{item.desc}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-sm text-amber-800" style={{ fontWeight: 600 }}>No necesitas mapear el proceso perfecto.</p>
+                  <p className="text-xs text-amber-700 mt-1">Queremos una primera versión clara y útil para entender mejor el problema antes de seguir.</p>
                 </div>
               </div>
 
@@ -1154,10 +1179,10 @@ export function Step1Page() {
                 >
                   <div className="flex items-center gap-2">
                     <Target size={13} className={step0?.quePasaQueQuieres ? 'text-indigo-500' : 'text-slate-400'} />
-                    <p className="text-xs" style={{ fontWeight: 600 }}>
-                      <span className={step0?.quePasaQueQuieres ? 'text-indigo-700' : 'text-slate-600'}>📋 Tu punto de partida (Step 0)</span>
-                      <span className="ml-2 text-xs font-normal text-slate-400">Solo lectura · úsalo para completar este módulo</span>
-                    </p>
+                    <div>
+                      <p className={`text-xs ${step0?.quePasaQueQuieres ? 'text-indigo-700' : 'text-slate-600'}`} style={{ fontWeight: 700 }}>Esto es lo que ya trajiste del Step 0</p>
+                      <p className="text-xs text-slate-500">Ahora vamos a profundizarlo en este módulo.</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
@@ -1177,7 +1202,10 @@ export function Step1Page() {
                   <div className="px-4 py-3 bg-white border-t border-indigo-100">
                     {step0?.quePasaQueQuieres ? (
                       <>
-                        <p className="text-xs text-indigo-800 mb-2.5 italic">"{step0.quePasaQueQuieres}"</p>
+                        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 mb-3">
+                          <p className="text-xs text-indigo-700" style={{ fontWeight: 600 }}>Punto de partida</p>
+                          <p className="text-xs text-indigo-900 mt-1 italic">"{step0.quePasaQueQuieres}"</p>
+                        </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2">
                           {[
                             { label: 'Área afectada', value: step0.impacta?.join(', ') || '—' },
@@ -1205,16 +1233,19 @@ export function Step1Page() {
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>1</span>
-                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Recorrido del proceso donde ocurre el reto</h2>
+                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Cuéntanos el proceso donde aparece este reto</h2>
                   {bloque1Ok && <CheckCircle2 size={14} className="text-emerald-500 ml-auto shrink-0" />}
                 </div>
                 <div className="p-4 space-y-4">
-                  <p className="text-xs text-slate-400">Describe el proceso y la situación real, luego agrega los pasos en orden.</p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-slate-700">Describe el proceso real con tus palabras y ordénalo en pasos. No buscamos un flujograma perfecto, sino entender cómo ocurre hoy.</p>
+                    <p className="text-xs text-slate-500">Empieza por el momento en que el proceso se activa y sigue la secuencia normal hasta donde aparece la fricción.</p>
+                  </div>
 
                   {/* Descripción del proceso */}
                   <div>
                     <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>
-                      Cuéntame el reto que quieres abordar <span className="text-red-500">*</span>
+                      Cuéntalo con tus palabras <span className="text-red-500">*</span>
                     </label>
                     <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-500 italic mb-2">
                       <span style={{ fontWeight: 600 }} className="not-italic text-slate-600">Ej:</span> "En TechCorp, el proceso de incorporación dura 15–21 días. Durante ese tiempo el empleado no tiene accesos y no puede trabajar."
@@ -1233,6 +1264,7 @@ export function Step1Page() {
                     <label className="block text-xs text-slate-600 mb-2" style={{ fontWeight: 500 }}>
                       Pasos del proceso (en orden) <span className="text-red-500">*</span>
                     </label>
+                    <p className="text-xs text-slate-500 mb-2">Ordénalos como ocurren hoy. Eso nos ayudará a ubicar el punto exacto donde el reto se hace visible.</p>
                     <div className="space-y-2">
                       {asisData.pasos.map((p, i) => (
                         <div key={i} className="flex items-center gap-2">
@@ -1268,7 +1300,7 @@ export function Step1Page() {
                   {/* Actores del proceso */}
                   <div>
                     <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>¿Quiénes participan en este proceso?</label>
-                    <p className="text-xs text-slate-400 mb-1.5">Los actores involucrados en el flujo, no solo los afectados.</p>
+                    <p className="text-xs text-slate-500 mb-1.5">Nombra a quienes intervienen en el flujo, aunque no todos sufran el problema de la misma manera.</p>
                     <input
                       value={actoresProceso}
                       onChange={e => setActoresProceso(e.target.value)}
@@ -1294,11 +1326,14 @@ export function Step1Page() {
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>2</span>
-                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>¿En qué momento ocurre el reto?</h2>
+                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>¿En qué momento se hace visible el reto?</h2>
                   {bloque2Ok && <CheckCircle2 size={14} className="text-emerald-500 ml-auto shrink-0" />}
                 </div>
                 <div className="p-4 space-y-4">
-                  <p className="text-xs text-slate-400">Selecciona el paso donde ocurre la falla y acota cuándo, con qué frecuencia y cuánto dura.</p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-slate-700">Ahora que ya describiste el recorrido, ubica el punto donde el problema se nota con más claridad.</p>
+                    <p className="text-xs text-slate-500">Piensa en el momento exacto donde algo se traba, se demora, se pierde, se corrige o genera fricción.</p>
+                  </div>
 
                   {/* Selector de quiebre */}
                   <div>
@@ -1332,6 +1367,7 @@ export function Step1Page() {
                       <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>
                         ¿Qué pasa exactamente en ese momento? <span className="text-slate-400">(recomendado)</span>
                       </label>
+                      <p className="text-xs text-slate-500 mb-2">Describe la fricción puntual. No hace falta explicar todo el proceso otra vez.</p>
                       <textarea
                         value={asisData.quiebreDetalle}
                         onChange={e => setAsisData(p => ({ ...p, quiebreDetalle: e.target.value }))}
@@ -1345,6 +1381,7 @@ export function Step1Page() {
                   {/* Grid 2×2: cuándo / frecuencia / quién / duración */}
                   <div>
                     <label className="block text-xs text-slate-600 mb-2" style={{ fontWeight: 500 }}>Acota el momento y alcance del reto</label>
+                    <p className="text-xs text-slate-500 mb-3">Esto ayuda a entender si el problema pasa siempre, a quién afecta más y cuánto dura cuando aparece.</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="border border-slate-200 rounded-xl p-3 bg-white">
                         <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 600 }}>🕐 ¿CUÁNDO ocurre?</p>
@@ -1430,19 +1467,22 @@ export function Step1Page() {
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0" style={{ fontWeight: 700 }}>3</span>
-                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Consecuencia, causa inmediata y evidencia del reto</h2>
+                  <h2 className="text-sm text-slate-800" style={{ fontWeight: 600 }}>¿Qué consecuencia deja y qué evidencia tienes hoy?</h2>
                   {bloque3Ok && <CheckCircle2 size={14} className="text-emerald-500 ml-auto shrink-0" />}
                 </div>
                 <div className="p-4 space-y-5">
-                  <p className="text-xs text-slate-400">Tres preguntas clave para entender el impacto real antes de que la IA analice.</p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-slate-700">Queremos entender qué pasa cuando este reto ocurre y qué señales te hacen pensar que vale la pena abordarlo.</p>
+                    <p className="text-xs text-slate-500">Puede ser una consecuencia operativa, comercial, de experiencia, de riesgo o una evidencia como reclamos, tiempos, reprocesos, tickets o testimonios.</p>
+                  </div>
 
                   {/* 3a. Consecuencia */}
                   <div>
                     <label className="block text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>
-                      Que consecuencia tiene este reto? <span className="text-red-500">*</span>
+                      ¿Qué consecuencia tiene este reto? <span className="text-red-500">*</span>
                     </label>
-                    <p className="text-xs text-slate-400 mb-2">
-                      Marca todos los impactos que hoy genera este reto. Puedes seleccionar mas de uno si aplica.
+                    <p className="text-xs text-slate-500 mb-2">
+                      Marca los impactos que hoy genera este reto. Puedes seleccionar más de uno si aplica.
                     </p>
                     <div className="flex gap-2 mb-3 flex-wrap">
                       {STEP1_CONSEQUENCE_OPTIONS.map(option => {
@@ -1478,7 +1518,7 @@ export function Step1Page() {
                       placeholder="Ej. El empleado no puede trabajar durante 7 a 10 dias, generando costos de productividad y frustracion."
                       className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
                     />
-                    <p className="text-xs text-slate-400 mt-1">Describe el impacto concreto. No listes causas todavia.</p>
+                    <p className="text-xs text-slate-500 mt-1">Describe el impacto concreto que deja el problema. No listes causas todavía.</p>
                   </div>
 
                   {/* 3b. Causa inmediata */}
@@ -1486,7 +1526,7 @@ export function Step1Page() {
                     <label className="block text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>
                       ¿Cuál es la causa inmediata? <span className="text-red-500">*</span>
                     </label>
-                    <p className="text-xs text-slate-400 mb-2">
+                    <p className="text-xs text-slate-500 mb-2">
                       <span style={{ fontWeight: 600 }}>Causa inmediata</span> = la razón directa por la que ocurre el quiebre. No la causa raíz, sino lo que lo dispara hoy.
                     </p>
                     <textarea
@@ -1504,7 +1544,7 @@ export function Step1Page() {
                     <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
                       <div>
                         <label className="block text-sm text-slate-700" style={{ fontWeight: 500 }}>Evidencia que sustenta este reto</label>
-                        <p className="text-xs text-slate-400 mt-0.5">Aqui puedes escribir datos o evidencia breve, y tambien subir archivos o pegar links que respalden el problema.</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Aquí puedes dejar datos, señales o evidencia breve, y también subir archivos o links que respalden el problema.</p>
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
                         nivelSustento === 'solido' ? 'bg-emerald-100 text-emerald-700' :

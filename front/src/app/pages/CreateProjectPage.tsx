@@ -191,7 +191,7 @@ export function CreateProjectPage() {
               <div className="mb-3">
                 <p className="text-sm text-indigo-900" style={{ fontWeight: 600 }}>Asignar sponsor</p>
                 <p className="text-xs text-indigo-700 mt-1">
-                  El sponsor acompaÃ±a tres hitos: alineamiento inicial, revisiÃ³n estratÃ©gica al cierre del Step 2 y presentaciÃ³n final. Puedes dejarlo pendiente y definirlo despuÃ©s.
+                  El sponsor acompaña tres hitos: alineamiento inicial, revisión estratégica al cierre del Step 2 y presentación final. Puedes dejarlo pendiente y definirlo después.
                 </p>
               </div>
               <div className="flex gap-2">
@@ -216,7 +216,7 @@ export function CreateProjectPage() {
                   <AlertCircle size={11} /> {sponsorError}
                 </p>
               )}
-              <p className="text-xs text-indigo-700 mt-2">MÃ¡ximo 2 sponsors por iniciativa.</p>
+              <p className="text-xs text-indigo-700 mt-2">Máximo 2 sponsors por iniciativa.</p>
             </div>
 
             {invites.length > 0 && (
@@ -249,7 +249,7 @@ export function CreateProjectPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-slate-700 truncate">{inv.email}</p>
-                      <p className="text-xs text-indigo-600">Sponsor Â· InvitaciÃ³n pendiente o por activar</p>
+                      <p className="text-xs text-indigo-600">Sponsor · Invitación pendiente o por activar</p>
                     </div>
                     <button onClick={() => removeSponsorInvite(inv.id)} className="p-1 hover:bg-indigo-100 rounded-lg transition-colors">
                       <X size={13} className="text-slate-400" />

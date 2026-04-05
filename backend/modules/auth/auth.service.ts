@@ -41,16 +41,16 @@ export class AuthService {
   constructor(private prisma: PrismaClient) {}
 
   /**
-   * Register a new user. Only 'owner' can self-register;
+   * Register a new user. Only 'participante' can self-register;
    * other roles must be created by an admin.
    */
   async registerUser(
     data: RegisterInput,
   ): Promise<{ user: SafeUser; tokens: AuthTokens }> {
-    // Only owner can self-register
-    if (data.role !== 'owner') {
+    // Only participante can self-register
+    if (data.role !== 'participante') {
       throw AppError.forbidden(
-        'Solo el rol owner puede registrarse. Otros roles son asignados por un administrador.',
+        'Solo el rol participante puede registrarse. Otros roles son asignados por un administrador.',
       );
     }
 

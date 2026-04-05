@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, TeamRole, TeamMemberStatus } from '@prisma/client';
 import { AppError } from '../../shared/errors/AppError';
 import { User } from '../../shared/types';
 import { UpdateProfileInput, InviteMemberInput } from './user.schemas';
@@ -58,9 +58,10 @@ export class UserService {
       user = await this.prisma.user.create({
         data: {
           email: data.email,
+          passwordHash: '',
           name: data.name || data.email.split('@')[0],
           initials,
-          role: 'owner',
+          role: 'participante',
           skills: [],
         },
       });
@@ -70,8 +71,8 @@ export class UserService {
       data: {
         projectId,
         userId: user.id,
-        role: data.role,
-        status: 'Pendiente',
+        role: data.role as TeamRole,
+        status: TeamMemberStatus.PENDING,
       },
     });
 
@@ -89,7 +90,7 @@ export class UserService {
 
     const updated = await this.prisma.teamMember.update({
       where: { id: memberId },
-      data: { role: newRole },
+      data: { role: newRole as TeamRole },
     });
 
     return updated;
@@ -104,7 +105,7 @@ export class UserService {
       throw AppError.notFound('Miembro del equipo');
     }
 
-    if (member.role === 'Owner') {
+    if (member.role === TeamRole.OWNER) {
       throw AppError.badRequest('No se puede eliminar al owner del proyecto');
     }
 

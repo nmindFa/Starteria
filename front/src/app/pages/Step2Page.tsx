@@ -37,6 +37,50 @@ interface HmwOption {
   source: 'ai' | 'custom';
 }
 
+interface ExperimentRoute {
+  id: string;
+  label: string;
+  why: string;
+  thisWeek: string;
+  keepSimple: string;
+  alternatives: string[];
+  optionalTools: string[];
+  hypothesis: string;
+  experiment: string;
+  metric: string;
+  threshold: string;
+}
+
+const EXPERIMENT_FOCUS_OPTIONS = [
+  'Que las personas entienden la propuesta',
+  'Que las personas usarian la solucion',
+  'Que la solucion ahorra tiempo o pasos',
+  'Que el flujo ordena mejor la informacion',
+  'Que una alerta, recordatorio o seguimiento si ayuda',
+  'Que el cambio genera impacto observable',
+  'Aun no estoy seguro',
+] as const;
+
+const PROTOTYPE_COMFORT_OPTIONS = [
+  'Prefiero empezar con algo manual y simple',
+  'Puedo armar una prueba visual o guiada',
+  'Ya use herramientas sencillas antes',
+  'Me siento listo para algo funcional basico',
+] as const;
+
+const PROTOTYPE_AUTONOMY_OPTIONS = [
+  'Necesito probar sin depender de otra area',
+  'Puedo coordinar con una o dos personas',
+  'Tengo apoyo para algo un poco mas armado',
+] as const;
+
+const PROTOTYPE_FIRST_VERSION_OPTIONS = [
+  'Una simulacion manual asistida',
+  'Un formulario con registro simple',
+  'Una demo visual o mockup',
+  'Algo funcional sencillo',
+] as const;
+
 const MOCK_FEEDBACK_S2 = {
   status: 'Aprobado' as const,
   summary: 'Excelente trabajo de divergencia y convergencia. El HMW está bien alineado con el reto identificado en Step 1 y la Matriz DVF es sólida.',
@@ -55,6 +99,100 @@ const cleanSentence = (value?: string, fallback = 'Sin definir') => {
 
 const trimForCard = (value: string, limit = 140) =>
   value.length <= limit ? value : `${value.slice(0, limit).trim()}...`;
+
+const getExperimentRoute = (
+  focus: string,
+  comfort: string,
+  autonomy: string,
+  firstVersion: string,
+  selectedIdeaText: string,
+): ExperimentRoute => {
+  const ideaBase = selectedIdeaText.trim() || 'tu idea finalista';
+  const focusLower = focus.toLowerCase();
+  const prefersManual = comfort.includes('manual') || autonomy.includes('sin depender') || firstVersion.includes('manual');
+  const prefersVisual = comfort.includes('visual') || firstVersion.includes('mockup');
+  const hasSimpleTools = comfort.includes('herramientas') || firstVersion.includes('formulario');
+  const feelsFunctional = comfort.includes('funcional') || firstVersion.includes('funcional');
+  const canAutomate = feelsFunctional && !autonomy.includes('sin depender') && /alerta|recordatorio|seguimiento|flujo/i.test(focusLower);
+
+  if (canAutomate) {
+    return {
+      id: 'automation',
+      label: 'Automatizacion basica',
+      why: 'Tu punto de partida ya permite probar un flujo sencillo con una accion automatizada, sin construir algo grande desde el dia uno.',
+      thisWeek: 'Puedes validar si la alerta o el seguimiento realmente activa la accion esperada en pocos casos reales.',
+      keepSimple: 'No necesitas integrar todo el proceso. Basta con una automatizacion basica sobre un caso acotado.',
+      alternatives: ['Formulario + registro simple', 'Demo visual o mockup'],
+      optionalTools: ['Forms o Sheets', 'Make, Zapier o n8n', 'Bitacora compartida'],
+      hypothesis: `Si activamos una alerta o seguimiento simple alrededor de ${ideaBase.toLowerCase()}, entonces veremos una mejor respuesta inicial porque el recordatorio llega en el momento correcto.`,
+      experiment: 'Montar una alerta o disparador simple sobre pocos casos y comparar si cambia la respuesta o el seguimiento.',
+      metric: 'Porcentaje de casos que responden o completan la accion esperada con el apoyo del recordatorio.',
+      threshold: 'Ver una mejora clara en al menos 3 de 5 casos iniciales.',
+    };
+  }
+
+  if (feelsFunctional) {
+    return {
+      id: 'functional',
+      label: 'Algo funcional simple',
+      why: 'Ya tienes base para probar una version corta de la solucion sin depender de algo complejo o definitivo.',
+      thisWeek: 'Puedes validar si el flujo funciona de punta a punta en un caso controlado y con pocos usuarios.',
+      keepSimple: 'No busques una solucion completa. Enfocate en un recorrido minimo que deje ver si vale la pena avanzar.',
+      alternatives: ['Formulario + registro simple', 'Prueba manual asistida'],
+      optionalTools: ['Forms o Notion', 'Sheets', 'Herramienta interna sencilla'],
+      hypothesis: `Si armamos una version funcional simple de ${ideaBase.toLowerCase()}, entonces podremos observar si el flujo realmente resuelve la friccion principal.`,
+      experiment: 'Probar una version minima con pocos casos reales y registrar fricciones, tiempos y decisiones.',
+      metric: 'Cantidad de casos que completan el flujo sin retrabajos importantes.',
+      threshold: 'Lograr que la mayoria de los casos piloteados complete el flujo con pocas correcciones.',
+    };
+  }
+
+  if (prefersVisual) {
+    return {
+      id: 'visual',
+      label: 'Demo visual o mockup',
+      why: 'Esta ruta te permite mostrar la propuesta con claridad antes de invertir tiempo en operarla o construirla.',
+      thisWeek: 'Puedes validar si las personas entienden la propuesta, el recorrido y el valor esperado.',
+      keepSimple: 'Una demo conversada ya puede darte señales utiles. No hace falta tener algo funcionando para aprender.',
+      alternatives: ['Prueba manual asistida', 'Formulario + registro simple'],
+      optionalTools: ['Figma, Canva o Slides', 'Guion de demo', 'Capturas o storyboard'],
+      hypothesis: `Si mostramos una version visual de ${ideaBase.toLowerCase()}, entonces las personas entenderan mejor la propuesta y podran reaccionar con mas claridad.`,
+      experiment: 'Preparar una demo breve, recorrerla con 3 a 5 personas y observar dudas, comprension y reaccion.',
+      metric: 'Nivel de comprension del flujo y claridad del valor percibido por quienes ven la demo.',
+      threshold: 'Que la mayoria pueda explicar con sus palabras para que sirve y donde ayuda.',
+    };
+  }
+
+  if (hasSimpleTools) {
+    return {
+      id: 'form',
+      label: 'Formulario + registro simple',
+      why: 'Tienes condiciones para probar el valor con una estructura ligera y trazable, sin construir un sistema completo.',
+      thisWeek: 'Puedes observar si la gente usa la solucion, deja datos utiles o completa el flujo minimo esperado.',
+      keepSimple: 'Empieza por capturar informacion y registrar la respuesta. Lo importante es validar la senal, no sofisticar el formato.',
+      alternatives: ['Prueba manual asistida', 'Demo visual o mockup'],
+      optionalTools: ['Google Forms', 'Sheets', 'Notion o bitacora compartida'],
+      hypothesis: `Si habilitamos un formulario simple para ${ideaBase.toLowerCase()}, entonces podremos validar si las personas entienden y usan la propuesta.`,
+      experiment: 'Lanzar un formulario o registro simple con pocos casos y seguir manualmente el resultado.',
+      metric: 'Cantidad de respuestas utiles, uso inicial y fricciones detectadas en el recorrido.',
+      threshold: 'Conseguir suficientes casos para detectar patron de uso y mejoras prioritarias.',
+    };
+  }
+
+  return {
+    id: 'manual',
+    label: 'Prueba manual asistida',
+    why: 'Es la forma mas liviana y segura de aprender rapido cuando todavia no quieres depender de tecnologia ni de otra area.',
+    thisWeek: 'Puedes validar si la propuesta ayuda de verdad, aunque hoy la ejecutes en manual y con acompanamiento cercano.',
+    keepSimple: 'No necesitas construir nada grande. Simular el servicio o el flujo tambien cuenta como experimento.',
+    alternatives: ['Demo visual o mockup', 'Formulario + registro simple'],
+    optionalTools: ['Plantilla o hoja compartida', 'Bitacora simple', 'Guion de prueba'],
+    hypothesis: `Si probamos ${ideaBase.toLowerCase()} de forma manual y asistida, entonces sabremos si genera valor real antes de pasar a algo mas armado.`,
+    experiment: 'Simular el flujo con pocos casos reales, acompanando paso a paso y registrando lo que ocurre.',
+    metric: 'Senales de comprension, uso o mejora observable en los primeros casos.',
+    threshold: 'Ver una reaccion positiva o una mejora clara en al menos 3 casos iniciales.',
+  };
+};
 
 export function Step2Page() {
   const { projectId } = useParams();
@@ -170,8 +308,23 @@ export function Step2Page() {
     evidenceQual: 'Notas de RRHH y TI, comentarios del nuevo ingreso y fricciones observadas durante el proceso.',
   });
   const [experimentAiLoading, setExperimentAiLoading] = useState(false);
+  const [experimentFocus, setExperimentFocus] = useState<string>(EXPERIMENT_FOCUS_OPTIONS[1]);
+  const [prototypeComfort, setPrototypeComfort] = useState<string>(PROTOTYPE_COMFORT_OPTIONS[0]);
+  const [prototypeAutonomy, setPrototypeAutonomy] = useState<string>(PROTOTYPE_AUTONOMY_OPTIONS[0]);
+  const [prototypeFirstVersion, setPrototypeFirstVersion] = useState<string>(PROTOTYPE_FIRST_VERSION_OPTIONS[0]);
 
-  const saveState = useAutosave([hmw, ideas, shortlist, solutionCard, testCard, experimentCard]);
+  const saveState = useAutosave([
+    hmw,
+    ideas,
+    shortlist,
+    solutionCard,
+    testCard,
+    experimentCard,
+    experimentFocus,
+    prototypeComfort,
+    prototypeAutonomy,
+    prototypeFirstVersion,
+  ]);
 
   if (!project || !step) return <div className="p-6"><p className="text-slate-500">Proyecto no encontrado.</p></div>;
 
@@ -416,6 +569,25 @@ export function Step2Page() {
     ideas.length < 15  ? '¡Mínimo cumplido! ¿Puedes llegar a 15?' :
                          '¡Excelente variedad! Ya puedes pasar a elegir tus mejores ideas.';
 
+  const experimentRoute = getExperimentRoute(
+    experimentFocus,
+    prototypeComfort,
+    prototypeAutonomy,
+    prototypeFirstVersion,
+    selectedIdeaText,
+  );
+  const recommendationReady = Boolean(
+    experimentFocus.trim()
+    && prototypeComfort.trim()
+    && prototypeAutonomy.trim()
+    && prototypeFirstVersion.trim()
+  );
+  const experimentBridgeProgress = [
+    experimentFocus,
+    prototypeComfort,
+    prototypeAutonomy,
+    prototypeFirstVersion,
+  ].filter(value => value.trim().length > 0).length;
   const completedExperimentSteps = testCard.pasos.filter(step => step.trim().length > 0).length;
   const moduleCReady = Boolean(
     selectedIdea
@@ -467,6 +639,24 @@ export function Step2Page() {
       }));
       setExperimentAiLoading(false);
     }, 1400);
+  };
+
+  const applyExperimentRouteSuggestion = () => {
+    setExperimentCard(prev => ({
+      ...prev,
+      hypothesis: prev.hypothesis.trim() || experimentRoute.hypothesis,
+      minimumMechanism: prev.minimumMechanism.trim() || experimentRoute.experiment,
+      tool: prev.tool.trim() || experimentRoute.optionalTools.join(' · '),
+      metric: prev.metric.trim() || `${experimentRoute.metric} Umbral inicial: ${experimentRoute.threshold}`,
+    }));
+    setTestCard(prev => ({
+      ...prev,
+      hipotesis: prev.hipotesis.trim() || experimentRoute.hypothesis,
+      queTestan: prev.queTestan.trim() || experimentRoute.experiment,
+      metodo: prev.metodo.trim() || experimentRoute.label,
+      metrica: prev.metrica.trim() || `${experimentRoute.metric} Umbral inicial: ${experimentRoute.threshold}`,
+    }));
+    toast.success('Llevamos esta recomendacion como borrador a tu Card de experimento.');
   };
 
   const modules = [
@@ -1805,7 +1995,7 @@ export function Step2Page() {
                   <StatusChip status={moduleCReady ? 'Completado' : 'En progreso'} size="sm" />
                 </div>
                 <p className="text-sm text-slate-500">
-                  Convierte la idea elegida en un experimento pequeño, claro y medible. Aquí defines qué validar primero, cómo probarlo y qué evidencia vas a guardar.
+                  Convierte la idea elegida en un experimento pequeño, claro y medible. Primero aterrizas una ruta viable para probarla y luego dejas lista la Card con qué validar, cómo hacerlo y qué evidencia guardar.
                 </p>
               </div>
 
@@ -1846,6 +2036,203 @@ export function Step2Page() {
 
               {selectedIdea && (
                 <>
+                  <div className="border border-slate-200 rounded-2xl p-5 bg-white space-y-5">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="max-w-2xl">
+                        <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs border border-amber-200 mb-3" style={{ fontWeight: 600 }}>
+                          <Lightbulb size={12} />
+                          Nuevo bloque UX
+                        </div>
+                        <h2 className="text-lg text-slate-900" style={{ fontWeight: 700 }}>Aterriza tu experimento</h2>
+                        <p className="text-sm text-slate-500 mt-2">
+                          No necesitas saber tecnologia para empezar. Aqui traducimos tu idea finalista a una forma de prueba viable, clara y accionable para esta semana.
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" style={{ fontWeight: 600 }}>
+                        {experimentBridgeProgress}/4 definiciones base
+                      </div>
+                    </div>
+
+                    <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-5">
+                      <div className="space-y-5">
+                        <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
+                          <div>
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>1. Que necesitas validar primero para avanzar</p>
+                            <p className="text-xs text-slate-500 mt-1">Empieza por la duda mas importante. La herramienta viene despues.</p>
+                          </div>
+                          <div className="grid sm:grid-cols-2 gap-2">
+                            {EXPERIMENT_FOCUS_OPTIONS.map(option => {
+                              const active = experimentFocus === option;
+                              return (
+                                <button
+                                  key={option}
+                                  onClick={() => setExperimentFocus(option)}
+                                  className={`text-left rounded-xl border px-3 py-3 text-sm transition-colors ${active ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
+                                  style={{ fontWeight: active ? 600 : 500 }}
+                                >
+                                  {option}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-4">
+                          <div>
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>2. Que tan lejos puedes llegar hoy con tu primer prototipo</p>
+                            <p className="text-xs text-slate-500 mt-1">No es una evaluacion. Solo nos ayuda a recomendarte una ruta realista segun tu punto de partida.</p>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>Que tan comodo te sientes creando algo digital</p>
+                              <div className="flex flex-wrap gap-2">
+                                {PROTOTYPE_COMFORT_OPTIONS.map(option => {
+                                  const active = prototypeComfort === option;
+                                  return (
+                                    <button
+                                      key={option}
+                                      onClick={() => setPrototypeComfort(option)}
+                                      className={`px-3 py-2 rounded-full text-xs border transition-colors ${active ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                                      style={{ fontWeight: 600 }}
+                                    >
+                                      {option}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>Cuanta autonomia necesitas para probar</p>
+                              <div className="flex flex-wrap gap-2">
+                                {PROTOTYPE_AUTONOMY_OPTIONS.map(option => {
+                                  const active = prototypeAutonomy === option;
+                                  return (
+                                    <button
+                                      key={option}
+                                      onClick={() => setPrototypeAutonomy(option)}
+                                      className={`px-3 py-2 rounded-full text-xs border transition-colors ${active ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                                      style={{ fontWeight: 600 }}
+                                    >
+                                      {option}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-slate-600 mb-2" style={{ fontWeight: 600 }}>Que primera version si sientes capaz de hacer</p>
+                              <div className="flex flex-wrap gap-2">
+                                {PROTOTYPE_FIRST_VERSION_OPTIONS.map(option => {
+                                  const active = prototypeFirstVersion === option;
+                                  return (
+                                    <button
+                                      key={option}
+                                      onClick={() => setPrototypeFirstVersion(option)}
+                                      className={`px-3 py-2 rounded-full text-xs border transition-colors ${active ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                                      style={{ fontWeight: 600 }}
+                                    >
+                                      {option}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="border border-emerald-200 rounded-xl p-4 bg-emerald-50 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>RUTA RECOMENDADA</p>
+                              <p className="text-base text-emerald-900" style={{ fontWeight: 700 }}>{experimentRoute.label}</p>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-full bg-white border border-emerald-200 text-emerald-700 text-xs" style={{ fontWeight: 700 }}>
+                              {recommendationReady ? 'Lista para usar' : 'En construccion'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-700">{experimentRoute.why}</p>
+                          <div className="space-y-2 text-sm text-slate-700">
+                            <div className="rounded-xl bg-white/80 border border-emerald-100 p-3">
+                              <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Que podrias validar esta semana</p>
+                              <p>{experimentRoute.thisWeek}</p>
+                            </div>
+                            <div className="rounded-xl bg-white/80 border border-emerald-100 p-3">
+                              <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Por que no necesitas empezar por algo complejo</p>
+                              <p>{experimentRoute.keepSimple}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="border border-slate-200 rounded-xl p-4 bg-white space-y-3">
+                          <div>
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Otras rutas posibles</p>
+                            <p className="text-xs text-slate-500 mt-1">Si cambia tu contexto, estas tambien podrian servirte sin abrumar el arranque.</p>
+                          </div>
+                          <div className="space-y-2">
+                            {experimentRoute.alternatives.map(option => (
+                              <div key={option} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>{option}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="border border-slate-200 rounded-xl p-4 bg-white space-y-3">
+                          <div>
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Herramientas opcionales</p>
+                            <p className="text-xs text-slate-500 mt-1">Primero importa validar valor. Las herramientas son solo ejemplos para hacerlo mas facil.</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {experimentRoute.optionalTools.map(tool => (
+                              <span key={tool} className="px-2.5 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs text-slate-600" style={{ fontWeight: 600 }}>
+                                {tool}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 space-y-4">
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                          <p className="text-sm text-indigo-900" style={{ fontWeight: 600 }}>Puente hacia tu Test Card</p>
+                          <p className="text-xs text-indigo-700 mt-1">Tomamos esta recomendacion como borrador inicial. Todo sigue siendo editable en la Card de experimentacion.</p>
+                        </div>
+                        <button
+                          onClick={applyExperimentRouteSuggestion}
+                          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 text-sm transition-colors"
+                          style={{ fontWeight: 600 }}
+                        >
+                          Usar sugerencia en la Card <ChevronRight size={14} />
+                        </button>
+                      </div>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-indigo-100 bg-white/80 p-3">
+                          <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>Hipotesis mas riesgosa</p>
+                          <p className="text-sm text-slate-700">{experimentRoute.hypothesis}</p>
+                        </div>
+                        <div className="rounded-xl border border-indigo-100 bg-white/80 p-3">
+                          <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>Experimento sugerido</p>
+                          <p className="text-sm text-slate-700">{experimentRoute.experiment}</p>
+                        </div>
+                        <div className="rounded-xl border border-indigo-100 bg-white/80 p-3">
+                          <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>Metrica sugerida</p>
+                          <p className="text-sm text-slate-700">{experimentRoute.metric}</p>
+                        </div>
+                        <div className="rounded-xl border border-indigo-100 bg-white/80 p-3">
+                          <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>Umbral inicial sugerido</p>
+                          <p className="text-sm text-slate-700">{experimentRoute.threshold}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-5">
                     <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-4">
                       <div>

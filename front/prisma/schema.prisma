@@ -10,10 +10,26 @@ datasource db {
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
 enum Role {
-  owner
+  participante
   mentor
   admin
-  leader
+  sponsor
+  colaborador
+  viewer
+}
+
+enum SponsorCheckpointStatus {
+  PENDING
+  APPROVED
+  FLAGGED
+  EXPIRED
+  SKIPPED
+}
+
+enum AlignmentSignal {
+  ALIGNED
+  CONCERNS
+  PIVOT_SUGGESTED
 }
 
 enum ProjectStatus {
@@ -144,6 +160,7 @@ model User {
   auditLogs        AuditLog[]
   helpRequests     HelpRequest[]    @relation("HelpRequester")
   mentorHelpRequests HelpRequest[]  @relation("HelpMentor")
+  sponsorCheckpoints SponsorCheckpoint[] @relation("SponsorCheckpoints")
 
   @@index([email])
   @@index([role])
@@ -172,8 +189,9 @@ model Project {
   steps          Step[]
   evidence       Evidence[]
   teamMembers    TeamMember[]
-  mentorSessions MentorSession[]
-  helpRequests   HelpRequest[]
+  mentorSessions     MentorSession[]
+  helpRequests       HelpRequest[]
+  sponsorCheckpoints SponsorCheckpoint[]
 
   @@index([ownerId])
   @@index([cohortId])
@@ -286,6 +304,8 @@ model TeamMember {
   invitedAt DateTime         @default(now())
   joinedAt  DateTime?
 
+  modulePermissions String[]    // Module IDs the colaborador can edit
+
   @@unique([projectId, userId])
   @@index([projectId])
   @@index([userId])
@@ -368,5 +388,27 @@ model HelpRequest {
   @@index([projectId])
   @@index([userId])
   @@index([mentorId])
+  @@index([status])
+}
+
+model SponsorCheckpoint {
+  id                   String                   @id @default(cuid())
+  projectId            String
+  project              Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stepNumber           Int
+  sponsorId            String
+  sponsor              User                     @relation("SponsorCheckpoints", fields: [sponsorId], references: [id])
+  status               SponsorCheckpointStatus  @default(PENDING)
+  strategicFeedback    String?
+  alignmentSignal      AlignmentSignal?
+  focusRecommendation  String?
+  respondedAt          DateTime?
+  expiresAt            DateTime
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  @@unique([projectId, stepNumber])
+  @@index([projectId])
+  @@index([sponsorId])
   @@index([status])
 }

@@ -5,7 +5,7 @@ metadata:
   namespace: starteria
 data:
   config.yaml: |
-    tunnel: REPLACE_WITH_TUNNEL_ID
+    tunnel: 4ab484e9-b7f8-4beb-9300-d12265a7a32b
     ingress:
       - hostname: starter-ia.com
         service: http://starteria-frontend:80
