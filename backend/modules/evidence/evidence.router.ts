@@ -1,13 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../shared/db/prisma';
 import { EvidenceController } from './evidence.controller';
 import { EvidenceService } from './evidence.service';
 import { validate } from '../../shared/middleware/validate';
 import { createEvidenceSchema, updateEvidenceStatusSchema } from './evidence.schemas';
 
 import { authenticate } from '../auth/auth.middleware';
-
-const prisma = new PrismaClient();
 const service = new EvidenceService(prisma);
 const controller = new EvidenceController(service);
 

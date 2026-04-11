@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   ArrowLeft, CheckCircle2, Lock, Send, Calendar, ChevronRight,
@@ -13,7 +13,9 @@ import { ProgressBar } from '../components/ProgressBar';
 import { BannerPorDefinir } from '../components/BannerPorDefinir';
 import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
 import { EvidenceUploader } from '../components/EvidenceUploader';
-import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
+import { AutosaveIndicator } from '../components/AutosaveIndicator';
+import { useAutosave } from '../hooks/useAutosave';
+import * as stepService from '../services/stepService';
 import { Step1CaptureSynthesisModule } from '../components/step1-capture-synthesis/Step1CaptureSynthesisModule';
 import { buildCaptureModuleContext, buildStep1ModuleViewModels, calculateStep1Progress, getStep1CaptureMissing } from '../components/step1-architecture/step1Completion';
 import { normalizeCaptureSynthesisState, syncCaptureSynthesisWithResearch } from '../components/step1-architecture/step1Legacy';
@@ -539,7 +541,22 @@ export function Step1Page() {
     setModuleAdjustments(prev => ({ ...prev, capture: false }));
   }, [captureSignature]);
 
-  const saveState = useAutosave([asisData, evidenciasA, aiAnalysisState, bData, captureSynthesisData, moduleAdjustments]);
+  const step1FormData = { asisData, evidenciasA, aiAnalysisState, bData, captureSynthesisData, moduleAdjustments };
+
+  const autosaveFn = useCallback(async (data: typeof step1FormData) => {
+    if (!projectId) return;
+    await stepService.saveStepData(projectId, 1, {
+      _meta: { version: 1, lastSavedAt: new Date().toISOString(), lastSavedBy: 'user' },
+      formData: data,
+    });
+  }, [projectId]);
+
+  const { state: saveState } = useAutosave({
+    data: step1FormData,
+    saveFn: autosaveFn,
+    delay: 2000,
+    enabled: !!projectId,
+  });
 
   const updateResearchV2 = (updater: (prev: Step1ResearchModuleV2State) => Step1ResearchModuleV2State) => {
     setBData(prev => {

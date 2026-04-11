@@ -2,9 +2,33 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
+// In-memory token store (never persisted to sessionStorage)
+let accessToken: string | null = null;
+
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
+
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+export async function initAuth(): Promise<void> {
+  try {
+    const { data } = await axios.post(
+      `${API_BASE_URL}/auth/refresh`,
+      {},
+      { withCredentials: true },
+    );
+    accessToken = data.data.accessToken;
+  } catch {
+    accessToken = null;
+  }
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true, // Send cookies for refresh token
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -12,9 +36,8 @@ const api = axios.create({
 
 // Request interceptor: attach access token
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (accessToken) {
+    config.headers.Authorization = `Bearer ${accessToken}`;
   }
   return config;
 });
@@ -62,13 +85,13 @@ api.interceptors.response.use(
           { withCredentials: true },
         );
         const newToken = data.data.accessToken;
-        sessionStorage.setItem('accessToken', newToken);
+        accessToken = newToken;
         processQueue(null, newToken);
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        sessionStorage.removeItem('accessToken');
+        accessToken = null;
         window.location.href = '/auth';
         return Promise.reject(refreshError);
       } finally {

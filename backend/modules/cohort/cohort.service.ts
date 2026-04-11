@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, ProjectStatus, RiskLevel } from '@prisma/client';
 import { AppError } from '../../shared/errors/AppError';
 import { CohortQuery } from './cohort.schemas';
 
@@ -37,7 +37,7 @@ export class CohortService {
         projects: {
           include: {
             steps: true,
-            team: true,
+            teamMembers: true,
           },
         },
       },
@@ -50,15 +50,15 @@ export class CohortService {
     const projects = (cohort as any).projects || [];
     const kpis = {
       totalProjects: projects.length,
-      activeProjects: projects.filter((p: any) => p.status !== 'Draft' && p.status !== 'Finalizado').length,
-      completedProjects: projects.filter((p: any) => p.status === 'Finalizado').length,
+      activeProjects: projects.filter((p: any) => p.status !== ProjectStatus.DRAFT && p.status !== ProjectStatus.COMPLETED).length,
+      completedProjects: projects.filter((p: any) => p.status === ProjectStatus.COMPLETED).length,
       avgProgress: projects.length > 0
         ? projects.reduce((sum: number, p: any) => sum + (p.currentStep / 4) * 100, 0) / projects.length
         : 0,
       riskDistribution: {
-        Bajo: projects.filter((p: any) => p.riskLevel === 'Bajo').length,
-        Medio: projects.filter((p: any) => p.riskLevel === 'Medio').length,
-        Alto: projects.filter((p: any) => p.riskLevel === 'Alto').length,
+        LOW: projects.filter((p: any) => p.riskLevel === RiskLevel.LOW).length,
+        MEDIUM: projects.filter((p: any) => p.riskLevel === RiskLevel.MEDIUM).length,
+        HIGH: projects.filter((p: any) => p.riskLevel === RiskLevel.HIGH).length,
       },
     };
 
@@ -81,7 +81,7 @@ export class CohortService {
         take: limit,
         include: {
           steps: { include: { modules: true } },
-          team: true,
+          teamMembers: true,
         },
         orderBy: { lastModified: 'desc' },
       }),
@@ -106,7 +106,7 @@ export class CohortService {
       step2: projects.filter((p) => p.currentStep >= 2).length,
       step3: projects.filter((p) => p.currentStep >= 3).length,
       step4: projects.filter((p) => p.currentStep >= 4).length,
-      completed: projects.filter((p) => p.status === 'Finalizado').length,
+      completed: projects.filter((p) => p.status === ProjectStatus.COMPLETED).length,
     };
 
     const statusBreakdown: Record<string, number> = {};
@@ -122,7 +122,7 @@ export class CohortService {
       where: { cohortId },
       include: {
         steps: { include: { modules: true } },
-        team: true,
+        teamMembers: true,
         evidence: includeEvidence ? true : false,
       },
     });
@@ -135,7 +135,7 @@ export class CohortService {
       p.status,
       p.currentStep,
       (p as any).riskLevel || 'N/A',
-      (p as any).team?.length || 0,
+      (p as any).teamMembers?.length || 0,
       p.lastModified,
     ]);
 

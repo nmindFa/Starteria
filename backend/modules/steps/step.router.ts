@@ -1,13 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../shared/db/prisma';
 import { StepController } from './step.controller';
 import { StepService } from './step.service';
 import { validate } from '../../shared/middleware/validate';
 import { updateStepStatusSchema, updateModuleSchema, requestSessionSchema } from './step.schemas';
 
 import { authenticate } from '../auth/auth.middleware';
-
-const prisma = new PrismaClient();
 const service = new StepService(prisma);
 const controller = new StepController(service);
 

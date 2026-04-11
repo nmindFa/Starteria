@@ -1,11 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../shared/db/prisma';
 import { CohortController } from './cohort.controller';
 import { CohortService } from './cohort.service';
 
 import { authenticate, requireRole } from '../auth/auth.middleware';
-
-const prisma = new PrismaClient();
 const service = new CohortService(prisma);
 const controller = new CohortController(service);
 

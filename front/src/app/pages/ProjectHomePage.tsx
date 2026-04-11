@@ -266,7 +266,7 @@ export function ProjectHomePage() {
   const overallProgress = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
   const sponsorMembers = project.team.filter(member => member.role === 'Sponsor');
   const sponsorSlotsLeft = Math.max(0, 2 - sponsorMembers.length);
-  const canManageSponsors = user?.role === 'owner' || user?.role === 'admin';
+  const canManageSponsors = user?.role === 'participante' || user?.role === 'admin';
   const firstName = user?.name?.trim().split(/\s+/)[0];
   const step0Complete = project.step0Status === 'Completado';
   const step0Data = project.step0Data;
@@ -1062,7 +1062,7 @@ export function ProjectHomePage() {
                   </div>
                 </div>
               ))}
-              {user?.role === 'owner' && (
+              {user?.role === 'participante' && (
                 <div className="pt-3 border-t border-slate-100">
                   <div className="flex gap-2">
                     <input

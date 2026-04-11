@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { SponsorService } from './sponsor.service';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../shared/db/prisma';
 
-const service = new SponsorService(new PrismaClient());
+const service = new SponsorService(prisma);
 
 export async function createCheckpoint(req: Request, res: Response, next: NextFunction) {
   try {

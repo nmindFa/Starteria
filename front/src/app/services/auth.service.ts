@@ -1,4 +1,4 @@
-import api from './api';
+import api, { setAccessToken, getAccessToken } from './api';
 
 export interface AuthUser {
   id: string;
@@ -19,7 +19,7 @@ export const authService = {
     const { data } = await api.post('/auth/login', { email, password });
     const result = data.data;
     const token = result.tokens?.accessToken || result.accessToken;
-    sessionStorage.setItem('accessToken', token);
+    setAccessToken(token);
     return result;
   },
 
@@ -32,7 +32,7 @@ export const authService = {
     });
     const result = data.data;
     const token = result.tokens?.accessToken || result.accessToken;
-    sessionStorage.setItem('accessToken', token);
+    setAccessToken(token);
     return result;
   },
 
@@ -40,7 +40,7 @@ export const authService = {
     try {
       await api.post('/auth/logout');
     } finally {
-      sessionStorage.removeItem('accessToken');
+      setAccessToken(null);
     }
   },
 
@@ -52,11 +52,11 @@ export const authService = {
   async refreshToken(): Promise<string> {
     const { data } = await api.post('/auth/refresh');
     const token = data.data.accessToken;
-    sessionStorage.setItem('accessToken', token);
+    setAccessToken(token);
     return token;
   },
 
   isAuthenticated(): boolean {
-    return !!sessionStorage.getItem('accessToken');
+    return getAccessToken() !== null;
   },
 };

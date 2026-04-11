@@ -1,13 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../shared/db/prisma';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
 import { validate } from '../../shared/middleware/validate';
 import { updateProfileSchema, inviteMemberSchema, updateMemberRoleSchema } from './user.schemas';
 
 import { authenticate } from '../auth/auth.middleware';
-
-const prisma = new PrismaClient();
 const service = new UserService(prisma);
 const controller = new UserController(service);
 

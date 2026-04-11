@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   ArrowLeft, Sparkles, CheckCircle2, Info, Calendar, CreditCard,
@@ -9,7 +9,10 @@ import type { Step0Data } from '../context/AppContext';
 import { BannerPorDefinir } from '../components/BannerPorDefinir';
 import { MentorVirtualPanel } from '../components/MentorVirtualPanel';
 import { MentorSupportModal } from '../components/MentorSupportModal';
-import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
+import { AutosaveIndicator } from '../components/AutosaveIndicator';
+import { useAutosave } from '../hooks/useAutosave';
+import * as projectService from '../services/projectService';
+import * as stepService from '../services/stepService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -136,7 +139,19 @@ export function Step0Page() {
   const [copyMsg, setCopyMsg] = useState(false);
   const [deliveryEmail, setDeliveryEmail] = useState('');
 
-  const saveState = useAutosave([form]);
+  // Real autosave: debounced PUT to backend every 2s
+  const autosaveFn = useCallback(async (data: Step0Data) => {
+    if (!projectId) return;
+    await projectService.updateStep0(projectId, data, project?.step0Status === 'Completado' ? 'COMPLETED' : 'IN_PROGRESS');
+  }, [projectId, project?.step0Status]);
+
+  const { state: saveState } = useAutosave({
+    data: form,
+    saveFn: autosaveFn,
+    delay: 2000,
+    enabled: !!projectId,
+  });
+
   const firstName = form.nombreParticipante.trim().split(/\s+/)[0];
 
   if (!project) {
@@ -175,11 +190,16 @@ export function Step0Page() {
 
   const handleSave = async () => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 500));
-    updateStep0(project.id, form, 'Completado');
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => navigate(`/projects/${project.id}`), 600);
+    try {
+      await projectService.updateStep0(project.id, form, 'COMPLETED');
+      updateStep0(project.id, form, 'Completado');
+      setSaved(true);
+      setTimeout(() => navigate(`/projects/${project.id}`), 600);
+    } catch (err) {
+      console.error('Error saving Step 0:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── IA Analysis helpers ────────────────────────────────────────────────────

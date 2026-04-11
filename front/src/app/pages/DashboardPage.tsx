@@ -74,7 +74,7 @@ export function DashboardPage() {
   const [search, setSearch] = useState('');
   const [loading] = useState(false);
 
-  const isOwner = user?.role === 'owner';
+  const isOwner = user?.role === 'participante';
   const isSponsor = user?.role === 'sponsor';
   const filtered = projects.filter(project =>
     project.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -118,7 +118,7 @@ export function DashboardPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl text-slate-900 mb-1" style={{ fontWeight: 700 }}>
-            {user?.role === 'owner'
+            {user?.role === 'participante'
               ? 'Mis proyectos'
               : user?.role === 'mentor'
                 ? 'Proyectos a revisar'
@@ -131,7 +131,7 @@ export function DashboardPage() {
             {visibleProjects.length} proyecto{visibleProjects.length !== 1 ? 's' : ''}
           </p>
         </div>
-        {user?.role === 'owner' && (
+        {user?.role === 'participante' && (
           <button
             onClick={() => navigate('/projects/new')}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-sm transition-colors shadow-sm"
@@ -241,7 +241,7 @@ export function DashboardPage() {
                 ? 'Cuando te asignen como sponsor verás aquí el avance, los hitos donde debes intervenir y la siguiente convocatoria.'
                 : 'Crea tu primer proyecto y empieza a trabajar en tu desafío.'}
           </p>
-          {!search && user?.role === 'owner' && (
+          {!search && user?.role === 'participante' && (
             <button
               onClick={() => navigate('/projects/new')}
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm transition-colors"

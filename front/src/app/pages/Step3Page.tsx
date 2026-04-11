@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -10,7 +10,9 @@ import {
 import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
 import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
-import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
+import { AutosaveIndicator } from '../components/AutosaveIndicator';
+import { useAutosave } from '../hooks/useAutosave';
+import * as stepService from '../services/stepService';
 
 type ModuleId = 'A' | 'B' | 'C';
 type GoNoGoDecision = 'Go' | 'Iterar' | 'No-Go' | 'Pivote' | null;
@@ -414,7 +416,22 @@ export function Step3Page() {
   const [showFinalizarDemo, setShowFinalizarDemo] = useState(false);
 
   // Autosave
-  const saveState = useAutosave({ prepChecks, formatoExp, componentes, logistica, instrumentacion, testCycles, activeCycleId, goNoGo, aprendizajes, diagnostico });
+  const step3FormData = { prepChecks, formatoExp, componentes, logistica, instrumentacion, testCycles, activeCycleId, goNoGo, aprendizajes, diagnostico };
+
+  const autosaveFn = useCallback(async (data: typeof step3FormData) => {
+    if (!projectId) return;
+    await stepService.saveStepData(projectId, 3, {
+      _meta: { version: 1, lastSavedAt: new Date().toISOString(), lastSavedBy: 'user' },
+      formData: data,
+    });
+  }, [projectId]);
+
+  const { state: saveState } = useAutosave({
+    data: step3FormData,
+    saveFn: autosaveFn,
+    delay: 2000,
+    enabled: !!projectId,
+  });
 
   // ── Gate ─────────────────────────────────────────────────────────────────────
   if (!project) return <div className="p-6"><p className="text-slate-500">Proyecto no encontrado.</p></div>;

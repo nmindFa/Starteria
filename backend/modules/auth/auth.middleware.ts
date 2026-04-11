@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../shared/db/prisma';
 import { verifyAccessToken } from './token.service';
 import { AppError } from '../../shared/errors/AppError';
 import { Role } from '../../shared/types/user.types';
@@ -18,8 +18,6 @@ declare global {
     }
   }
 }
-
-const prisma = new PrismaClient();
 
 /**
  * authenticate — Verify JWT access token and attach user to request.
@@ -109,9 +107,9 @@ export function requireProjectAccess(
         throw AppError.badRequest('ID de proyecto requerido');
       }
 
-      // Validate UUID format to prevent injection
-      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!UUID_REGEX.test(projectId)) {
+      // Validate CUID format to prevent injection (schema uses cuid())
+      const CUID_REGEX = /^c[a-z0-9]{20,30}$/i;
+      if (!CUID_REGEX.test(projectId)) {
         throw AppError.badRequest('ID de proyecto invalido');
       }
 

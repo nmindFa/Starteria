@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -10,7 +10,9 @@ import { StatusChip } from '../components/StatusChip';
 import { BannerPorDefinir } from '../components/BannerPorDefinir';
 import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
 import { EvidenceUploader } from '../components/EvidenceUploader';
-import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
+import { AutosaveIndicator } from '../components/AutosaveIndicator';
+import { useAutosave } from '../hooks/useAutosave';
+import * as stepService from '../services/stepService';
 
 type ModuleId = 'A' | 'B' | 'C' | 'D';
 
@@ -313,7 +315,7 @@ export function Step2Page() {
   const [prototypeAutonomy, setPrototypeAutonomy] = useState<string>(PROTOTYPE_AUTONOMY_OPTIONS[0]);
   const [prototypeFirstVersion, setPrototypeFirstVersion] = useState<string>(PROTOTYPE_FIRST_VERSION_OPTIONS[0]);
 
-  const saveState = useAutosave([
+  const step2FormData = {
     hmw,
     ideas,
     shortlist,
@@ -324,7 +326,22 @@ export function Step2Page() {
     prototypeComfort,
     prototypeAutonomy,
     prototypeFirstVersion,
-  ]);
+  };
+
+  const autosaveFn = useCallback(async (data: typeof step2FormData) => {
+    if (!projectId) return;
+    await stepService.saveStepData(projectId, 2, {
+      _meta: { version: 1, lastSavedAt: new Date().toISOString(), lastSavedBy: 'user' },
+      formData: data,
+    });
+  }, [projectId]);
+
+  const { state: saveState } = useAutosave({
+    data: step2FormData,
+    saveFn: autosaveFn,
+    delay: 2000,
+    enabled: !!projectId,
+  });
 
   if (!project || !step) return <div className="p-6"><p className="text-slate-500">Proyecto no encontrado.</p></div>;
 

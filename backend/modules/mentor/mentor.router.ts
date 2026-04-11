@@ -1,13 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../shared/db/prisma';
 import { MentorController } from './mentor.controller';
 import { MentorService } from './mentor.service';
 import { validate } from '../../shared/middleware/validate';
 import { submitReviewSchema, helpRequestSchema } from './mentor.schemas';
 
 import { authenticate, requireRole } from '../auth/auth.middleware';
-
-const prisma = new PrismaClient();
 const service = new MentorService(prisma);
 const controller = new MentorController(service);
 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../shared/db/prisma';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { authenticate } from './auth.middleware';
@@ -8,8 +8,6 @@ import { registerSchema, loginSchema } from './auth.schemas';
 import { loginLimiter } from './rate-limiter';
 
 // Dependencies: cookie-parser must be applied at app level for req.cookies
-
-const prisma = new PrismaClient();
 const service = new AuthService(prisma);
 const controller = new AuthController(service);
 

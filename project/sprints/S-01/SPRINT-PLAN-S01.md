@@ -10,8 +10,8 @@ velocity_actual: null
 
 # Sprint 01: Sistema Multi-Agente IA Starteria
 
-**Duration:** 2026-04-07 -> 2026-06-06 (9 semanas)
-**Sprint goal:** Implementar el sistema multi-agente de IA con 8 agentes en topologia Orchestrator-Worker, integrando el modulo backend `ai/` con endpoints reales, el servicio frontend `aiService.ts`, y el bridge OpenClaw para canales WhatsApp/Telegram.
+**Duration:** 2026-04-07 -> 2026-06-13 (10 semanas, incluye Semana 0 pre-sprint)
+**Sprint goal:** Implementar la capa base de persistencia (TASK-000) y el sistema multi-agente de IA con 8 agentes en topologia Orchestrator-Worker, integrando el modulo backend `ai/` con endpoints reales, el servicio frontend `aiService.ts`, y el bridge OpenClaw para canales WhatsApp/Telegram.
 
 ---
 
@@ -19,6 +19,7 @@ velocity_actual: null
 
 | Feature | PRD | SPEC | Status | Priority |
 |---|---|---|---|---|
+| Capa base de persistencia y recuperacion de estado | -- | TASK-000 | in-progress | critical |
 | Sistema Multi-Agente IA (8 agentes, Orchestrator-Worker) | PRD-001 | SPEC-001 | approved | high |
 
 ---
@@ -37,11 +38,17 @@ velocity_actual: null
 
 ## Task board
 
-### Sequential tasks (must run in order)
+### Pre-sprint task (must complete before all others)
 
 | Order | Task | Spec | Est. tokens | Status | Session date |
 |---|---|---|---|---|---|
-| 1 | TASK-001: Backend scaffolding (Phase 0) | SPEC-001 | 16K | ready | Semana 1 |
+| 0 | TASK-000: Capa base de persistencia (Pre-sprint) | TASK-000 | 24K | **in-progress** | Semana 0 |
+
+### Sequential tasks (must run in order, after TASK-000)
+
+| Order | Task | Spec | Est. tokens | Status | Session date |
+|---|---|---|---|---|---|
+| 1 | TASK-001: Backend scaffolding (Phase 0) | SPEC-001 | 16K | blocked (needs TASK-000) | Semana 1 |
 | 2 | TASK-002: Orchestrator + Feedback IA (Phase 1) | SPEC-001 | 64K | blocked (needs TASK-001) | Semana 2-3 |
 | 3 | TASK-005: OpenClaw Bridge (Phase 4) | SPEC-001 | 32K | blocked (needs TASK-002) | Semana 8-9 |
 
@@ -52,13 +59,23 @@ velocity_actual: null
 | TASK-003: Mentor Virtual + Research Assistant (Phase 2) [P] | SPEC-001 | 32K | blocked (needs TASK-002) | Semana 4-5 |
 | TASK-004: Solution Design + Experiment Coach + Narrative (Phase 3) [P] | SPEC-001 | 64K | blocked (needs TASK-002) | Semana 5-7 |
 
-**Nota:** TASK-003 y TASK-004 son paralelos entre si. Ambos dependen de TASK-002. TASK-005 depende de TASK-002 y se ejecuta en las ultimas semanas del sprint.
+**Nota:** TASK-000 es bloqueante para TODO el sprint. Sin persistencia real, los agentes IA recibiran datos mock/vacios. TASK-003 y TASK-004 son paralelos entre si. Ambos dependen de TASK-002. TASK-005 depende de TASK-002 y se ejecuta en las ultimas semanas del sprint.
 
 ---
 
 ## Session schedule
 
-### Semana 1 (2026-04-07 -- 2026-04-11)
+### Semana 0 -- Pre-sprint (2026-04-07 -- 2026-04-11)
+
+| Dia | Actividad humana | Claude Code sessions |
+|---|---|---|
+| Lun | Revisar arquitectura de persistencia | TASK-000: WI-1 Token migration + auth bridge |
+| Mar | Validar auth real funciona | TASK-000: WI-2 Service layer + adapter |
+| Mie | Probar flujo login real | TASK-000: WI-3 useAutosave + AppContext refactor |
+| Jue | Validar autosave funciona | TASK-000: WI-4 lastPosition + Step page wiring |
+| Vie | Testing E2E persistencia | TASK-000: WI-5 Tests + verificacion, merge |
+
+### Semana 1 (2026-04-14 -- 2026-04-18)
 
 | Dia | Actividad humana | Claude Code sessions |
 |---|---|---|
@@ -68,7 +85,7 @@ velocity_actual: null
 | Jue | Revisar PR de TASK-001 | TASK-001: completar y merge |
 | Vie | Validar migration, confirmar rutas registradas | Ninguna |
 
-### Semana 2 (2026-04-14 -- 2026-04-18)
+### Semana 2 (2026-04-21 -- 2026-04-25)
 
 | Dia | Actividad humana | Claude Code sessions |
 |---|---|---|

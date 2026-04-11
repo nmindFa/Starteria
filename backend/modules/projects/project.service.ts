@@ -191,4 +191,28 @@ export class ProjectService {
 
     return updated as unknown as Project;
   }
+
+  async updateLastPosition(
+    projectId: string,
+    userId: string,
+    position: { stepNumber: number; moduleId?: string }
+  ): Promise<void> {
+    // Verify project exists and user has access
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+    if (!project) throw AppError.notFound('Proyecto');
+
+    await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        lastPosition: {
+          stepNumber: position.stepNumber,
+          moduleId: position.moduleId ?? null,
+          userId,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    });
+  }
 }

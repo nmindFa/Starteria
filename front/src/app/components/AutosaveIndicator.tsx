@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Check, Loader2, Cloud } from 'lucide-react';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -26,17 +26,5 @@ export function AutosaveIndicator({ state = 'saved' }: AutosaveIndicatorProps) {
   );
 }
 
-export function useAutosave(value: unknown, onSave?: () => void, delay = 1500) {
-  const [saveState, setSaveState] = useState<SaveState>('idle');
-
-  useEffect(() => {
-    setSaveState('saving');
-    const timer = setTimeout(() => {
-      setSaveState('saved');
-      onSave?.();
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [value]);
-
-  return saveState;
-}
+// Re-export del hook real para compatibilidad con imports legacy
+export { useAutosave } from '../hooks/useAutosave';

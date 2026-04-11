@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -28,7 +28,9 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
-import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
+import { AutosaveIndicator } from '../components/AutosaveIndicator';
+import { useAutosave } from '../hooks/useAutosave';
+import * as stepService from '../services/stepService';
 
 type ModuleId = 'overview' | 'A' | 'B' | 'C';
 type Audiencia =
@@ -629,7 +631,7 @@ export function Step4Page() {
   const [pitchVideoLink, setPitchVideoLink] = useState('');
   const [pitchAnalysisReady, setPitchAnalysisReady] = useState(false);
 
-  const saveState = useAutosave({
+  const step4FormData = {
     audience,
     meetingGoal,
     decision,
@@ -650,6 +652,21 @@ export function Step4Page() {
     meetingStatus,
     stepFinalized,
     executiveDecisionReady,
+  };
+
+  const autosaveFn = useCallback(async (data: typeof step4FormData) => {
+    if (!projectId) return;
+    await stepService.saveStepData(projectId, 4, {
+      _meta: { version: 1, lastSavedAt: new Date().toISOString(), lastSavedBy: 'user' },
+      formData: data,
+    });
+  }, [projectId]);
+
+  const { state: saveState } = useAutosave({
+    data: step4FormData,
+    saveFn: autosaveFn,
+    delay: 2000,
+    enabled: !!projectId,
   });
 
   if (!project) {

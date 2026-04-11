@@ -78,4 +78,14 @@ export class ProjectController {
       next(err);
     }
   };
+
+  updatePosition = async (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      await this.service.updateLastPosition(req.params.id, user.id, req.body);
+      res.json({ success: true, data: { message: 'Posicion actualizada' } });
+    } catch (err) {
+      next(err);
+    }
+  };
 }

@@ -178,6 +178,7 @@ model Project {
   mentorCredits Int           @default(3)
   riskLevel     RiskLevel?
   isArchived    Boolean       @default(false)
+  lastPosition  Json?
   createdAt     DateTime      @default(now())
   lastModified  DateTime      @updatedAt
 
