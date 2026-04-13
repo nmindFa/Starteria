@@ -1107,8 +1107,8 @@ ${meetingOwner} / ${meetingRole}
   );
 
   return (
-    <div className="flex h-full">
-      <div className="hidden md:flex w-64 flex-col border-r border-slate-200 bg-white p-3 gap-1 shrink-0">
+    <div className="h-full md:grid md:grid-cols-[232px_minmax(0,1fr)] min-[1440px]:grid-cols-[244px_minmax(0,1fr)] min-[1680px]:grid-cols-[256px_minmax(0,1fr)]">
+      <div className="hidden md:flex min-h-0 flex-col border-r border-slate-200 bg-white p-3 gap-1">
         <div className="px-2 py-2 mb-1">
           <button
             onClick={() => navigate(`/projects/${projectId}`)}
@@ -1161,8 +1161,8 @@ ${meetingOwner} / ${meetingRole}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-5 md:p-6">
-        <div className="max-w-5xl mx-auto">
+      <div className="min-w-0 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1420px] px-5 py-6 min-[1440px]:max-w-[1520px] min-[1440px]:px-6 min-[1680px]:max-w-[1640px] min-[1680px]:px-8">
           <button
             onClick={() => navigate(`/projects/${projectId}`)}
             className="flex md:hidden items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors"

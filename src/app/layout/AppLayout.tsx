@@ -11,6 +11,7 @@ const ROLE_LABELS: Record<string, string> = {
   mentor: 'Mentor',
   admin: 'Administrador',
   sponsor: 'Sponsor',
+  portfolio_lead: 'Portfolio Lead',
 };
 
 export function AppLayout() {
@@ -22,6 +23,11 @@ export function AppLayout() {
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/auth', { replace: true });
+      return;
+    }
+
+    if (user?.role === 'portfolio_lead') {
+      navigate('/portfolio/inicio', { replace: true });
       return;
     }
 
@@ -188,7 +194,7 @@ export function AppLayout() {
       <div className="px-3 py-3 border-t border-slate-100">
         <p className="text-xs text-slate-400 px-1 mb-1.5" style={{ fontWeight: 600 }}>VER COMO (demo)</p>
         <div className="grid grid-cols-2 gap-1">
-          {(['owner', 'mentor', 'admin', 'sponsor'] as const).map(r => (
+          {(['owner', 'mentor', 'admin', 'sponsor', 'portfolio_lead'] as const).map(r => (
             <button
               key={r}
               onClick={() => setUserRole(r)}

@@ -44,20 +44,11 @@ const buildCaptureRecordsFromResearch = (researchState: Step1ResearchModuleV2Sta
       if (!source) return;
 
       const guideList = guides.filter(guide => guide?.sourceId === sourceId);
-      const existing = records.get(sourceId);
+      const recordKey = `${front.id}::${sourceId}`;
       const guideSummary = buildGuideSummary(guideList[0]);
 
-      if (existing) {
-        existing.frontIds = Array.from(new Set([...existing.frontIds, front.id]));
-        existing.frontTitles = Array.from(new Set([...existing.frontTitles, front.title || 'Frente sin titulo']));
-        existing.guideIds = Array.from(new Set([...existing.guideIds, ...guideList.map(guide => guide.id)]));
-        existing.guideSummary = existing.guideSummary || guideSummary;
-        existing.guideBody = existing.guideBody || guideList[0]?.body || '';
-        return;
-      }
-
-      records.set(sourceId, {
-        id: `capture-${sourceId}`,
+      records.set(recordKey, {
+        id: `capture-${front.id}-${sourceId}`,
         sourceId,
         sourceLabel: source.label,
         sourceType: source.type === 'perfil' ? 'perfil' : 'data',
@@ -172,11 +163,26 @@ export const syncCaptureSynthesisWithResearch = (
   researchState: Step1ResearchModuleV2State,
 ): Step1CaptureSynthesisData => {
   const nextRecords = buildCaptureRecordsFromResearch(researchState);
+  const currentCaptureById = new Map(current.captures.map(capture => [capture.id, capture]));
+  const currentCapturesBySourceFront = new Map(
+    current.captures.map(capture => [`${capture.sourceId}::${capture.frontIds[0] || ''}`, capture]),
+  );
 
   return {
     ...current,
     captures: nextRecords.map(record => {
-      const existing = current.captures.find(item => item.sourceId === record.sourceId);
+      const existing =
+        currentCaptureById.get(record.id)
+        || currentCapturesBySourceFront.get(`${record.sourceId}::${record.frontIds[0] || ''}`)
+        || current.captures.find(item =>
+          item.sourceId === record.sourceId &&
+          item.frontIds.includes(record.frontIds[0]),
+        )
+        || current.captures.find(item =>
+          item.sourceId === record.sourceId &&
+          item.frontIds.length === 1 &&
+          item.frontIds[0] === record.frontIds[0],
+        );
       if (!existing) return record;
 
       return {
@@ -188,8 +194,26 @@ export const syncCaptureSynthesisWithResearch = (
         status: existing.status,
       };
     }),
-    evidences: current.evidences.filter(evidence =>
-      nextRecords.some(record => record.id === evidence.captureRecordId) || !evidence.captureRecordId,
-    ),
+    evidences: current.evidences
+      .map(evidence => {
+        if (!evidence.captureRecordId) return evidence;
+        if (nextRecords.some(record => record.id === evidence.captureRecordId)) return evidence;
+
+        const legacyCapture = currentCaptureById.get(evidence.captureRecordId);
+        if (!legacyCapture) return null;
+
+        const targetRecord = nextRecords.find(record =>
+          record.sourceId === legacyCapture.sourceId &&
+          legacyCapture.frontIds.includes(record.frontIds[0]),
+        );
+
+        if (!targetRecord) return null;
+
+        return {
+          ...evidence,
+          captureRecordId: targetRecord.id,
+        };
+      })
+      .filter((evidence): evidence is Step1CaptureSynthesisData['evidences'][number] => Boolean(evidence)),
   };
 };

@@ -5,6 +5,8 @@ import { useApp } from '../context/AppContext';
 import type { Project, SponsorTouchpoint } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
 import { ProgressBar } from '../components/ProgressBar';
+import { usePortfolioLead } from '../portfolio/PortfolioLeadContext';
+import { activationLabel, challengeStatusLabel, challengeTypeLabel, participantCtaLabel } from '../portfolio/portfolioLeadCopy';
 
 function SkeletonCard() {
   return (
@@ -70,6 +72,7 @@ function getSponsorMilestone(project: Project) {
 
 export function DashboardPage() {
   const { projects, setCurrentProject, user, getProjectMember, acceptSponsorInvitation } = useApp();
+  const { challenges, strategicFronts } = usePortfolioLead();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [loading] = useState(false);
@@ -95,6 +98,14 @@ export function DashboardPage() {
       : filtered;
 
   const sponsorAlerts = isSponsor ? buildSponsorAlerts(visibleProjects) : [];
+  const participantEmail = user?.email?.toLowerCase() ?? '';
+  const publishedChallenges = challenges.filter(challenge => challenge.visibleToParticipants);
+  const openChallenges = publishedChallenges.filter(challenge => challenge.activationMode === 'convocatoria_abierta');
+  const invitedChallenges = publishedChallenges.filter(challenge =>
+    challenge.activationMode !== 'convocatoria_abierta'
+      && (challenge.activationMode === 'squad_asignado'
+        || challenge.selectedPeople.some(person => person.value.toLowerCase() === participantEmail)),
+  );
 
   const handleOpenProject = (id: string) => {
     const project = projects.find(item => item.id === id);
@@ -208,6 +219,25 @@ export function DashboardPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {isOwner && (
+        <div className="mb-6 grid gap-6 xl:grid-cols-2">
+          <ParticipantChallengePanel
+            title="Retos abiertos"
+            description="Aqui ves retos ya publicados para participantes. Esta bandeja no reemplaza el workspace de la iniciativa."
+            emptyTitle="No hay retos abiertos por ahora"
+            emptyDescription="Cuando Portfolio Lead publique una convocatoria abierta, aparecera aqui."
+            challenges={openChallenges}
+          />
+          <ParticipantChallengePanel
+            title="Retos donde fui invitado"
+            description="Aqui aparecen retos publicados para ti por invitacion o por squad."
+            emptyTitle="No tienes invitaciones activas"
+            emptyDescription="Cuando te inviten a un reto publicado, aparecera aqui con una accion contextual."
+            challenges={invitedChallenges}
+          />
         </div>
       )}
 
@@ -369,6 +399,77 @@ export function DashboardPage() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function ParticipantChallengePanel({
+  title,
+  description,
+  emptyTitle,
+  emptyDescription,
+  challenges,
+}: {
+  title: string;
+  description: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  challenges: ReturnType<typeof usePortfolioLead>['challenges'];
+}) {
+  const { user } = useApp();
+  const { strategicFronts } = usePortfolioLead();
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <h2 className="text-sm text-slate-900" style={{ fontWeight: 700 }}>{title}</h2>
+      <p className="mt-2 text-xs text-slate-500">{description}</p>
+
+      {challenges.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>{emptyTitle}</p>
+          <p className="mt-1 text-xs text-slate-500">{emptyDescription}</p>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {challenges.map(challenge => {
+            const front = strategicFronts.find(item => item.id === challenge.strategicFrontId);
+            const invited = challenge.selectedPeople.some(person => person.value.toLowerCase() === (user?.email?.toLowerCase() ?? ''));
+            return (
+              <div key={challenge.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="max-w-3xl">
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">{challengeStatusLabel(challenge.status)}</span>
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">{activationLabel(challenge.activationMode)}</span>
+                    </div>
+                    <p className="mt-3 text-sm text-slate-900" style={{ fontWeight: 700 }}>{challenge.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">{front?.name ?? 'Sin frente'} · {challengeTypeLabel(challenge.challengeType)}</p>
+                  </div>
+                  <button className="rounded-lg bg-slate-900 px-3 py-2 text-xs text-white hover:bg-slate-800 transition-colors" style={{ fontWeight: 600 }}>
+                    {participantCtaLabel(challenge, invited)}
+                  </button>
+                </div>
+
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <MiniInfo label="Que se quiere mover" value={challenge.whatWeWantToMove} />
+                  <MiniInfo label="Por que importa ahora" value={challenge.whyNow} />
+                  <MiniInfo label="Challenge owner" value={challenge.challengeOwner} />
+                  <MiniInfo label="Estado de publicacion" value={challenge.publicationNotes} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MiniInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <p className="text-[11px] text-slate-500" style={{ fontWeight: 700 }}>{label}</p>
+      <p className="mt-1 text-xs text-slate-700">{value}</p>
     </div>
   );
 }

@@ -208,6 +208,60 @@ const buildResearchModuleAContext = (
   actoresProceso,
 });
 
+const getResearchFocusSignature = (researchState: Step1ResearchModuleV2State) => JSON.stringify({
+  objective: researchState.objective.draft,
+  fronts: researchState.fronts.map(front => ({
+    id: front.id,
+    title: front.title,
+    whyItMatters: front.whyItMatters,
+    learningGoal: front.learningGoal,
+  })),
+});
+
+const getResearchPlanSignature = (researchState: Step1ResearchModuleV2State) => JSON.stringify({
+  fronts: researchState.fronts.map(front => ({
+    id: front.id,
+    sourceMode: front.sourceMode,
+    sources: front.sources,
+    selectedSourceIds: front.selectedSourceIds,
+    guides: front.guides,
+  })),
+});
+
+const hasResearchOperationalPlan = (researchState: Step1ResearchModuleV2State) =>
+  researchState.fronts.some(front =>
+    front.sources.some(source => source.origin === 'manual') ||
+    front.guides.length > 0 ||
+    front.guides.some(guide => guide.origin === 'manual'),
+  );
+
+const mergeSuggestedFrontsWithExisting = (
+  currentFronts: Step1ResearchModuleV2State['fronts'],
+  suggestedFronts: Step1ResearchModuleV2State['fronts'],
+): Step1ResearchModuleV2State['fronts'] => {
+  return suggestedFronts.map((suggestedFront, index) => {
+    const currentFront = currentFronts[index];
+    if (!currentFront) {
+      return {
+        ...suggestedFront,
+        status: 'revisar',
+        guides: suggestedFront.guides.map(guide => ({ ...guide, status: 'revisar' })),
+      };
+    }
+
+    return {
+      ...currentFront,
+      id: currentFront.id,
+      title: suggestedFront.title,
+      whyItMatters: suggestedFront.whyItMatters,
+      learningGoal: suggestedFront.learningGoal,
+      origin: suggestedFront.origin,
+      status: 'revisar',
+      guides: currentFront.guides.map(guide => ({ ...guide, status: 'revisar' })),
+    };
+  });
+};
+
 const syncLegacyModuleBFromV2 = (
   current: ModuleBData,
   researchV2: Step1ResearchModuleV2State,
@@ -460,30 +514,6 @@ export function Step1Page() {
 
   const researchModuleAContext = buildResearchModuleAContext(asisData, lecturaConsolidada, actoresProceso);
 
-  // Temas prioritarios para investigar — derivados del contexto real del módulo
-  const temasPrioritarios = [
-    {
-      n: 1,
-      titulo: 'Magnitud real del problema',
-      desc: `¿Cuántos casos exactos presentan retraso en "${asisData.quiebreIndex !== null && asisData.pasos[asisData.quiebreIndex] ? asisData.pasos[asisData.quiebreIndex].toLowerCase() : 'el paso quiebre'}"? ¿Hay registros en sistema o se trabaja con estimaciones informales?`,
-    },
-    {
-      n: 2,
-      titulo: 'Tiempo y costo real por caso',
-      desc: `¿Cuánto tarda en promedio resolver el quiebre, y cuántas horas-persona consume en ${actoresProceso ? actoresProceso.split(',')[0].trim() : 'los actores involucrados'}? ¿Existe algún cálculo o referencia de costo?`,
-    },
-    {
-      n: 3,
-      titulo: 'Variación del impacto entre perfiles',
-      desc: `¿El problema afecta igual a todos los involucrados o hay perfiles que lo sufren de forma más crítica? Identificar esos segmentos ayudará a enfocar la acción.`,
-    },
-    {
-      n: 4,
-      titulo: 'Parches actuales y sus límites',
-      desc: `¿Qué hacen hoy ${actoresProceso ? actoresProceso.split(',')[0].trim() : 'los actores'} para compensar el problema mientras existe? ¿Por qué esas soluciones improvisadas no resuelven el quiebre de fondo?`,
-    },
-  ];
-
   const analysisSignature = JSON.stringify({
     casoReal: asisData.casoReal,
     pasos: asisData.pasos,
@@ -492,13 +522,10 @@ export function Step1Page() {
     causaInmediata: asisData.causaInmediata,
     actoresProceso,
   });
-  const researchSignature = JSON.stringify({
-    objective: bData.researchV2.objective,
-    fronts: bData.researchV2.fronts,
-  });
+  const researchPlanSignature = getResearchPlanSignature(bData.researchV2);
   const captureSignature = JSON.stringify(captureSynthesisData);
   const analysisSignatureRef = useRef(analysisSignature);
-  const researchSignatureRef = useRef(researchSignature);
+  const researchPlanSignatureRef = useRef(researchPlanSignature);
   const captureSignatureRef = useRef(captureSignature);
 
   const moduloBIniciado =
@@ -525,13 +552,13 @@ export function Step1Page() {
   }, [analysisSignature, moduloBIniciado, moduloCIniciado]);
 
   useEffect(() => {
-    if (researchSignatureRef.current === researchSignature) return;
-    researchSignatureRef.current = researchSignature;
+    if (researchPlanSignatureRef.current === researchPlanSignature) return;
+    researchPlanSignatureRef.current = researchPlanSignature;
     setModuleAdjustments(prev => ({
-      research: false,
+      research: prev.research ? false : prev.research,
       capture: moduloCIniciado ? true : prev.capture,
     }));
-  }, [researchSignature, moduloCIniciado]);
+  }, [researchPlanSignature, moduloCIniciado]);
 
   useEffect(() => {
     if (captureSignatureRef.current === captureSignature) return;
@@ -546,6 +573,24 @@ export function Step1Page() {
       const nextResearchV2 = updater(prev.researchV2);
       return syncLegacyModuleBFromV2(prev, nextResearchV2);
     });
+  };
+
+  const updateResearchFocusFromModuleA = (updater: (prev: Step1ResearchModuleV2State) => Step1ResearchModuleV2State) => {
+    const previousResearchState = bData.researchV2;
+    const nextResearchState = updater(previousResearchState);
+    const focusChanged = getResearchFocusSignature(previousResearchState) !== getResearchFocusSignature(nextResearchState);
+
+    updateResearchV2(() => nextResearchState);
+
+    if (!focusChanged) return;
+
+    const operationalPlanExists = hasResearchOperationalPlan(previousResearchState);
+    if (!operationalPlanExists && !moduloCIniciado) return;
+
+    setModuleAdjustments(prev => ({
+      research: operationalPlanExists ? true : prev.research,
+      capture: moduloCIniciado ? true : prev.capture,
+    }));
   };
 
   if (!project || !step) return <div className="p-6"><p className="text-slate-500">Proyecto o Step no encontrado.</p></div>;
@@ -577,14 +622,14 @@ export function Step1Page() {
     if (bData.version === 'v2') {
       const missing: string[] = [];
       if (!bData.researchV2.objective.draft.trim()) {
-        missing.push('Define el objetivo general de investigacion');
+        missing.push('Completa el objetivo de investigacion en el Modulo A');
       }
 
       const validFronts = bData.researchV2.fronts.filter(front =>
         front.title.trim() && front.whyItMatters.trim() && front.learningGoal.trim(),
       );
       if (validFronts.length < 3) {
-        missing.push(`Define al menos 3 frentes de investigacion alineados (llevas ${validFronts.length})`);
+        missing.push(`Completa al menos 3 temas prioritarios en el Modulo A (llevas ${validFronts.length})`);
       }
 
       const frontsWithoutSources = bData.researchV2.fronts.filter(front =>
@@ -634,9 +679,13 @@ export function Step1Page() {
   };
 
   const moduloDListo = () => getModuloDMissing().length === 0;
+  const moduloAResearchReady =
+    bData.researchV2.objective.draft.trim().length > 0 &&
+    bData.researchV2.fronts.filter(front => front.title.trim() && front.whyItMatters.trim() && front.learningGoal.trim()).length >= 3;
+  const moduloAListo = fichaConfirmada && moduloAResearchReady;
 
   const modules: { id: ModuleId; label: string; shortName: string; unlocked: boolean; completed: boolean }[] = [
-    { id: 'A', label: 'Módulo A: Análisis inicial', shortName: 'A · Análisis inicial', unlocked: true, completed: fichaConfirmada || (bloque1Ok && bloque2Ok && bloque3Ok) },
+    { id: 'A', label: 'Módulo A: Análisis inicial', shortName: 'A · Análisis inicial', unlocked: true, completed: moduloAListo },
     { id: 'B', label: 'Módulo B: Investigación de campo', shortName: 'B · Investigación', unlocked: true, completed: moduloBListo() },
     { id: 'C', label: 'Módulo C: Restricciones', shortName: 'C · Restricciones', unlocked: true, completed: semaforo === 'verde' },
     { id: 'D', label: 'Módulo D: Actores y validación', shortName: 'D · Validación', unlocked: semaforo !== 'rojo', completed: moduloDListo() },
@@ -684,7 +733,7 @@ export function Step1Page() {
   };
 
   const canSend = modules.slice(0, 4).every(m => m.completed) || true; // for demo
-  const moduloACompletado = fichaConfirmada || (bloque1Ok && bloque2Ok && bloque3Ok);
+  const moduloACompletado = moduloAListo;
   const moduloBCompletado = moduloBListo();
   const captureSynthesisMissing = getStep1CaptureMissing(captureSynthesisData);
   const moduloCCompletado = captureSynthesisMissing.length === 0;
@@ -822,6 +871,9 @@ export function Step1Page() {
     if (!asisData.consecuencia.trim()) m.push('Consecuencia del reto (Bloque 3)');
     if (!asisData.causaInmediata.trim()) m.push('Causa inmediata (Bloque 3)');
     if (!fichaConfirmada) m.push('Analiza con IA y confirma la ficha consolidada');
+    if (!bData.researchV2.objective.draft.trim()) m.push('Define el objetivo de investigación sugerido para el Módulo B');
+    const frentesValidos = bData.researchV2.fronts.filter(front => front.title.trim() && front.whyItMatters.trim() && front.learningGoal.trim()).length;
+    if (frentesValidos < 3) m.push(`Define al menos 3 temas prioritarios alineados al objetivo (llevas ${frentesValidos})`);
     return m;
   };
 
@@ -901,14 +953,21 @@ export function Step1Page() {
     setIaLoadingB(true);
     setTimeout(() => {
       if (bData.version === 'v2') {
-        updateResearchV2(prev => ({
+        const suggestedObjective = buildResearchObjective(researchModuleAContext);
+        updateResearchFocusFromModuleA(prev => ({
           ...prev,
           objective: {
-            ...buildResearchObjective(researchModuleAContext),
-            draft: prev.objective.draft,
-            suggestedDraft: buildResearchObjective(researchModuleAContext).suggestedDraft,
+            ...suggestedObjective,
+            draft: suggestedObjective.suggestedDraft,
+            suggestedDraft: suggestedObjective.suggestedDraft,
+            draftOrigin: 'sugerido',
             status: 'revisar',
           },
+          fronts: prev.fronts.map(front => ({
+            ...front,
+            status: 'revisar',
+            guides: front.guides.map(guide => ({ ...guide, status: 'revisar' })),
+          })),
         }));
         setIaLoadingB(false);
         return;
@@ -929,9 +988,9 @@ export function Step1Page() {
     setIaLoadingB(true);
     setTimeout(() => {
       if (bData.version === 'v2') {
-        updateResearchV2(prev => ({
+        updateResearchFocusFromModuleA(prev => ({
           ...prev,
-          fronts: buildResearchFrontSuggestions(researchModuleAContext),
+          fronts: mergeSuggestedFrontsWithExisting(prev.fronts, buildResearchFrontSuggestions(researchModuleAContext)),
         }));
         setIaLoadingB(false);
         return;
@@ -952,6 +1011,60 @@ export function Step1Page() {
       }));
       setIaLoadingB(false);
     }, 1800);
+  };
+
+  const actualizarObjetivoInvestigacionDesdeA = (nextDraft: string) => {
+    updateResearchFocusFromModuleA(prev => ({
+      ...prev,
+      objective: {
+        ...prev.objective,
+        draft: nextDraft,
+        draftOrigin: 'manual',
+        status: 'revisar',
+      },
+      fronts: prev.fronts.map(front => ({
+        ...front,
+        status: 'revisar',
+        guides: front.guides.map(guide => ({ ...guide, status: 'revisar' })),
+      })),
+    }));
+  };
+
+  const actualizarTemaPrioritarioDesdeA = (
+    frontId: string,
+    field: 'title' | 'whyItMatters' | 'learningGoal',
+    value: string,
+  ) => {
+    updateResearchFocusFromModuleA(prev => ({
+      ...prev,
+      fronts: prev.fronts.map(front => {
+        if (front.id !== frontId) return front;
+        return {
+          ...front,
+          [field]: value,
+          origin: 'manual',
+          status: 'revisar',
+          guides: front.guides.map(guide => ({ ...guide, status: 'revisar' })),
+        };
+      }),
+    }));
+  };
+
+  const getLearningGoalHighlights = (learningGoal: string) => {
+    const normalized = learningGoal
+      .replace(/\r/g, '\n')
+      .split('\n')
+      .map(item => item.replace(/^[\s\-•*]+/, '').trim())
+      .filter(Boolean);
+
+    const sourceItems = normalized.length > 1
+      ? normalized
+      : learningGoal
+          .split(/(?<=\?)|[.;]+|\s*,\s*/g)
+          .map(item => item.replace(/^[\s\-•*]+/, '').trim())
+          .filter(Boolean);
+
+    return sourceItems.slice(0, 4);
   };
 
   const sugerirPerfilesIA = () => {
@@ -1003,9 +1116,9 @@ export function Step1Page() {
   };
 
   return (
-    <div className="flex h-full">
+    <div className="h-full md:grid md:grid-cols-[220px_minmax(0,1fr)] min-[1440px]:grid-cols-[232px_minmax(0,1fr)] min-[1680px]:grid-cols-[240px_minmax(0,1fr)]">
       {/* Left module nav */}
-      <div className="hidden md:flex w-52 flex-col border-r border-slate-200 bg-white p-3 gap-1 shrink-0">
+      <div className="hidden md:flex min-h-0 flex-col border-r border-slate-200 bg-white p-3 gap-1">
         <div className="px-2 py-2 mb-1">
           <button onClick={() => navigate(`/projects/${projectId}`)} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors">
             <ArrowLeft size={12} /> Volver al proyecto
@@ -1087,8 +1200,22 @@ export function Step1Page() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-2xl mx-auto">
+      <div className="min-w-0 overflow-y-auto">
+        <div
+          className={
+            activeModule === 'B'
+              ? 'mx-auto w-full max-w-[1380px] px-5 py-6 min-[1440px]:max-w-[1500px] min-[1440px]:px-6 min-[1680px]:max-w-[1620px] min-[1680px]:px-8'
+              : 'mx-auto w-full max-w-[1380px] px-5 py-6 min-[1440px]:max-w-[1500px] min-[1440px]:px-6 min-[1680px]:max-w-[1620px] min-[1680px]:px-8'
+          }
+        >
+          <div
+            className={
+              activeModule === 'B'
+                ? 'grid min-w-0 grid-cols-1 items-start gap-6 min-[1280px]:grid-cols-[minmax(0,940px)_minmax(0,1fr)] min-[1440px]:grid-cols-[minmax(0,1020px)_minmax(0,1fr)] min-[1680px]:grid-cols-[minmax(0,1100px)_minmax(120px,1fr)] min-[1680px]:gap-8'
+                : ''
+            }
+          >
+            <div className={activeModule === 'B' ? 'min-w-0' : 'mx-auto w-full max-w-[940px] min-[1440px]:max-w-[1020px] min-[1680px]:max-w-[1100px]'}>
           {/* Mobile back */}
           <button onClick={() => navigate(`/projects/${projectId}`)} className="flex md:hidden items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors">
             <ArrowLeft size={14} /> Volver al proyecto
@@ -1731,12 +1858,12 @@ export function Step1Page() {
                           <p className="text-indigo-200 text-xs">Antes de avanzar al Módulo B, conviene clarificar estos puntos. Serán la base de lo que definas a continuación.</p>
                         </div>
                         <div className="bg-white divide-y divide-indigo-50">
-                          {temasPrioritarios.map((tema) => (
-                            <div key={tema.n} className="flex items-start gap-4 px-4 py-3.5">
-                              <span className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0 mt-0.5" style={{ fontWeight: 700 }}>{tema.n}</span>
+                          {bData.researchV2.fronts.map((tema, index) => (
+                            <div key={tema.id} className="flex items-start gap-4 px-4 py-3.5">
+                              <span className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs shrink-0 mt-0.5" style={{ fontWeight: 700 }}>{index + 1}</span>
                               <div className="flex-1">
-                                <p className="text-sm text-slate-800 mb-0.5" style={{ fontWeight: 600 }}>{tema.titulo}</p>
-                                <p className="text-xs text-slate-500 leading-relaxed">{tema.desc}</p>
+                                <p className="text-sm text-slate-800 mb-0.5" style={{ fontWeight: 600 }}>{tema.title || 'Tema prioritario sin definir'}</p>
+                                <p className="text-xs text-slate-500 leading-relaxed">{tema.learningGoal || 'Completa este foco para dejar claro que necesitas validar antes de pasar al Modulo B.'}</p>
                               </div>
                             </div>
                           ))}
@@ -1891,17 +2018,158 @@ export function Step1Page() {
                     ))}
                   </div>
 
-                  {/* Temas prioritarios — compacto */}
-                  <div className="px-4 py-3 border-t border-indigo-100 bg-indigo-50">
-                    <p className="text-xs text-indigo-600 mb-2" style={{ fontWeight: 700 }}>Temas a investigar en el Módulo B</p>
-                    <ul className="space-y-1">
-                      {temasPrioritarios.map(t => (
-                        <li key={t.n} className="flex items-start gap-2 text-xs text-indigo-800">
-                          <span className="text-indigo-400 shrink-0 mt-0.5" style={{ fontWeight: 700 }}>{t.n}.</span>
-                          <span style={{ fontWeight: 500 }}>{t.titulo}</span>
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="px-4 py-4 border-t border-indigo-100 bg-indigo-50/70 space-y-4">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>Salida para investigación</p>
+                        <p className="text-xs text-indigo-800">
+                          Aquí defines qué necesitas validar. El Módulo B heredará este foco para organizar la captura en campo.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={sugerirObjetivoIA}
+                          disabled={iaLoadingB}
+                          className="flex items-center gap-1.5 text-xs text-violet-700 px-3 py-1.5 bg-white hover:bg-violet-50 rounded-lg border border-violet-200 transition-colors disabled:opacity-50"
+                          style={{ fontWeight: 600 }}
+                        >
+                          <Sparkles size={11} /> {iaLoadingB ? 'Reformulando...' : 'Reformular objetivo con IA'}
+                        </button>
+                        <button
+                          onClick={() => setShowMentorModal(true)}
+                          className="flex items-center gap-1.5 text-xs text-slate-700 px-3 py-1.5 bg-white hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
+                          style={{ fontWeight: 600 }}
+                        >
+                          <MessageSquare size={11} /> Mentor
+                        </button>
+                      </div>
+                    </div>
+
+                    {moduleAdjustments.research && (
+                      <div className="rounded-xl border border-amber-200 bg-white px-3 py-2.5">
+                        <p className="text-xs text-amber-800" style={{ fontWeight: 700 }}>Módulo B requiere actualización</p>
+                        <p className="text-xs text-amber-700 mt-1">
+                          Cambió el foco de investigación. Revisa en el Módulo B si las fuentes y guías siguen alineadas antes de avanzar.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="rounded-xl border border-indigo-100 bg-white p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                          <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700 }}>Objetivo de investigación</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {bData.researchV2.objective.draftOrigin === 'sugerido' && (
+                              <span className="text-[11px] px-2 py-1 rounded-full bg-violet-100 text-violet-700 border border-violet-200" style={{ fontWeight: 700 }}>
+                                Sugerido por IA
+                              </span>
+                            )}
+                            <span className="text-[11px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700" style={{ fontWeight: 700 }}>
+                              Define qué validar
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <textarea
+                        value={bData.researchV2.objective.draft}
+                        onChange={event => actualizarObjetivoInvestigacionDesdeA(event.target.value)}
+                        rows={4}
+                        placeholder="Ej. Validar si el reto realmente ocurre, a quién afecta más y qué evidencia hace falta antes de avanzar."
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                      />
+                      <div className="rounded-xl border border-violet-100 bg-violet-50 p-3">
+                        <p className="text-xs text-violet-700" style={{ fontWeight: 700 }}>Por qué este objetivo tiene sentido</p>
+                        <p className="text-xs text-violet-800 mt-1 leading-relaxed">
+                          {bData.researchV2.objective.trace.recommendationReason}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <p className="text-xs text-indigo-600" style={{ fontWeight: 700 }}>Temas prioritarios alineados al objetivo</p>
+                          <p className="text-xs text-slate-500 mt-1">Edita aquí el foco. En el Módulo B solo organizarás cómo capturar la información.</p>
+                        </div>
+                        <button
+                          onClick={sugerirTemasIA}
+                          disabled={iaLoadingB}
+                          className="flex items-center gap-1.5 text-xs text-violet-700 px-3 py-1.5 bg-white hover:bg-violet-50 rounded-lg border border-violet-200 transition-colors disabled:opacity-50"
+                          style={{ fontWeight: 600 }}
+                        >
+                          <Sparkles size={11} /> {iaLoadingB ? 'Actualizando...' : 'Sugerir temas con IA'}
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {bData.researchV2.fronts.map((front, index) => (
+                          <div key={front.id} className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 space-y-4 shadow-sm">
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[11px] px-2 py-1 rounded-full bg-indigo-100 text-indigo-700" style={{ fontWeight: 700 }}>
+                                Tema {index + 1}
+                              </span>
+                              {front.origin === 'sugerido' && (
+                                <span className="text-[11px] px-2 py-1 rounded-full bg-violet-100 text-violet-700 border border-violet-200" style={{ fontWeight: 700 }}>
+                                  Sugerido por IA
+                                </span>
+                              )}
+                              </div>
+                              <span className="text-[11px] text-slate-400" style={{ fontWeight: 600 }}>
+                                Foco de investigacion
+                              </span>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+                                <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 600 }}>Tema prioritario</label>
+                                <input
+                                  value={front.title}
+                                  onChange={event => actualizarTemaPrioritarioDesdeA(front.id, 'title', event.target.value)}
+                                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                              </div>
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+                                <label className="text-xs text-slate-600 mb-1.5 block" style={{ fontWeight: 600 }}>Por qué importa</label>
+                                <p className="text-xs text-slate-500 mb-0.5">Explica por que vale la pena investigar este tema antes de definir la captura.</p>
+                                <textarea
+                                  value={front.whyItMatters}
+                                  onChange={event => actualizarTemaPrioritarioDesdeA(front.id, 'whyItMatters', event.target.value)}
+                                  rows={3}
+                                  className="field-sizing-content min-h-[96px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none overflow-hidden"
+                                />
+                              </div>
+                              <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-4 space-y-3">
+                                <label className="text-xs text-indigo-700 mb-1.5 block" style={{ fontWeight: 700 }}>Qué necesitas validar</label>
+                                <p className="text-xs text-indigo-700/80 mb-0.5">Ordenalo como preguntas o puntos breves para que el foco se entienda rapido.</p>
+                                {front.learningGoal.trim() ? (
+                                  <div className="rounded-xl border border-indigo-100 bg-white/90 px-4 py-3">
+                                    <ul className="space-y-2">
+                                      {getLearningGoalHighlights(front.learningGoal).map((item, itemIndex) => (
+                                        <li key={`${front.id}-learning-${itemIndex}`} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
+                                          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                          <span>{item}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : (
+                                  <div className="rounded-xl border border-dashed border-indigo-200 bg-white/70 px-4 py-3">
+                                    <p className="text-sm text-slate-500 leading-relaxed">Resume aqui la informacion concreta que todavia necesitas confirmar.</p>
+                                  </div>
+                                )}
+                                <textarea
+                                  value={front.learningGoal}
+                                  onChange={event => actualizarTemaPrioritarioDesdeA(front.id, 'learningGoal', event.target.value)}
+                                  rows={3}
+                                  placeholder="Ej. Confirmar frecuencia, impacto real, variaciones entre perfiles y evidencia faltante."
+                                  className="field-sizing-content min-h-[104px] w-full rounded-xl border border-indigo-100 bg-white px-4 py-3 text-sm leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none overflow-hidden"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Footer */}
@@ -1940,7 +2208,7 @@ export function Step1Page() {
                       className={`w-full rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors ${listo ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
                       style={{ fontWeight: 500 }}
                     >
-                      {listo ? <>Módulo A listo → Ir a Medición <ChevronRight size={15} /></> : <><Lock size={14} /> Completa los campos requeridos para avanzar</>}
+                      {listo ? <>Módulo A listo → Ir a Investigación de campo <ChevronRight size={15} /></> : <><Lock size={14} /> Completa los campos requeridos para avanzar</>}
                     </button>
                   </div>
                 );
@@ -1962,8 +2230,6 @@ export function Step1Page() {
               onChange={updateResearchV2}
               onOpenIA={openIAPanel}
               onOpenMentor={() => setShowMentorModal(true)}
-              onSuggestObjective={sugerirObjetivoIA}
-              onSuggestFronts={sugerirTemasIA}
               onGoToModuleA={() => setActiveModule('A')}
               onNext={() => moduloBListo() && setActiveModule('C')}
             />
@@ -3957,6 +4223,9 @@ export function Step1Page() {
               )}
             </div>
           )}
+            </div>
+            {activeModule === 'B' && <div className="hidden min-[1280px]:block" aria-hidden="true" />}
+          </div>
         </div>
       </div>
 

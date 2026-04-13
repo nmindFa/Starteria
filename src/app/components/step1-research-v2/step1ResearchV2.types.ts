@@ -8,6 +8,9 @@ export interface ResearchSource {
   type: ResearchSourceType;
   label: string;
   detail: string;
+  owner: string;
+  accessPoint: string;
+  expectedLearning: string;
   origin: 'sugerido' | 'manual';
 }
 
@@ -21,8 +24,10 @@ export interface ResearchGuide {
   criteria: string[];
   suggestedSources: string[];
   questions: string[];
+  questionGroups?: string[][];
   informationGaps: string[];
   body: string;
+  origin: 'sugerido' | 'manual';
   status: ResearchStatus;
 }
 
@@ -31,6 +36,7 @@ export interface ResearchFront {
   title: string;
   whyItMatters: string;
   learningGoal: string;
+  origin: 'sugerido' | 'manual';
   sourceMode: ResearchSourceMode;
   sources: ResearchSource[];
   selectedSourceIds: string[];
@@ -50,6 +56,7 @@ export interface ResearchObjective {
   transformationNote: string;
   draft: string;
   suggestedDraft: string;
+  draftOrigin: 'sugerido' | 'manual';
   trace: ResearchObjectiveTrace;
   status: ResearchStatus;
 }

@@ -18,19 +18,11 @@ const buildInterviewCriteria = (front: ResearchFront): string[] => [
 ];
 
 const buildInterviewQuestions = (front: ResearchFront, criteria: string[]): string[] => {
-  const openingQuestions = [
-    `Para empezar, como se relaciona tu rol con ${normalizeText(front.title, 'este frente').toLowerCase()}?`,
-    'Cuando piensas en este problema, que caso reciente te viene primero a la mente?',
-  ];
-
   const coreQuestions = criteria.map(criterion => {
     const cleanedCriterion = criterion.replace(/\.$/, '').toLowerCase();
     return `Como se manifiesta ${cleanedCriterion} en tu experiencia y que ejemplos concretos puedes compartir?`;
   });
-
-  const closingQuestion = 'Para cerrar, que deberiamos investigar mejor antes de sacar una conclusion sobre este frente?';
-
-  return [...openingQuestions, ...coreQuestions, closingQuestion].slice(0, MAX_GUIDE_QUESTIONS);
+  return coreQuestions.slice(0, MAX_GUIDE_QUESTIONS);
 };
 
 const buildDataSuggestedSources = (source: ResearchSource, front: ResearchFront): string[] => {
@@ -80,6 +72,7 @@ const buildInterviewGuide = (
 ): ResearchGuide => {
   const criteria = buildInterviewCriteria(front);
   const questions = buildInterviewQuestions(front, criteria);
+  const questionGroups = questions.map(question => [question]);
   const intro = `Queremos entender tu experiencia para investigar ${normalizeText(front.title, 'este frente').toLowerCase()} sin asumir respuestas ni dar el problema por validado.`;
 
   return {
@@ -92,8 +85,10 @@ const buildInterviewGuide = (
     criteria,
     suggestedSources: [],
     questions,
+    questionGroups,
     informationGaps: [],
     body: '',
+    origin: 'sugerido',
     status: objective.draft.trim() ? 'listo' : 'revisar',
   };
 };
@@ -120,46 +115,59 @@ const buildDataGuide = (
     questions: [],
     informationGaps,
     body: '',
+    origin: 'sugerido',
     status: objective.draft.trim() ? 'listo' : 'revisar',
   };
 };
 
 export const serializeResearchGuide = (
-  guide: Pick<ResearchGuide, 'mode' | 'sourceType' | 'sourceLabel' | 'intro' | 'criteria' | 'suggestedSources' | 'questions' | 'informationGaps'>,
+  guide: Pick<ResearchGuide, 'mode' | 'sourceType' | 'sourceLabel' | 'intro' | 'criteria' | 'suggestedSources' | 'questions' | 'questionGroups' | 'informationGaps'>,
 ) => {
-  const sourceLine = guide.sourceType === 'perfil'
-    ? `Perfil o rol: ${guide.sourceLabel}`
-    : `Fuente de data o evidencia: ${guide.sourceLabel}`;
-
+  const questionGroups = guide.questionGroups || [];
   if (guide.mode === 'data_review') {
     return [
-      sourceLine,
+      `GUIA DE CAPTURA DE DATA - ${guide.sourceLabel}`,
       '',
-      'Proposito de la revision:',
+      'Objetivo de revision:',
       guide.intro,
       '',
-      'Fuentes de informacion sugeridas:',
+      'Fuente que se revisara:',
       ...guide.suggestedSources.map((item, index) => `${index + 1}. ${item}`),
       '',
-      'Data o evidencia a capturar:',
+      'Datos o evidencia a capturar:',
       ...guide.criteria.map((item, index) => `${index + 1}. ${item}`),
       '',
-      'Vacios de informacion detectables:',
+      'Vacios que podrian seguir abiertos:',
       ...guide.informationGaps.map((item, index) => `${index + 1}. ${item}`),
+      '',
+      'Cierre / siguiente accion:',
+      'Revisa si esta evidencia confirma, ajusta o descarta el frente antes de sacar una conclusion.',
     ].join('\n');
   }
 
   return [
-    sourceLine,
+    `GUIA DE ENTREVISTA - ${guide.sourceLabel}`,
     '',
-    'Introduccion sugerida:',
+    'Objetivo general:',
     guide.intro,
     '',
-    'Criterios sugeridos a investigar:',
+    'Objetivos especificos:',
     ...guide.criteria.map((item, index) => `${index + 1}. ${item}`),
     '',
-    'Preguntas sugeridas:',
-    ...guide.questions.map((item, index) => `${index + 1}. ${item}`),
+    'Introduccion para abrir la conversacion:',
+    guide.intro,
+    '',
+    'Secciones por tema:',
+    ...guide.criteria.flatMap((item, index) => [
+      '',
+      `Tema ${index + 1}: ${item}`,
+      ...(questionGroups[index] && questionGroups[index].length > 0
+        ? questionGroups[index].map((question, questionIndex) => `  ${index + 1}.${questionIndex + 1} ${question}`)
+        : ['  - Agrega preguntas para este tema antes de usar la guia.']),
+    ]),
+    '',
+    'Cierre:',
+    'Pregunta que mas falta entender antes de cerrar la conversacion.',
   ].join('\n');
 };
 

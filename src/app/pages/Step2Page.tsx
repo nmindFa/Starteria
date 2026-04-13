@@ -11,10 +11,12 @@ import { BannerPorDefinir } from '../components/BannerPorDefinir';
 import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
 import { EvidenceUploader } from '../components/EvidenceUploader';
 import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
+import { StepWorkspaceShell } from '../components/layout/StepWorkspaceShell';
 
 type ModuleId = 'A' | 'B' | 'C' | 'D';
 
 interface Idea { id: string; text: string; cluster?: string }
+interface Participant { id: string; name: string }
 
 interface Finalista {
   id: string;
@@ -234,6 +236,8 @@ export function Step2Page() {
   const [showIdeasCreativas, setShowIdeasCreativas] = useState(false);
   const [activeVoterId, setActiveVoterId] = useState<string>('self');
   const [ideaSelections, setIdeaSelections] = useState<Record<string, string[]>>({ self: [] });
+  const [extraParticipants, setExtraParticipants] = useState<Participant[]>([]);
+  const [newParticipantName, setNewParticipantName] = useState('');
   const [tieDecisionMode, setTieDecisionMode] = useState<'single' | 'combine'>('single');
   const [landedIdeaText, setLandedIdeaText] = useState('');
   const [ideaLandingChecks, setIdeaLandingChecks] = useState({
@@ -342,9 +346,10 @@ export function Step2Page() {
     );
   }
 
-  const teamParticipants = project.team.length > 1
+  const baseParticipants: Participant[] = project.team.length > 1
     ? project.team.map(member => ({ id: member.id, name: member.name }))
-    : [{ id: 'self', name: 'Tú' }];
+    : [{ id: 'self', name: 'Tu' }];
+  const teamParticipants: Participant[] = [...baseParticipants, ...extraParticipants];
   const selectionMap = teamParticipants.reduce<Record<string, string[]>>((acc, participant) => {
     acc[participant.id] = ideaSelections[participant.id] || [];
     return acc;
@@ -364,6 +369,41 @@ export function Step2Page() {
       if (current.length >= 3) return prev;
       return { ...prev, [participantId]: [...current, ideaId] };
     });
+  };
+
+  const assignIdeaRank = (participantId: string, ideaId: string, rankIndex: number) => {
+    setIdeaSelections(prev => {
+      const current = [...(prev[participantId] || [])];
+      const withoutIdea = current.filter(id => id !== ideaId);
+      const next = [...withoutIdea];
+      next[rankIndex] = ideaId;
+      const compact = next.filter(Boolean);
+      return { ...prev, [participantId]: compact.slice(0, 3) };
+    });
+  };
+
+  const addVotingParticipant = () => {
+    const cleanName = newParticipantName.trim();
+    if (!cleanName) return;
+
+    const alreadyExists = [...baseParticipants, ...extraParticipants].some(participant =>
+      participant.name.trim().toLowerCase() === cleanName.toLowerCase(),
+    );
+    if (alreadyExists) {
+      toast.error('Ese integrante ya aparece en la votacion.');
+      return;
+    }
+
+    const id = `extra-${Date.now()}`;
+    setExtraParticipants(prev => [...prev, { id, name: cleanName }]);
+    setIdeaSelections(prev => ({ ...prev, [id]: [] }));
+    setActiveVoterId(id);
+    setNewParticipantName('');
+  };
+
+  const selectFinalIdeaBase = (ideaId: string) => {
+    if (selectedIdea !== ideaId) setLandedIdeaText('');
+    setSelectedIdea(ideaId);
   };
 
   const challengeAnchor = {
@@ -551,6 +591,30 @@ export function Step2Page() {
   const highestVoteCount = topIdeas[0]?.votes || 0;
   const tiedIdeas = highestVoteCount > 0 ? topIdeas.filter(item => item.votes === highestVoteCount) : [];
   const hasTie = tiedIdeas.length > 1;
+  const currentSelections = selectionMap[currentVoterId] || [];
+  const currentTopIdeas = currentSelections.map(ideaId => ideas.find(idea => idea.id === ideaId)).filter(Boolean) as Idea[];
+  const currentSelectionMissing = Math.max(0, 3 - currentSelections.length);
+  const teamCompletedCount = teamParticipants.filter(participant => (selectionMap[participant.id] || []).length === 3).length;
+  const participantStatuses = teamParticipants.map(participant => {
+    const selectedCount = (selectionMap[participant.id] || []).length;
+    const status = selectedCount === 3 ? 'completo' : selectedCount > 0 ? 'en_curso' : 'pendiente';
+    return {
+      ...participant,
+      selectedCount,
+      status,
+      topIdeas: (selectionMap[participant.id] || [])
+        .map(ideaId => ideas.find(idea => idea.id === ideaId)?.text)
+        .filter(Boolean) as string[],
+    };
+  });
+  const currentVoterName = participantStatuses.find(participant => participant.id === currentVoterId)?.name || 'Integrante';
+  const votesStarted = participantStatuses.some(participant => participant.selectedCount > 0);
+  const votesThreshold = individualMode ? 1 : Math.max(1, Math.ceil(teamParticipants.length / 2));
+  const phase2Unlocked = individualMode
+    ? currentSelections.length === 3
+    : teamCompletedCount >= votesThreshold;
+  const phase3Unlocked = phase2Unlocked && topIdeas.length > 0;
+  const currentFlowPhase: 1 | 2 | 3 = phase3Unlocked && selectedIdea ? 3 : phase2Unlocked ? 2 : 1;
   const selectedIdeaText = ideas.find(idea => idea.id === selectedIdea)?.text || '';
   const landingChecksComplete = Object.values(ideaLandingChecks).filter(Boolean).length >= 2;
   const ideaNeedsLanding = /robot|ia\b|app\b|plataforma|automatiz|integraci|sistema/i.test(selectedIdeaText);
@@ -665,10 +729,19 @@ export function Step2Page() {
     { id: 'C' as ModuleId, label: 'C · Cards de experimentación', completed: moduleCReady },
   ];
 
+  const mobileBackButton = (
+    <button onClick={() => navigate(`/projects/${projectId}`)} className="flex md:hidden items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors">
+      <ArrowLeft size={14} /> Volver al proyecto
+    </button>
+  );
+
   return (
-    <div className="flex h-full">
-      {/* Left nav */}
-      <div className="hidden md:flex w-52 flex-col border-r border-slate-200 bg-white p-3 gap-1 shrink-0">
+    <>
+    <StepWorkspaceShell
+      railWidth="standard"
+      variant="base"
+      rail={
+        <>
         <div className="px-2 py-2 mb-1">
           <button onClick={() => navigate(`/projects/${projectId}`)} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors">
             <ArrowLeft size={12} /> Volver al proyecto
@@ -685,17 +758,18 @@ export function Step2Page() {
         <div className="mt-auto pt-3 border-t border-slate-100">
           <AutosaveIndicator state={saveState} />
         </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-2xl mx-auto">
-          {/* Ancla del reto (permanent) */}
-          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-5 text-xs text-indigo-700">
-            <p style={{ fontWeight: 600 }}>🎯 Ancla del reto (Step 1)</p>
-            <p className="mt-1">{trimForCard(challengeAnchor.summary, 150)}</p>
-            <p className="mt-0.5 text-indigo-500">Impacto: {challengeAnchor.impact} · Afecta a: {challengeAnchor.affected}</p>
-            <p className="mt-0.5 text-indigo-500">Línea roja: {challengeAnchor.redLine} · Área: {challengeAnchor.area}</p>
-          </div>
+        </>
+      }
+    >
+        {mobileBackButton}
+          {activeModule !== 'A' && (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-5 text-xs text-indigo-700">
+              <p style={{ fontWeight: 600 }}>Ancla del reto validado</p>
+              <p className="mt-1">{trimForCard(challengeAnchor.summary, 150)}</p>
+              <p className="mt-0.5 text-indigo-500">Impacto: {challengeAnchor.impact} · Afecta a: {challengeAnchor.affected}</p>
+              <p className="mt-0.5 text-indigo-500">Línea roja: {challengeAnchor.redLine} · Área: {challengeAnchor.area}</p>
+            </div>
+          )}
 
           {/* Module A: HMW */}
           {activeModule === 'A' && (
@@ -709,52 +783,61 @@ export function Step2Page() {
                     <StatusChip status={hmwListo ? 'Completado' : 'En progreso'} size="sm" />
                   </div>
                   <p className="text-sm text-slate-500 max-w-2xl">
-                    Un HMW traduce el problema validado en una pregunta útil para idear con foco. Primero definimos bien esa pregunta y después abrimos soluciones.
-                    Formula simple: <span className="text-slate-600">“¿Cómo podríamos [mejorar algo] para [quién], sin [restricción o línea roja]?”</span>
+                    Ya validaste el reto. Ahora conviértelo en una pregunta útil para abrir ideas con foco, antes de elegir cualquier solución.
                   </p>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Target size={16} className="text-indigo-500" />
-                  <p className="text-sm text-indigo-900" style={{ fontWeight: 700 }}>Problema validado que guia este HMW</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-4 space-y-4">
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500" style={{ fontWeight: 700 }}>Reto validado del Step 1</p>
+                  <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>{challengeAnchor.title}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{trimForCard(challengeAnchor.summary, 180)}</p>
                 </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-xl bg-white border border-indigo-100 p-4">
-                    <p className="text-xs text-indigo-500 mb-1" style={{ fontWeight: 700 }}>Nombre corto del problema</p>
-                    <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>{challengeAnchor.title}</p>
-                    <p className="text-xs text-slate-500 mt-2">{trimForCard(challengeAnchor.summary, 180)}</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                    <p className="text-[11px] text-slate-500" style={{ fontWeight: 700 }}>Impacto</p>
+                    <p className="text-sm text-slate-700 mt-1">{challengeAnchor.impact}</p>
                   </div>
-                  <div className="rounded-xl bg-white border border-indigo-100 p-4 space-y-2">
-                    <div>
-                      <p className="text-xs text-indigo-500" style={{ fontWeight: 700 }}>Impacto principal</p>
-                      <p className="text-sm text-slate-700">{challengeAnchor.impact}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-indigo-500" style={{ fontWeight: 700 }}>Afecta directamente a</p>
-                      <p className="text-sm text-slate-700">{challengeAnchor.affected}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-indigo-500" style={{ fontWeight: 700 }}>Área o equipo afectado</p>
-                      <p className="text-sm text-slate-700">{challengeAnchor.area}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-indigo-500" style={{ fontWeight: 700 }}>Línea roja o restricción clave</p>
-                      <p className="text-sm text-slate-700">{challengeAnchor.redLine}</p>
-                    </div>
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                    <p className="text-[11px] text-slate-500" style={{ fontWeight: 700 }}>A quién afecta</p>
+                    <p className="text-sm text-slate-700 mt-1">{challengeAnchor.affected}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                    <p className="text-[11px] text-slate-500" style={{ fontWeight: 700 }}>Área implicada</p>
+                    <p className="text-sm text-slate-700 mt-1">{challengeAnchor.area}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                    <p className="text-[11px] text-slate-500" style={{ fontWeight: 700 }}>Línea roja</p>
+                    <p className="text-sm text-slate-700 mt-1">{challengeAnchor.redLine}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Target size={15} className="text-indigo-500" />
+                  <p className="text-sm text-indigo-900" style={{ fontWeight: 700 }}>Tu tarea ahora</p>
+                </div>
+                <p className="text-sm text-indigo-900" style={{ fontWeight: 600 }}>
+                  Convierte este reto en una pregunta que abra soluciones con foco.
+                </p>
+                <p className="text-xs text-indigo-800 leading-relaxed">
+                  Aquí no eliges una solución todavía. Un buen HMW abre una pregunta útil para explorar opciones sin cerrarte demasiado pronto.
+                </p>
+                <p className="text-xs text-indigo-700">
+                  Plantilla simple: <span className="text-indigo-900">“¿Cómo podríamos [mejorar algo] para [quién], sin [restricción o línea roja]?”</span>
+                </p>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                 <button
                   onClick={() => setShowHelpA(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 text-left transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50/80 hover:bg-slate-100 text-left transition-colors"
                 >
                   <span className="flex items-center gap-2 text-sm text-slate-700" style={{ fontWeight: 500 }}>
                     <HelpCircle size={14} className="text-slate-400" />
-                    Antes de elegir tu HMW, considera esto
+                    Antes de cerrar tu HMW, revisa esto
                   </span>
                   <ChevronDown size={14} className={`text-slate-400 transition-transform ${showHelpA ? 'rotate-180' : ''}`} />
                 </button>
@@ -762,10 +845,10 @@ export function Step2Page() {
                   <div className="px-4 py-4 bg-white border-t border-slate-100">
                     <ul className="space-y-2">
                       {[
-                        'No metas la solución dentro de la pregunta.',
-                        'Nombra con claridad qué problema o mejora quieres abordar.',
-                        'Deja claro a quién afecta directamente.',
-                        'Considera la línea roja principal o restricción clave.',
+                        'No metas la solucion dentro de la pregunta.',
+                        'Nombra con claridad que reto o mejora quieres abordar.',
+                        'Deja claro a quien afecta directamente.',
+                        'Incluye la linea roja principal o restriccion clave.',
                         'Busca una pregunta que abra posibilidades, no una sola respuesta obvia.',
                       ].map((item, i) => (
                         <li key={i} className="flex items-start gap-2.5 text-xs text-slate-600">
@@ -1203,75 +1286,231 @@ export function Step2Page() {
                 </div>
               </div>
 
-              <div className="grid lg:grid-cols-[1.35fr_0.95fr] gap-4 items-start">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Flujo progresivo del modulo</p>
+                    <p className="text-xs text-slate-500 mt-1">Primero vota una persona a la vez. Luego revisan el consolidado del equipo. Al final aterrizan una sola idea.</p>
+                  </div>
+                  <div className="text-xs text-slate-500 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5" style={{ fontWeight: 600 }}>
+                    Fase actual: {currentFlowPhase === 1 ? 'Votacion individual' : currentFlowPhase === 2 ? 'Coincidencias del equipo' : 'Idea final'}
+                  </div>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <div className={`rounded-2xl border p-4 ${currentFlowPhase === 1 ? 'border-indigo-300 bg-indigo-50' : currentFlowPhase > 1 ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                    <div className="flex items-start gap-3">
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 ${currentFlowPhase === 1 ? 'bg-indigo-600 text-white' : currentFlowPhase > 1 ? 'bg-emerald-600 text-white' : 'border border-slate-200 bg-white text-slate-400'}`} style={{ fontWeight: 700 }}>
+                        {currentFlowPhase > 1 ? 'OK' : '1'}
+                      </span>
+                      <div>
+                        <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Votacion individual</p>
+                        <p className="text-xs text-slate-600 mt-1">Cada integrante completa su top 3 y se ve con claridad quien esta votando ahora.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`rounded-2xl border p-4 ${currentFlowPhase === 2 ? 'border-indigo-300 bg-indigo-50' : currentFlowPhase > 2 ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                    <div className="flex items-start gap-3">
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 ${currentFlowPhase === 2 ? 'bg-indigo-600 text-white' : currentFlowPhase > 2 ? 'bg-emerald-600 text-white' : 'border border-slate-200 bg-white text-slate-400'}`} style={{ fontWeight: 700 }}>
+                        {currentFlowPhase > 2 ? 'OK' : '2'}
+                      </span>
+                      <div>
+                        <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Coincidencias del equipo</p>
+                        <p className="text-xs text-slate-600 mt-1">
+                          {phase2Unlocked
+                            ? 'Ya puedes revisar el consolidado y detectar la idea que va liderando.'
+                            : individualMode
+                            ? 'Se habilita cuando completes tu top 3.'
+                            : `Se habilita cuando al menos ${votesThreshold} integrante${votesThreshold === 1 ? '' : 's'} complete${votesThreshold === 1 ? '' : 'n'} su top 3.`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`rounded-2xl border p-4 ${currentFlowPhase === 3 ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-slate-50'}`}>
+                    <div className="flex items-start gap-3">
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 ${currentFlowPhase === 3 ? 'bg-indigo-600 text-white' : 'border border-slate-200 bg-white text-slate-400'}`} style={{ fontWeight: 700 }}>
+                        3
+                      </span>
+                      <div>
+                        <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Idea final</p>
+                        <p className="text-xs text-slate-600 mt-1">
+                          {phase3Unlocked
+                            ? 'Ya puedes elegir la idea base y aterrizarla para pasar al siguiente modulo.'
+                            : 'Aparece despues del consolidado, cuando ya hay base suficiente para decidir.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
                 <div className="space-y-4">
-                  <div className="border border-slate-200 rounded-2xl p-4 bg-white">
+                  <div className="border-2 border-indigo-200 rounded-3xl p-5 bg-white shadow-sm">
                     <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                       <div>
-                        <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Ideas registradas</p>
-                        <p className="text-xs text-slate-500">Registra opciones, comparalas y marca las que realmente merece la pena seguir evaluando.</p>
+                        <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>FASE 1</p>
+                        <p className="text-lg text-slate-900" style={{ fontWeight: 700 }}>Votacion individual</p>
+                        <p className="text-sm text-slate-500 mt-1">En esta fase solo importa completar el top 3 de cada integrante. El consolidado y la idea final aparecen despues.</p>
                       </div>
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600" style={{ fontWeight: 600 }}>
-                        {ideas.length} idea{ideas.length !== 1 ? 's' : ''}
-                      </span>
+                      <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-2">
+                        <p className="text-xs text-indigo-700" style={{ fontWeight: 700 }}>{teamCompletedCount}/{teamParticipants.length} completos</p>
+                        <p className="text-[11px] text-indigo-500 mt-0.5">Un integrante activo a la vez</p>
+                      </div>
                     </div>
 
-                    {!individualMode && (
-                      <div className="space-y-2 mb-4">
-                        <p className="text-xs text-slate-500">Cada integrante elige sus 3 ideas favoritas.</p>
-                        <div className="flex gap-2 flex-wrap">
-                          {teamParticipants.map(participant => {
-                            const selectedCount = (selectionMap[participant.id] || []).length;
-                            const isActive = currentVoterId === participant.id;
-                            return (
-                              <button
-                                key={participant.id}
-                                onClick={() => setActiveVoterId(participant.id)}
-                                className={`px-3 py-2 rounded-xl text-xs border transition-colors ${
-                                  isActive
-                                    ? 'bg-indigo-600 border-indigo-600 text-white'
-                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                }`}
-                                style={{ fontWeight: isActive ? 600 : 500 }}
-                              >
-                                {participant.name} · {selectedCount}/3
-                              </button>
-                            );
-                          })}
+                    <div className="space-y-3 mb-4">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Integrantes y estado de votacion</p>
+                        <p className="text-xs text-slate-500">Selecciona a quien esta votando ahora para registrar su top 3.</p>
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        <input
+                          value={newParticipantName}
+                          onChange={e => setNewParticipantName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addVotingParticipant();
+                            }
+                          }}
+                          placeholder="Agregar integrante"
+                          className="flex-1 min-w-[220px] border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                        />
+                        <button
+                          onClick={addVotingParticipant}
+                          disabled={!newParticipantName.trim()}
+                          className="px-3 py-2.5 rounded-xl text-xs border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          style={{ fontWeight: 600 }}
+                        >
+                          <Plus size={13} className="inline mr-1" /> Agregar integrante
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {participantStatuses.map(participant => {
+                          const isActive = currentVoterId === participant.id;
+                          const statusTone =
+                            participant.status === 'completo'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                              : participant.status === 'en_curso'
+                              ? 'border-amber-200 bg-amber-50 text-amber-800'
+                              : 'border-slate-200 bg-slate-50 text-slate-700';
+                          const indicatorTone =
+                            participant.status === 'completo'
+                              ? 'bg-emerald-600 text-white'
+                              : participant.status === 'en_curso'
+                              ? 'bg-amber-500 text-white'
+                              : 'bg-slate-300 text-slate-700';
+
+                          return (
+                            <button
+                              key={participant.id}
+                              onClick={() => setActiveVoterId(participant.id)}
+                              className={`w-full text-left rounded-2xl border p-4 transition-colors ${isActive ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                            >
+                              <div className="flex items-start justify-between gap-3 flex-wrap">
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className={`text-base ${isActive ? 'text-indigo-900' : 'text-slate-900'}`} style={{ fontWeight: 700 }}>{participant.name}</p>
+                                    {isActive && (
+                                      <span className="text-[11px] px-2.5 py-1 rounded-full bg-indigo-600 text-white" style={{ fontWeight: 700 }}>
+                                        Votando ahora
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-slate-500 mt-1">{participant.selectedCount}/3 votos registrados</p>
+                                </div>
+                                <div className={`rounded-2xl border px-3 py-2 ${statusTone}`}>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${indicatorTone}`} style={{ fontWeight: 700 }}>
+                                      {participant.status === 'completo' ? '✓' : participant.status === 'en_curso' ? '•' : '...'}
+                                    </span>
+                                    <div>
+                                      <p className="text-xs" style={{ fontWeight: 700 }}>
+                                        {participant.status === 'completo' ? 'Completo' : participant.status === 'en_curso' ? 'En curso' : 'Pendiente'}
+                                      </p>
+                                      <p className="text-[11px] opacity-80">
+                                        {participant.status === 'completo'
+                                          ? 'Ya termino su votacion'
+                                          : participant.status === 'en_curso'
+                                          ? 'Ya empezo, aun le faltan votos'
+                                          : 'Todavia no registra votos'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div>
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 700 }}>
+                              Votacion activa
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">Aqui completas el top 3 de {currentVoterName}.</p>
+                          </div>
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-white text-slate-700 border border-slate-200" style={{ fontWeight: 700 }}>
+                            {currentSelections.length}/3
+                          </span>
+                        </div>
+
+                        <div className="rounded-xl border border-indigo-100 bg-white px-3 py-2.5 mb-3">
+                          <p className="text-xs text-indigo-700" style={{ fontWeight: 700 }}>
+                            {currentVoterName} esta registrando sus votos ahora
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {['Top 1', 'Top 2', 'Top 3'].map((label, index) => (
+                            <div key={label} className="rounded-2xl border border-white/70 bg-white px-3 py-3">
+                              <p className="text-[11px] text-indigo-500 mb-1" style={{ fontWeight: 700 }}>{label}</p>
+                              <p className={`${currentTopIdeas[index] ? 'text-slate-800' : 'text-slate-400'} text-sm`} style={{ fontWeight: 600 }}>
+                                {currentTopIdeas[index]?.text || 'Aun sin elegir'}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className={`mt-3 rounded-2xl border px-3 py-3 ${currentSelectionMissing === 0 ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                          <p className={`text-sm ${currentSelectionMissing === 0 ? 'text-emerald-700' : 'text-amber-700'}`} style={{ fontWeight: 700 }}>
+                            {currentSelectionMissing === 0 ? 'Top 3 completo.' : `Faltan ${currentSelectionMissing} seleccion${currentSelectionMissing === 1 ? '' : 'es'} para cerrar esta votacion.`}
+                          </p>
                         </div>
                       </div>
-                    )}
+                    </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-4">
+                      <div className="border border-slate-200 rounded-2xl p-4 bg-white">
+                        <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+                          <div>
+                            <p className="text-sm text-slate-800" style={{ fontWeight: 700 }}>Ideas disponibles</p>
+                            <p className="text-xs text-slate-500 mt-1">Asigna `Top 1`, `Top 2` y `Top 3` para {currentVoterName}. Aqui la tarea principal es votar.</p>
+                          </div>
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600" style={{ fontWeight: 600 }}>
+                            {ideas.length} idea{ideas.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
                       {ideas.map((idea, index) => {
                         const selectedByCurrent = (selectionMap[currentVoterId] || []).includes(idea.id);
-                        const voteCount = ideaVoteSummary.find(item => item.id === idea.id)?.votes || 0;
-                        const isSelectedIdea = selectedIdea === idea.id;
                         return (
-                          <div key={idea.id} className={`border rounded-xl p-3 transition-colors ${
-                            isSelectedIdea ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white'
+                          <div key={idea.id} className={`border rounded-2xl p-3 transition-colors ${
+                            selectedByCurrent ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200 bg-white'
                           }`}>
                             <div className="flex items-start gap-3">
-                              <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 text-xs flex items-center justify-center shrink-0 mt-0.5" style={{ fontWeight: 700 }}>
+                              <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 text-xs flex items-center justify-center shrink-0 mt-0.5" style={{ fontWeight: 700 }}>
                                 {index + 1}
                               </span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm text-slate-800">{idea.text}</p>
-                                <div className="flex items-center gap-2 flex-wrap mt-2">
-                                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${voteCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`} style={{ fontWeight: 600 }}>
-                                    {voteCount} voto{voteCount !== 1 ? 's' : ''}
-                                  </span>
-                                  {topIdeas.some(item => item.id === idea.id) && (
-                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700" style={{ fontWeight: 600 }}>
-                                      Entre las mas votadas
-                                    </span>
-                                  )}
-                                  {isSelectedIdea && (
-                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700" style={{ fontWeight: 600 }}>
-                                      Idea elegida
-                                    </span>
-                                  )}
-                                </div>
+                                {selectedByCurrent && (
+                                  <p className="text-xs text-indigo-600 mt-2" style={{ fontWeight: 600 }}>
+                                    Esta idea ya forma parte del top 3 de {currentVoterName}.
+                                  </p>
+                                )}
                               </div>
                               <button
                                 onClick={() => setIdeas(prev => prev.filter(item => item.id !== idea.id))}
@@ -1283,42 +1522,59 @@ export function Step2Page() {
 
                             <div className="flex items-center gap-2 flex-wrap mt-3">
                               <button
-                                onClick={() => toggleIdeaVote(currentVoterId, idea.id)}
-                                className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                                  selectedByCurrent
+                                onClick={() => assignIdeaRank(currentVoterId, idea.id, 0)}
+                                className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${
+                                  currentSelections[0] === idea.id
                                     ? 'bg-indigo-600 border-indigo-600 text-white'
                                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                 }`}
-                                style={{ fontWeight: 600 }}
+                                style={{ fontWeight: 700 }}
                               >
-                                {selectedByCurrent ? 'Ya esta en el top 3' : 'Marcar en el top 3'}
+                                {currentSelections[0] === idea.id ? 'Top 1 ✓' : 'Top 1'}
                               </button>
                               <button
-                                onClick={() => {
-                                  if (selectedIdea !== idea.id) setLandedIdeaText('');
-                                  setSelectedIdea(idea.id);
-                                }}
-                                className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                                  isSelectedIdea
-                                    ? 'bg-emerald-600 border-emerald-600 text-white'
-                                    : 'bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                                onClick={() => assignIdeaRank(currentVoterId, idea.id, 1)}
+                                className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${
+                                  currentSelections[1] === idea.id
+                                    ? 'bg-indigo-600 border-indigo-600 text-white'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                 }`}
-                                style={{ fontWeight: 600 }}
+                                style={{ fontWeight: 700 }}
                               >
-                                {isSelectedIdea ? 'Idea final activa' : 'Elegir como idea final'}
+                                {currentSelections[1] === idea.id ? 'Top 2 ✓' : 'Top 2'}
                               </button>
+                              <button
+                                onClick={() => assignIdeaRank(currentVoterId, idea.id, 2)}
+                                className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${
+                                  currentSelections[2] === idea.id
+                                    ? 'bg-indigo-600 border-indigo-600 text-white'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                                style={{ fontWeight: 700 }}
+                              >
+                                {currentSelections[2] === idea.id ? 'Top 3 ✓' : 'Top 3'}
+                              </button>
+                              {selectedByCurrent && (
+                                <button
+                                  onClick={() => toggleIdeaVote(currentVoterId, idea.id)}
+                                  className="px-3 py-1.5 rounded-xl text-xs border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors"
+                                  style={{ fontWeight: 600 }}
+                                >
+                                  Quitar del top 3
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    {ideas.length === 0 && (
-                      <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl mt-3">
-                        Tus ideas apareceran aqui. Empieza con una primera propuesta y sigue ampliando opciones.
+                        {ideas.length === 0 && (
+                          <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl mt-3">
+                            Tus ideas apareceran aqui. Empieza con una primera propuesta y sigue ampliando opciones.
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
                   <div className="border border-slate-200 rounded-xl overflow-hidden">
                     <button
@@ -1352,36 +1608,50 @@ export function Step2Page() {
                       </div>
                     )}
                   </div>
+                    </div>
+                  </div>
                 </div>
-
                 <div className="space-y-4">
-                  <div className="border border-slate-200 rounded-2xl p-4 bg-white">
+                  {phase2Unlocked ? (
+                    <div className="border border-slate-200 rounded-2xl p-4 bg-white">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div>
-                        <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                          {individualMode ? 'Tus 3 ideas favoritas' : 'Votos y coincidencias del equipo'}
-                        </p>
+                        <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>2. Coincidencias del equipo</p>
                         <p className="text-xs text-slate-500">
                           {individualMode
-                            ? 'Elige las 3 opciones con mas potencial antes de decidir una idea final.'
-                            : 'Revisa que eligio cada integrante y detecta la idea con mayor preferencia.'}
+                            ? 'Aqui veras las ideas con mayor preferencia dentro de tu propia seleccion.'
+                            : 'Revisen donde se concentra la preferencia antes de bajar a una sola idea.'}
                         </p>
                       </div>
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600" style={{ fontWeight: 600 }}>
-                        {(selectionMap[currentVoterId] || []).length}/3
-                      </span>
+                      {!individualMode && (
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600" style={{ fontWeight: 600 }}>
+                          {teamCompletedCount}/{teamParticipants.length} listos
+                        </span>
+                      )}
                     </div>
 
                     {!individualMode && (
                       <div className="space-y-2 mb-4">
-                        {teamParticipants.map(participant => (
-                          <div key={participant.id} className="flex items-center justify-between text-xs border border-slate-100 rounded-xl px-3 py-2 bg-slate-50">
-                            <span className="text-slate-600" style={{ fontWeight: 500 }}>{participant.name}</span>
-                            <span className={`${(selectionMap[participant.id] || []).length === 3 ? 'text-emerald-600' : 'text-amber-600'}`} style={{ fontWeight: 600 }}>
-                              {(selectionMap[participant.id] || []).length}/3 elegidas
-                            </span>
-                          </div>
-                        ))}
+                        <p className="text-xs text-slate-500">Avance del equipo</p>
+                        <div className="space-y-2">
+                          {participantStatuses.map(participant => (
+                            <div key={participant.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                              <div>
+                                <p className="text-xs text-slate-700" style={{ fontWeight: 700 }}>{participant.name}</p>
+                                <p className="text-xs text-slate-500">{participant.selectedCount}/3 votos</p>
+                              </div>
+                              <span className={`text-[11px] px-2 py-1 rounded-full border ${
+                                participant.status === 'completo'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : participant.status === 'en_curso'
+                                  ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                  : 'border-slate-200 bg-white text-slate-500'
+                              }`} style={{ fontWeight: 700 }}>
+                                {participant.status === 'completo' ? 'Completo' : participant.status === 'en_curso' ? 'En curso' : 'Pendiente'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 
@@ -1393,13 +1663,22 @@ export function Step2Page() {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>
-                                {index === 0 ? 'Mayor preferencia' : `Top ${index + 1}`}
+                                {index === 0 ? 'Mayor coincidencia' : `${index + 1}. Siguiente preferencia`}
                               </p>
                               <p className="text-sm text-slate-800">{idea.text}</p>
                             </div>
                             <span className="text-xs px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-700" style={{ fontWeight: 700 }}>
                               {idea.votes} voto{idea.votes !== 1 ? 's' : ''}
                             </span>
+                          </div>
+                          <div className="mt-3">
+                            <button
+                              onClick={() => selectFinalIdeaBase(idea.id)}
+                              className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${selectedIdea === idea.id ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50'}`}
+                              style={{ fontWeight: 600 }}
+                            >
+                              {selectedIdea === idea.id ? 'Idea base activa' : 'Usar como idea base'}
+                            </button>
                           </div>
                         </div>
                       )) : (
@@ -1408,13 +1687,22 @@ export function Step2Page() {
                         </div>
                       )}
                     </div>
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+                      <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700 }}>FASE 2</p>
+                      <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Coincidencias del equipo</p>
+                      <p className="text-xs text-slate-500 mt-2">
+                        Todavia no toma protagonismo. Primero completa la votacion individual y luego aqui veras el ranking, quienes votaron, quienes faltan y la idea que lidera.
+                      </p>
+                    </div>
+                  )}
 
-                  {hasTie && (
+                  {phase2Unlocked && hasTie && (
                     <div className="border border-amber-200 bg-amber-50 rounded-2xl p-4 space-y-3">
                       <div>
                         <p className="text-sm text-amber-800" style={{ fontWeight: 600 }}>Hay empate entre ideas compatibles</p>
-                        <p className="text-xs text-amber-700 mt-1">Elijan si conviene quedarse con una sola idea o combinar elementos que realmente funcionen juntas.</p>
+                        <p className="text-xs text-amber-700 mt-1">Resuelvan primero si conviene elegir una sola idea o combinar lo mejor de las empatadas antes de aterrizar la final.</p>
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         {([
@@ -1439,10 +1727,7 @@ export function Step2Page() {
                         {tiedIdeas.map(idea => (
                           <button
                             key={idea.id}
-                            onClick={() => {
-                              if (selectedIdea !== idea.id) setLandedIdeaText('');
-                              setSelectedIdea(idea.id);
-                            }}
+                            onClick={() => selectFinalIdeaBase(idea.id)}
                             className={`w-full text-left border rounded-xl px-3 py-2 transition-colors ${
                               selectedIdea === idea.id ? 'border-indigo-300 bg-white' : 'border-amber-200 bg-amber-50 hover:bg-white'
                             }`}
@@ -1454,71 +1739,82 @@ export function Step2Page() {
                     </div>
                   )}
 
-                  <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-3">
-                    <div>
-                      <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Idea final elegida</p>
-                      <p className="text-xs text-slate-500 mt-1">El output de este modulo es una sola propuesta mas aterrizada y lista para definir la hipotesis a validar.</p>
-                    </div>
+                  {phase3Unlocked ? (
+                    <div className="border border-slate-200 rounded-2xl p-4 bg-white space-y-3">
+                      <div>
+                        <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>FASE 3</p>
+                        <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Idea final y aterrizaje</p>
+                        <p className="text-xs text-slate-500 mt-1">Aqui dejas clara la idea base elegida y la version aterrizada que realmente pasara al siguiente modulo.</p>
+                      </div>
 
-                    {selectedIdea ? (
-                      <>
-                        <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-3">
-                          <p className="text-xs text-indigo-500 mb-1" style={{ fontWeight: 600 }}>IDEA BASE</p>
-                          <p className="text-sm text-indigo-900" style={{ fontWeight: 600 }}>{selectedIdeaText}</p>
-                        </div>
+                      {selectedIdea ? (
+                        <>
+                          <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-3">
+                            <p className="text-xs text-indigo-500 mb-1" style={{ fontWeight: 600 }}>IDEA BASE ELEGIDA</p>
+                            <p className="text-sm text-indigo-900" style={{ fontWeight: 600 }}>{selectedIdeaText}</p>
+                          </div>
 
-                        <div className="space-y-2">
-                          <p className="text-xs text-slate-600" style={{ fontWeight: 600 }}>Filtro simple de viabilidad y factibilidad</p>
-                          {([
-                            { key: 'recursosMinimos' as const, label: 'Se puede ejecutar con recursos minimos o apoyo liviano.' },
-                            { key: 'pruebaLigera' as const, label: 'Se puede probar sin depender de una implementacion grande.' },
-                            { key: 'versionSimple' as const, label: 'Se puede aterrizar a una version simple, manual o no-code.' },
-                          ]).map(item => (
-                            <label key={item.key} className="flex items-start gap-2 border border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={ideaLandingChecks[item.key]}
-                                onChange={e => setIdeaLandingChecks(prev => ({ ...prev, [item.key]: e.target.checked }))}
-                                className="mt-0.5 w-4 h-4 accent-indigo-600"
+                          <div className="space-y-2">
+                            <p className="text-xs text-slate-600" style={{ fontWeight: 600 }}>Checklist de viabilidad y factibilidad</p>
+                            {([
+                              { key: 'recursosMinimos' as const, label: 'Se puede ejecutar con recursos minimos o apoyo liviano.' },
+                              { key: 'pruebaLigera' as const, label: 'Se puede probar sin depender de una implementacion grande.' },
+                              { key: 'versionSimple' as const, label: 'Se puede aterrizar a una version simple, manual o no-code.' },
+                            ]).map(item => (
+                              <label key={item.key} className="flex items-start gap-2 border border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={ideaLandingChecks[item.key]}
+                                  onChange={e => setIdeaLandingChecks(prev => ({ ...prev, [item.key]: e.target.checked }))}
+                                  className="mt-0.5 w-4 h-4 accent-indigo-600"
+                                />
+                                <span className="text-xs text-slate-700">{item.label}</span>
+                              </label>
+                            ))}
+                          </div>
+
+                          {(ideaNeedsLanding || !landingChecksComplete || tieDecisionMode === 'combine') && (
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>
+                                Version aterrizada que pasara al siguiente modulo
+                              </label>
+                              <textarea
+                                value={landedIdeaText}
+                                onChange={e => setLandedIdeaText(e.target.value)}
+                                rows={4}
+                                placeholder={tieDecisionMode === 'combine'
+                                  ? 'Escribe una sola propuesta que combine lo mejor de las ideas empatadas en una version ejecutable.'
+                                  : 'Reescribe la idea en una version mas viable, simple y facil de probar.'}
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                               />
-                              <span className="text-xs text-slate-700">{item.label}</span>
-                            </label>
-                          ))}
-                        </div>
+                              <p className="text-xs text-slate-400 mt-1">
+                                Mantiene la idea base, pero deja clara la version ejecutable que el equipo quiere probar.
+                              </p>
+                            </div>
+                          )}
 
-                        {(ideaNeedsLanding || !landingChecksComplete || tieDecisionMode === 'combine') && (
-                          <div>
-                            <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>
-                              Version aterrizada de la idea
-                            </label>
-                            <textarea
-                              value={landedIdeaText}
-                              onChange={e => setLandedIdeaText(e.target.value)}
-                              rows={4}
-                              placeholder={tieDecisionMode === 'combine'
-                                ? 'Escribe una sola propuesta que combine lo mejor de las ideas empatadas en una version ejecutable.'
-                                : 'Reescribe la idea en una version mas viable, simple y facil de probar.'}
-                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                            />
-                            <p className="text-xs text-slate-400 mt-1">
-                              Si la idea ya esta aterrizada, usa este espacio para dejar clara la version que pasara al siguiente modulo.
+                          <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50">
+                            <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 600 }}>OUTPUT DEL MODULO</p>
+                            <p className="text-sm text-emerald-900" style={{ fontWeight: 600 }}>
+                              {landedIdeaText.trim() || selectedIdeaText}
                             </p>
                           </div>
-                        )}
-
-                        <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50">
-                          <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 600 }}>Output del modulo</p>
-                          <p className="text-sm text-emerald-900" style={{ fontWeight: 600 }}>
-                            {landedIdeaText.trim() || selectedIdeaText}
-                          </p>
+                        </>
+                      ) : (
+                        <div className="text-center py-6 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                          Elige una idea base desde el consolidado para activar el cierre de esta fase.
                         </div>
-                      </>
-                    ) : (
-                      <div className="text-center py-6 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
-                        Primero elige una idea final desde la lista o desde el resumen de votos.
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+                      <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700 }}>FASE 3</p>
+                      <p className="text-sm text-slate-900" style={{ fontWeight: 700 }}>Idea final y aterrizaje</p>
+                      <p className="text-xs text-slate-500 mt-2">
+                        Esta fase aparece despues del consolidado. Asi la idea final no compite visualmente con la votacion inicial.
+                      </p>
+                    </div>
+                  )}
 
                   <div>
                     <p className="text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>
@@ -2145,25 +2441,34 @@ export function Step2Page() {
                       </div>
 
                       <div className="space-y-4">
-                        <div className="border border-emerald-200 rounded-xl p-4 bg-emerald-50 space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>RUTA RECOMENDADA</p>
-                              <p className="text-base text-emerald-900" style={{ fontWeight: 700 }}>{experimentRoute.label}</p>
+                        <div className="bg-white border border-emerald-200 rounded-2xl overflow-hidden shadow-sm">
+                          <div className="bg-emerald-600 px-4 py-3.5">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs text-emerald-100" style={{ fontWeight: 700, letterSpacing: '0.04em' }}>RUTA RECOMENDADA</p>
+                                <p className="text-white text-base mt-0.5" style={{ fontWeight: 700 }}>{experimentRoute.label}</p>
+                              </div>
+                              <span className="px-2.5 py-1 rounded-full bg-white/95 border border-emerald-100 text-emerald-700 text-xs" style={{ fontWeight: 700 }}>
+                                {recommendationReady ? 'Lista para usar' : 'En construccion'}
+                              </span>
                             </div>
-                            <span className="px-2.5 py-1 rounded-full bg-white border border-emerald-200 text-emerald-700 text-xs" style={{ fontWeight: 700 }}>
-                              {recommendationReady ? 'Lista para usar' : 'En construccion'}
-                            </span>
                           </div>
-                          <p className="text-sm text-slate-700">{experimentRoute.why}</p>
-                          <div className="space-y-2 text-sm text-slate-700">
-                            <div className="rounded-xl bg-white/80 border border-emerald-100 p-3">
-                              <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Que podrias validar esta semana</p>
-                              <p>{experimentRoute.thisWeek}</p>
+                          <div className="p-4 space-y-3">
+                            <div>
+                              <p className="text-xs text-emerald-700" style={{ fontWeight: 700, letterSpacing: '0.04em' }}>POR QUE SE RECOMIENDA</p>
+                              <p className="text-sm text-slate-700 mt-1">{experimentRoute.why}</p>
                             </div>
-                            <div className="rounded-xl bg-white/80 border border-emerald-100 p-3">
-                              <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700 }}>Por que no necesitas empezar por algo complejo</p>
-                              <p>{experimentRoute.keepSimple}</p>
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3">
+                              <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700, letterSpacing: '0.03em' }}>QUE PODRIAS VALIDAR ESTA SEMANA</p>
+                              <p className="text-sm text-slate-700">{experimentRoute.thisWeek}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700, letterSpacing: '0.03em' }}>POR QUE NO NECESITAS EMPEZAR COMPLEJO</p>
+                              <p className="text-sm text-slate-700">{experimentRoute.keepSimple}</p>
+                            </div>
+                            <div className="rounded-xl border border-dashed border-emerald-200 bg-white p-3">
+                              <p className="text-xs text-emerald-700 mb-1" style={{ fontWeight: 700, letterSpacing: '0.03em' }}>SENAL DE SALIDA</p>
+                              <p className="text-sm text-slate-700">Ya tienes una ruta orientadora para convertir esta idea en una prueba concreta sin arrancar con algo complejo.</p>
                             </div>
                           </div>
                         </div>
@@ -2201,33 +2506,35 @@ export function Step2Page() {
                     <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 space-y-4">
                       <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div>
-                          <p className="text-sm text-indigo-900" style={{ fontWeight: 600 }}>Puente hacia tu Test Card</p>
-                          <p className="text-xs text-indigo-700 mt-1">Tomamos esta recomendacion como borrador inicial. Todo sigue siendo editable en la Card de experimentacion.</p>
+                          <p className="text-sm text-indigo-900" style={{ fontWeight: 600 }}>Hipotesis mas riesgosa a validar</p>
+                          <p className="text-xs text-indigo-700 mt-1">La IA propone un borrador inicial. Tu ajustas la redaccion y esa version final queda lista para la Card de experimentacion.</p>
                         </div>
                         <button
                           onClick={applyExperimentRouteSuggestion}
                           className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 text-sm transition-colors"
                           style={{ fontWeight: 600 }}
                         >
-                          Usar sugerencia en la Card <ChevronRight size={14} />
+                          Usar esta sugerencia como base <ChevronRight size={14} />
                         </button>
                       </div>
-                      <div className="grid md:grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-indigo-100 bg-white/80 p-3">
-                          <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>Hipotesis mas riesgosa</p>
+                      <div className="rounded-xl border border-indigo-100 bg-white/90 p-4 space-y-3">
+                        <div>
+                          <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700, letterSpacing: '0.03em' }}>BORRADOR SUGERIDO POR IA</p>
                           <p className="text-sm text-slate-700">{experimentRoute.hypothesis}</p>
                         </div>
-                        <div className="rounded-xl border border-indigo-100 bg-white/80 p-3">
-                          <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>Experimento sugerido</p>
-                          <p className="text-sm text-slate-700">{experimentRoute.experiment}</p>
-                        </div>
-                        <div className="rounded-xl border border-indigo-100 bg-white/80 p-3">
-                          <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>Metrica sugerida</p>
-                          <p className="text-sm text-slate-700">{experimentRoute.metric}</p>
-                        </div>
-                        <div className="rounded-xl border border-indigo-100 bg-white/80 p-3">
-                          <p className="text-xs text-indigo-600 mb-1" style={{ fontWeight: 700 }}>Umbral inicial sugerido</p>
-                          <p className="text-sm text-slate-700">{experimentRoute.threshold}</p>
+                        <div className="grid sm:grid-cols-3 gap-3 text-sm">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700 }}>Experimento sugerido</p>
+                            <p className="text-slate-700">{experimentRoute.experiment}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700 }}>Metrica sugerida</p>
+                            <p className="text-slate-700">{experimentRoute.metric}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700 }}>Umbral inicial</p>
+                            <p className="text-slate-700">{experimentRoute.threshold}</p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2261,9 +2568,11 @@ export function Step2Page() {
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Hipótesis a validar</label>
-                        <p className="text-xs text-slate-500 mb-2">Piensa aquí la hipótesis más riesgosa: la que más incertidumbre tiene y que, si falla, debilita la propuesta.</p>
+                      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                        <div>
+                          <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 600 }}>Hipótesis más riesgosa a validar</label>
+                          <p className="text-xs text-slate-500">Ajusta aquí la versión final que irá a la card. Si te sirve, puedes partir del borrador sugerido por IA y editarlo con tu propio criterio.</p>
+                        </div>
                         <textarea
                           value={experimentCard.hypothesis}
                           onChange={e => setExperimentCard(prev => ({ ...prev, hypothesis: e.target.value }))}
@@ -2271,6 +2580,12 @@ export function Step2Page() {
                           placeholder="Si [usuario] usa/interactúa con [mecanismo mínimo], entonces [resultado esperado], porque [supuesto principal]."
                           className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                         />
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3">
+                          <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 700, letterSpacing: '0.03em' }}>VERSIÓN FINAL LISTA PARA LA CARD</p>
+                          <p className="text-sm text-slate-700">
+                            {experimentCard.hypothesis || 'Todavía no defines la hipótesis final.'}
+                          </p>
+                        </div>
                       </div>
 
                       <div className="grid sm:grid-cols-2 gap-4">
@@ -3020,9 +3335,7 @@ export function Step2Page() {
               )}
             </div>
           )}
-        </div>
-      </div>
-
+    </StepWorkspaceShell>
       {showSendModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
@@ -3157,7 +3470,6 @@ export function Step2Page() {
           </div>
         </div>
       )}
-
       {/* Mentor HMW modal */}
       {showMentorHMW && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
@@ -3193,6 +3505,7 @@ export function Step2Page() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
+

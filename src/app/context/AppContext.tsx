@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-export type Role = 'owner' | 'mentor' | 'admin' | 'sponsor';
+export type Role = 'owner' | 'mentor' | 'admin' | 'sponsor' | 'portfolio_lead';
 
 export type Step0Status = 'No iniciado' | 'En progreso' | 'Completado';
 
@@ -239,6 +239,17 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
       role: 'sponsor',
       initials: 'RJ',
       skills: ['Liderazgo', 'Transformación digital'],
+    },
+  },
+  'portfolio@starteria.io': {
+    password: 'demo123',
+    user: {
+      id: 'u5',
+      name: 'Valeria Castro',
+      email: 'portfolio@starteria.io',
+      role: 'portfolio_lead',
+      initials: 'VC',
+      skills: ['Portafolio', 'Estrategia', 'Gobernanza'],
     },
   },
 };
@@ -660,6 +671,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   ) => {
     if (!user) return false;
     if (user.role === 'admin' || user.role === 'mentor') return true;
+    if (user.role === 'portfolio_lead') return false;
 
     const member = getProjectMember(projectId, user.email);
     if (!member) return false;

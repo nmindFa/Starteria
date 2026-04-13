@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router';
 import { Toaster } from 'sonner';
 import { AppProvider } from '../context/AppContext';
+import { PortfolioLeadProvider } from '../portfolio/PortfolioLeadContext';
 
 /**
  * RootLayout wraps every route with AppProvider so that React context
@@ -12,8 +13,10 @@ import { AppProvider } from '../context/AppContext';
 export function RootLayout() {
   return (
     <AppProvider>
-      <Toaster position="top-center" richColors closeButton />
-      <Outlet />
+      <PortfolioLeadProvider>
+        <Toaster position="top-center" richColors closeButton />
+        <Outlet />
+      </PortfolioLeadProvider>
     </AppProvider>
   );
 }
