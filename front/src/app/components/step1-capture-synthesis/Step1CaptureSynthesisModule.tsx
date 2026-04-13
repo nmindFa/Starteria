@@ -204,6 +204,7 @@ export function Step1CaptureSynthesisModule({
   const [guidedCriterion, setGuidedCriterion] = useState<string | null>(null);
   const [guidedTarget, setGuidedTarget] = useState<Step1CaptureAnalysisTarget | null>(null);
   const [reinforcedFronts, setReinforcedFronts] = useState<Record<string, boolean>>({});
+  const [showResearchObjective, setShowResearchObjective] = useState(false);
   const frontBlocks = useMemo(() => context.researchFronts.map(front => ({
     ...front,
     captures: state.captures.filter(capture => capture.frontIds.includes(front.id)),
@@ -217,6 +218,17 @@ export function Step1CaptureSynthesisModule({
     .filter(front => reinforcedFronts[front.id])
     .map(front => front.title || 'Frente sin titulo');
   const closureCard = useMemo(() => buildModuleClosureCard(context, state), [context, state]);
+  const researchObjectiveText = context.researchObjective || 'Completa el Modulo B para definir con claridad que se buscaba validar.';
+  const researchObjectiveSummary = useMemo(() => {
+    const compact = researchObjectiveText.trim();
+    if (!compact) return '';
+    if (compact.length <= 150) return compact;
+
+    const sentence = compact.match(/^.*?[.!?](\s|$)/)?.[0]?.trim();
+    if (sentence && sentence.length <= 150) return sentence;
+
+    return `${compact.slice(0, 147).trimEnd()}...`;
+  }, [researchObjectiveText]);
 
   const addInsight = () => onChange(prev => ({ ...prev, organizedInsights: [...prev.organizedInsights, ''] }));
 
@@ -273,12 +285,29 @@ export function Step1CaptureSynthesisModule({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-violet-200 bg-violet-50 p-5 space-y-3">
-        <div>
-          <p className="text-xs text-violet-700 mb-1" style={{ fontWeight: 700 }}>Objetivo general de investigacion</p>
-          <p className="text-base text-violet-900 leading-relaxed" style={{ fontWeight: 600 }}>{context.researchObjective || 'Completa el Modulo B para definir con claridad que se buscaba validar.'}</p>
-          <p className="text-sm text-violet-700 mt-2">Usa este objetivo como referencia para capturar evidencia, interpretar hallazgos y decidir si el problema se mantiene o necesita ajuste.</p>
+      <div className="rounded-xl border border-slate-200 bg-slate-50/85 p-3 md:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500" style={{ fontWeight: 700 }}>Objetivo general de investigacion</p>
+            <p className="text-sm text-slate-700 mt-1 leading-relaxed" style={{ fontWeight: 500 }}>{researchObjectiveSummary}</p>
+            <p className="text-xs text-slate-500 mt-1">Referencia rapida para orientar la captura. La prioridad aqui es subir evidencia y organizar hallazgos por frente.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowResearchObjective(current => !current)}
+            className="shrink-0 inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 transition-colors"
+            style={{ fontWeight: 600 }}
+          >
+            {showResearchObjective ? 'Ocultar' : 'Ver completo'}
+            <ChevronRight size={12} className={`transition-transform ${showResearchObjective ? 'rotate-90' : ''}`} />
+          </button>
         </div>
+
+        {showResearchObjective && (
+          <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3">
+            <p className="text-sm text-slate-800 leading-relaxed">{researchObjectiveText}</p>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">

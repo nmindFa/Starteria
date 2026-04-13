@@ -12,12 +12,13 @@ export function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
-  const { login, isAuthenticated } = useApp();
+  const { login, isAuthenticated, user } = useApp();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated) navigate('/dashboard', { replace: true });
-  }, [isAuthenticated]);
+    if (!isAuthenticated) return;
+    navigate(user?.role === 'portfolio_lead' ? '/portfolio/inicio' : '/dashboard', { replace: true });
+  }, [isAuthenticated, navigate, user?.role]);
 
   const validateEmail = (v: string) => {
     const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -39,7 +40,7 @@ export function AuthPage() {
     const result = await login(email, password);
     setLoading(false);
     if (result.success) {
-      navigate('/dashboard');
+      navigate(email.toLowerCase() === 'portfolio@starteria.io' ? '/portfolio/inicio' : '/dashboard');
     } else {
       setError(result.error ?? 'Algo salió mal. Vuelve a intentar.');
     }
@@ -49,6 +50,7 @@ export function AuthPage() {
     { label: 'Participante', email: 'participante@starteria.io' },
     { label: 'Mentor', email: 'mentor@starteria.io' },
     { label: 'Admin', email: 'admin@starteria.io' },
+    { label: 'Portfolio Lead', email: 'portfolio@starteria.io' },
     { label: 'Sponsor', email: 'sponsor@starteria.io' },
   ];
 

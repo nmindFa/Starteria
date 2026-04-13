@@ -7,12 +7,11 @@ import {
 import { useApp } from '../context/AppContext';
 
 const ROLE_LABELS: Record<string, string> = {
-  participante: 'Participante',
+  owner: 'Participante',
   mentor: 'Mentor',
   admin: 'Administrador',
   sponsor: 'Sponsor',
-  colaborador: 'Colaborador',
-  viewer: 'Observador',
+  portfolio_lead: 'Portfolio Lead',
 };
 
 export function AppLayout() {
@@ -24,6 +23,11 @@ export function AppLayout() {
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/auth', { replace: true });
+      return;
+    }
+
+    if (user?.role === 'portfolio_lead') {
+      navigate('/portfolio/inicio', { replace: true });
       return;
     }
 
@@ -190,7 +194,7 @@ export function AppLayout() {
       <div className="px-3 py-3 border-t border-slate-100">
         <p className="text-xs text-slate-400 px-1 mb-1.5" style={{ fontWeight: 600 }}>VER COMO (demo)</p>
         <div className="grid grid-cols-2 gap-1">
-          {(['participante', 'mentor', 'admin', 'sponsor', 'colaborador', 'viewer'] as const).map(r => (
+          {(['owner', 'mentor', 'admin', 'sponsor', 'portfolio_lead'] as const).map(r => (
             <button
               key={r}
               onClick={() => setUserRole(r)}
@@ -214,7 +218,7 @@ export function AppLayout() {
           </div>
           <div className="flex-1 text-left min-w-0">
             <p className="text-sm text-slate-800 truncate" style={{ fontWeight: 500 }}>{user?.name}</p>
-            <p className="text-xs text-slate-400">{ROLE_LABELS[user?.role ?? 'participante']}</p>
+            <p className="text-xs text-slate-400">{ROLE_LABELS[user?.role ?? 'owner']}</p>
           </div>
         </button>
         <button onClick={logout} className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -10,9 +10,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
 import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
-import { AutosaveIndicator } from '../components/AutosaveIndicator';
-import { useAutosave } from '../hooks/useAutosave';
-import * as stepService from '../services/stepService';
+import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
 
 type ModuleId = 'A' | 'B' | 'C';
 type GoNoGoDecision = 'Go' | 'Iterar' | 'No-Go' | 'Pivote' | null;
@@ -22,8 +20,34 @@ interface Componente {
   id: string; nombre: string; proposito: string; canal: string;
   owner: string; link: string; dod: string; estado: 'Pendiente' | 'Listo';
 }
+interface ExperimentFormatGuide {
+  queEs: string;
+  cuandoConviene: string;
+  aprendizaje: string;
+  evidencia: string;
+  ejemplo: string;
+  nota?: string;
+}
+interface LaunchChecklistItem {
+  id: string;
+  titulo: string;
+  nota: string;
+  responsable: string;
+  estado: 'pendiente' | 'listo';
+  origen: 'sugerida' | 'personalizada';
+}
 interface InstrumentacionRow {
-  id: string; dato: string; fuente: string; responsable: string; evidencia: string;
+  id: string;
+  dato: string;
+  lineaBase: string;
+  metricaExito: string;
+  fuente: string;
+  comoCapturar: string;
+  dondeCapturar: string;
+  responsable: string;
+  evidenciaEsperada: string;
+  frecuencia: string;
+  estado: 'pendiente' | 'listo';
 }
 interface EventoBitacora {
   id: string; fecha: string; hora: string; accion: string; responsable: string; nota: string;
@@ -88,15 +112,61 @@ const PREP_ITEMS = [
   'Preparar encuesta de 3 preguntas para el empleado el día 3',
 ];
 const FORMATOS_EXP = ['Formulario', 'Landing', 'WhatsApp', 'Prototipo', 'Concierge', 'Piloto operativo'];
+const FORMATO_GUIDES: Record<string, ExperimentFormatGuide> = {
+  Formulario: {
+    queEs: 'Un formulario simple para recoger solicitudes, respuestas o información ordenada.',
+    cuandoConviene: 'Cuando quieres validar si las personas completarían un pedido o dejarían datos.',
+    aprendizaje: 'Entender interés, intención o calidad de la información que entregan.',
+    evidencia: 'Respuestas enviadas, tasa de completitud y tiempos de respuesta.',
+    ejemplo: 'Un formulario para centralizar pedidos de acceso a TI.',
+    nota: 'Úsalo cuando necesites una forma clara y rápida de capturar datos sin construir un sistema.',
+  },
+  Landing: {
+    queEs: 'Una página simple que explica la propuesta y busca una acción de interés.',
+    cuandoConviene: 'Cuando quieres validar si la propuesta llama la atención antes de construirla.',
+    aprendizaje: 'Medir interés inicial, clics, registros o intención.',
+    evidencia: 'Visitas, clics, registros y conversiones.',
+    ejemplo: 'Una página que presenta un nuevo servicio interno y mide cuántos se anotan.',
+    nota: 'Úsalo cuando quieras ver si el mensaje engancha antes de invertir más tiempo.',
+  },
+  WhatsApp: {
+    queEs: 'Una interacción manual o semiautomática usando mensajes.',
+    cuandoConviene: 'Cuando quieres probar rápido una comunicación o atención sin construir sistema.',
+    aprendizaje: 'Entender dudas, tiempos de respuesta, aceptación y fricciones.',
+    evidencia: 'Mensajes, tiempos, respuestas, capturas y seguimiento.',
+    ejemplo: 'Atender solicitudes por WhatsApp para validar si ese canal reduce fricción.',
+    nota: 'Úsalo cuando la conversación directa sea la forma más simple de probar la hipótesis.',
+  },
+  Prototipo: {
+    queEs: 'Una simulación de la solución para mostrar cómo funcionaría.',
+    cuandoConviene: 'Cuando necesitas que alguien vea, pruebe o reaccione a una experiencia futura.',
+    aprendizaje: 'Validar comprensión, utilidad percibida y puntos de fricción.',
+    evidencia: 'Feedback, observaciones, grabaciones y notas de prueba.',
+    ejemplo: 'Un flujo clickeable de onboarding antes de desarrollarlo.',
+    nota: 'Úsalo cuando aún no conviene construir la solución real, pero sí mostrar la experiencia.',
+  },
+  Concierge: {
+    queEs: 'Una prueba donde el servicio se hace manualmente detrás de escena.',
+    cuandoConviene: 'Cuando quieres validar valor sin construir toda la operación o tecnología.',
+    aprendizaje: 'Saber si la propuesta resuelve algo importante antes de automatizarla.',
+    evidencia: 'Casos atendidos, tiempos, satisfacción y problemas manuales.',
+    ejemplo: 'Resolver manualmente una solicitud como si el sistema ya existiera.',
+    nota: 'Úsalo cuando quieres probar el valor real con poco esfuerzo técnico.',
+  },
+  'Piloto operativo': {
+    queEs: 'Una prueba en contexto real, con personas reales y condiciones cercanas a la operación.',
+    cuandoConviene: 'Cuando ya tienes suficiente claridad para ejecutar una prueba pequeña en vivo.',
+    aprendizaje: 'Ver si funciona en la realidad y si cumple la meta esperada.',
+    evidencia: 'Resultados operativos, tiempos, errores y cumplimiento de meta.',
+    ejemplo: 'Probar el nuevo flujo con 5 personas de una sede durante una semana.',
+    nota: 'Úsalo cuando ya no solo quieres reacción, sino ver ejecución real.',
+  },
+};
 const MOCK_COMPONENTES: Componente[] = [
   { id: 'c1', nombre: 'Formulario de solicitud de accesos', proposito: 'Centralizar el pedido de accesos en una sola interfaz', canal: 'Google Forms', owner: 'Ana R.', link: 'https://forms.google.com/...', dod: 'Campos validados + notificación automática a TI', estado: 'Listo' },
   { id: 'c2', nombre: 'Sheet de seguimiento TI', proposito: 'Registrar tiempos y resultados de cada caso', canal: 'Google Sheets', owner: 'TI', link: 'https://sheets.google.com/...', dod: 'Todas las columnas completas al cierre del piloto', estado: 'Listo' },
 ];
-const MOCK_INSTRUMENTACION: InstrumentacionRow[] = [
-  { id: 'i1', dato: 'Timestamp envío → accesos activos', fuente: 'Google Sheets', responsable: 'TI', evidencia: '(Placeholder) link al sheet' },
-  { id: 'i2', dato: 'NPS empleado día 3', fuente: 'Encuesta Google Forms', responsable: 'RRHH', evidencia: '(Placeholder) link al formulario' },
-  { id: 'i3', dato: 'Casos resueltos en tiempo / total', fuente: 'Sheet de seguimiento', responsable: 'Ana R.', evidencia: '(Placeholder) screenshots' },
-];
+const MOCK_INSTRUMENTACION: InstrumentacionRow[] = [];
 const MOCK_BITACORA: EventoBitacora[] = [
   { id: 'b1', fecha: '2025-02-24', hora: '09:15', accion: 'Se envió formulario al empleado #1 (Carlos M.)', responsable: 'Ana R.', nota: 'Primera prueba en vivo, todo OK' },
   { id: 'b2', fecha: '2025-02-24', hora: '14:30', accion: 'TI confirmó accesos activos para empleado #1', responsable: 'TI', nota: 'Tiempo total: 5h 15min' },
@@ -145,6 +215,192 @@ const createInitialTestCycle = (): TestCycle => ({
   siguienteCuando: 'Proxima semana, con 3 nuevos ingresos que incluyan al menos 1 caso especial.',
 });
 
+const MODULE_A_BASE_INSTRUMENTACION: InstrumentacionRow[] = [
+  {
+    id: 'i1',
+    dato: 'Tiempo entre el envío de la solicitud y la activación de accesos',
+    lineaBase: '7 días promedio',
+    metricaExito: '<=24 horas en 80% de los casos',
+    fuente: 'Registro de solicitudes TI',
+    comoCapturar: 'Comparando el momento de envío contra el momento de activación',
+    dondeCapturar: 'Google Sheet del piloto',
+    responsable: 'TI',
+    evidenciaEsperada: 'Sheet actualizado y captura de casos cerrados',
+    frecuencia: 'En cada caso',
+    estado: 'listo',
+  },
+  {
+    id: 'i2',
+    dato: 'Nivel de satisfacción del empleado al día 3',
+    lineaBase: '',
+    metricaExito: 'Promedio mayor a 70',
+    fuente: 'Encuesta de seguimiento',
+    comoCapturar: 'Formulario breve de 3 preguntas',
+    dondeCapturar: 'Formulario de seguimiento del piloto',
+    responsable: 'RRHH',
+    evidenciaEsperada: 'Respuestas de encuesta y resumen de comentarios',
+    frecuencia: 'Una vez por participante',
+    estado: 'pendiente',
+  },
+];
+
+const createChecklistItem = (partial?: Partial<LaunchChecklistItem>): LaunchChecklistItem => ({
+  id: partial?.id ?? `check-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+  titulo: partial?.titulo ?? '',
+  nota: partial?.nota ?? '',
+  responsable: partial?.responsable ?? '',
+  estado: partial?.estado ?? 'pendiente',
+  origen: partial?.origen ?? 'personalizada',
+});
+
+const createInstrumentationRow = (partial?: Partial<InstrumentacionRow>): InstrumentacionRow => ({
+  id: partial?.id ?? `inst-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+  dato: partial?.dato ?? '',
+  lineaBase: partial?.lineaBase ?? '',
+  metricaExito: partial?.metricaExito ?? '',
+  fuente: partial?.fuente ?? '',
+  comoCapturar: partial?.comoCapturar ?? '',
+  dondeCapturar: partial?.dondeCapturar ?? '',
+  responsable: partial?.responsable ?? '',
+  evidenciaEsperada: partial?.evidenciaEsperada ?? '',
+  frecuencia: partial?.frecuencia ?? '',
+  estado: partial?.estado ?? 'pendiente',
+});
+
+const inferFormatFromExperiment = (text: string) => {
+  const lower = text.toLowerCase();
+  if (lower.includes('whatsapp')) return 'WhatsApp';
+  if (lower.includes('landing')) return 'Landing';
+  if (lower.includes('prototipo') || lower.includes('clickeable')) return 'Prototipo';
+  if (lower.includes('concierge')) return 'Concierge';
+  if (lower.includes('piloto')) return 'Piloto operativo';
+  if (lower.includes('formulario') || lower.includes('forms')) return 'Formulario';
+  return '';
+};
+
+const extractBaselineFromHypothesis = (text: string) => {
+  const match = text.match(/de\s+([^.,]+?)\s+a\s+/i);
+  return match?.[1]?.trim() ?? '';
+};
+
+const extractSuccessMetric = (text: string) => {
+  const thresholdMatch = text.match(/Umbral[^:]*:\s*(.+)$/i);
+  if (thresholdMatch?.[1]) return thresholdMatch[1].trim();
+  const targetMatch = text.match(/a\s+([^.,]+(?:\d+%[^.,]*)?)/i);
+  return targetMatch?.[1]?.trim() ?? '';
+};
+
+const buildSuggestedChecklist = ({
+  formato,
+  componentes,
+  logistica,
+  instrumentacion,
+}: {
+  formato: string;
+  componentes: Componente[];
+  logistica: { donde: string; cuando: string; duracion: string; quienDispara: string; contingencia: string };
+  instrumentacion: InstrumentacionRow[];
+}) => {
+  const suggestions: Array<Partial<LaunchChecklistItem>> = [];
+
+  if (formato === 'Formulario') {
+    suggestions.push(
+      {
+        titulo: 'Validar que el formulario esté activo y accesible',
+        nota: 'Asegúrate de que abra bien, se pueda completar y no tenga campos bloqueados.',
+        responsable: componentes.find(item => item.canal.toLowerCase().includes('form'))?.owner ?? '',
+      },
+      {
+        titulo: 'Confirmar a quiénes incluirás en la prueba',
+        nota: 'Deja claros los participantes que sí entran en este experimento.',
+        responsable: '',
+      },
+    );
+  }
+
+  if (formato === 'WhatsApp') {
+    suggestions.push(
+      {
+        titulo: 'Confirmar quién responderá los mensajes durante la prueba',
+        nota: 'Evita dejar conversaciones sin atención o sin seguimiento.',
+        responsable: '',
+      },
+      {
+        titulo: 'Definir cómo guardarás capturas o conversaciones clave',
+        nota: 'Deja claro qué evidencia conservarás y dónde la subirás.',
+        responsable: '',
+      },
+    );
+  }
+
+  if (formato === 'Prototipo') {
+    suggestions.push({
+      titulo: 'Validar que el prototipo cubra el flujo que vas a mostrar',
+      nota: 'No necesitas simular todo; solo lo necesario para observar reacción y fricciones.',
+      responsable: componentes.find(item => item.nombre.toLowerCase().includes('prototipo'))?.owner ?? '',
+    });
+  }
+
+  if (formato === 'Concierge') {
+    suggestions.push({
+      titulo: 'Confirmar quién hará manualmente el servicio detrás de escena',
+      nota: 'La ejecución manual debe estar coordinada para que la experiencia no se rompa.',
+      responsable: '',
+    });
+  }
+
+  if (formato === 'Piloto operativo') {
+    suggestions.push({
+      titulo: 'Alinear la operación mínima para correr la prueba en vivo',
+      nota: 'Define qué equipo sostendrá la prueba y qué condición debe cumplirse para arrancar.',
+      responsable: logistica.quienDispara,
+    });
+  }
+
+  componentes
+    .filter(item => item.estado !== 'Listo')
+    .forEach(item => {
+      suggestions.push({
+        titulo: `Dejar listo: ${item.nombre}`,
+        nota: item.dod || item.proposito,
+        responsable: item.owner,
+      });
+    });
+
+  if (logistica.quienDispara.trim()) {
+    suggestions.push({
+      titulo: 'Confirmar quién dispara el experimento y cómo avisa al equipo',
+      nota: `Hoy aparece como referencia: ${logistica.quienDispara.trim()}.`,
+      responsable: logistica.quienDispara.trim(),
+    });
+  }
+
+  if (logistica.contingencia.trim()) {
+    suggestions.push({
+      titulo: 'Acordar qué harás si la prueba se traba',
+      nota: `Ruta de contingencia definida: ${logistica.contingencia.trim()}.`,
+      responsable: '',
+    });
+  }
+
+  if (instrumentacion.length > 0) {
+    suggestions.push({
+      titulo: 'Confirmar cómo se capturará la evidencia del experimento',
+      nota: 'Revisa que cada señal tenga responsable y un lugar claro de registro.',
+      responsable: instrumentacion.find(item => item.responsable.trim())?.responsable ?? '',
+    });
+  }
+
+  const unique = suggestions.filter((item, index, array) =>
+    item.titulo && array.findIndex(current => current.titulo === item.titulo) === index
+  );
+
+  return unique.map(item => createChecklistItem({
+    ...item,
+    origen: 'sugerida',
+  }));
+};
+
 function SectionCard({ title, icon: Icon, children, className = '' }: {
   title: string; icon: React.ElementType; children: React.ReactNode; className?: string;
 }) {
@@ -182,11 +438,10 @@ export function Step3Page() {
   // ══════════════════════════════════════════════════════════════════════════
   // MODULE A STATE
   // ══════════════════════════════════════════════════════════════════════════
-  const [prepChecks, setPrepChecks] = useState<boolean[]>(PREP_ITEMS.map(() => false));
   const [moduloACompleto, setModuloACompleto] = useState(false);
 
   // S3A_Formato
-  const [formatoExp, setFormatoExp] = useState('');
+  const [formatoExp, setFormatoExp] = useState(inferFormatFromExperiment(MOCK_TESTCARD.experimento));
 
   // S3A_Componentes
   const [componentes, setComponentes] = useState<Componente[]>(MOCK_COMPONENTES);
@@ -197,19 +452,16 @@ export function Step3Page() {
 
   // S3A_Logistica
   const [logistica, setLogistica] = useState({
-    donde: '(Contenido de ejemplo para prototipo) Oficina central — en persona los primeros 2 casos; remoto para los demás.',
-    cuando: '(Contenido de ejemplo para prototipo) Semana del 24 de febrero, con empleados que ingresan ese lunes.',
-    duracion: '(Contenido de ejemplo para prototipo) 5 días hábiles.',
-    quienDispara: '(Contenido de ejemplo para prototipo) Ana R. (RRHH) — coordina con TI para respuesta en 24h.',
-    contingencia: '(Contenido de ejemplo para prototipo) Si TI no responde en 24h, escalar al líder de TI directo.',
+    donde: 'Piloto interno con empleados nuevos del área de Tecnología.',
+    cuando: 'Semana del próximo ingreso de participantes.',
+    duracion: '5 días hábiles.',
+    quienDispara: 'Ana R. desde RRHH, coordinando con TI para la activación.',
+    contingencia: 'Si TI no responde en el plazo acordado, escalar al líder de TI.',
   });
 
   // S3A_Instrumentacion
-  const [instrumentacion, setInstrumentacion] = useState<InstrumentacionRow[]>(MOCK_INSTRUMENTACION);
-  const [showInstrOverlay, setShowInstrOverlay] = useState(false);
-  const [instrTipo, setInstrTipo] = useState<'link' | 'archivo' | null>(null);
-  const [instrDesc, setInstrDesc] = useState('');
-  const [instrRowId, setInstrRowId] = useState('');
+  const [instrumentacion, setInstrumentacion] = useState<InstrumentacionRow[]>(MODULE_A_BASE_INSTRUMENTACION);
+  const [checklistItems, setChecklistItems] = useState<LaunchChecklistItem[]>([]);
 
   // ══════════════════════════════════════════════════════════════════════════
   // MODULE B STATE
@@ -258,6 +510,36 @@ export function Step3Page() {
     comoPrueba: activeCycle?.siguienteMetodo ?? '',
     cuando: activeCycle?.siguienteCuando ?? '',
   };
+
+  useEffect(() => {
+    if (checklistItems.length > 0) return;
+    setChecklistItems(buildSuggestedChecklist({
+      formato: formatoExp || 'Formulario',
+      componentes,
+      logistica,
+      instrumentacion,
+    }));
+  }, [checklistItems.length, componentes, formatoExp, instrumentacion, logistica]);
+
+  useEffect(() => {
+    setInstrumentacion(current => {
+      const hasSeededMetric = current.some(item => item.dato.trim().length > 0);
+      if (hasSeededMetric) return current;
+      return [
+        createInstrumentationRow({
+          dato: 'Tiempo entre el envío de la solicitud y la activación de accesos',
+          lineaBase: extractBaselineFromHypothesis(MOCK_TESTCARD.hipotesis),
+          metricaExito: extractSuccessMetric(MOCK_TESTCARD.metrica),
+          fuente: 'Registro de solicitudes TI',
+          comoCapturar: 'Comparando el momento de envío contra el momento de activación',
+          dondeCapturar: 'Google Sheet del piloto',
+          responsable: 'TI',
+          evidenciaEsperada: MOCK_TESTCARD.evidencia,
+          frecuencia: 'En cada caso',
+        }),
+      ];
+    });
+  }, []);
 
   const updateCycle = (cycleId: string, updater: (cycle: TestCycle) => TestCycle) => {
     setTestCycles(prev => prev.map(cycle => (cycle.id === cycleId ? updater(cycle) : cycle)));
@@ -416,22 +698,7 @@ export function Step3Page() {
   const [showFinalizarDemo, setShowFinalizarDemo] = useState(false);
 
   // Autosave
-  const step3FormData = { prepChecks, formatoExp, componentes, logistica, instrumentacion, testCycles, activeCycleId, goNoGo, aprendizajes, diagnostico };
-
-  const autosaveFn = useCallback(async (data: typeof step3FormData) => {
-    if (!projectId) return;
-    await stepService.saveStepData(projectId, 3, {
-      _meta: { version: 1, lastSavedAt: new Date().toISOString(), lastSavedBy: 'user' },
-      formData: data,
-    });
-  }, [projectId]);
-
-  const { state: saveState } = useAutosave({
-    data: step3FormData,
-    saveFn: autosaveFn,
-    delay: 2000,
-    enabled: !!projectId,
-  });
+  const saveState = useAutosave({ checklistItems, formatoExp, componentes, logistica, instrumentacion, testCycles, activeCycleId, goNoGo, aprendizajes, diagnostico });
 
   // ── Gate ─────────────────────────────────────────────────────────────────────
   if (!project) return <div className="p-6"><p className="text-slate-500">Proyecto no encontrado.</p></div>;
@@ -452,6 +719,12 @@ export function Step3Page() {
     { id: 'B', label: 'B · Ejecutar y capturar', completed: moduleBReady },
     { id: 'C', label: 'C · Resultados y decisión', completed: !!goNoGo && hasFeedback },
   ];
+
+  const formatoGuide = formatoExp ? FORMATO_GUIDES[formatoExp] : null;
+  const checklistReadyCount = checklistItems.filter(item => item.estado === 'listo').length;
+  const checklistPendingCount = checklistItems.length - checklistReadyCount;
+  const instrumentationReadyCount = instrumentacion.filter(item => item.estado === 'listo').length;
+  const moduleAReady = Boolean(formatoExp) && checklistReadyCount > 0 && instrumentacion.length > 0;
 
   const addEvidencia = () => {
     if (!adjuntarDesc.trim() || !adjuntarTipo || !activeCycle) return;
@@ -478,6 +751,29 @@ export function Step3Page() {
     setNuevoComp({ nombre: '', proposito: '', canal: '', owner: '', link: '', dod: '', estado: 'Pendiente' });
     setShowComponenteModal(false);
     toast.success('Componente agregado');
+  };
+
+  const updateChecklistItem = (itemId: string, updates: Partial<LaunchChecklistItem>) => {
+    setChecklistItems(prev => prev.map(item => (item.id === itemId ? { ...item, ...updates } : item)));
+  };
+
+  const addChecklistItem = () => {
+    setChecklistItems(prev => [...prev, createChecklistItem({ titulo: '', origen: 'personalizada' })]);
+  };
+
+  const regenerateChecklistSuggestions = () => {
+    const personalized = checklistItems.filter(item => item.origen === 'personalizada');
+    const suggestions = buildSuggestedChecklist({ formato: formatoExp, componentes, logistica, instrumentacion });
+    setChecklistItems([...suggestions, ...personalized]);
+    toast.success('Sugerencias de alistamiento actualizadas');
+  };
+
+  const addInstrumentationRow = () => {
+    setInstrumentacion(prev => [...prev, createInstrumentationRow()]);
+  };
+
+  const updateInstrumentationRow = (rowId: string, updates: Partial<InstrumentacionRow>) => {
+    setInstrumentacion(prev => prev.map(row => (row.id === rowId ? { ...row, ...updates } : row)));
   };
 
   const addEventoBitacora = () => {
@@ -638,8 +934,7 @@ export function Step3Page() {
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div className="flex h-full">
-      {/* ── Left sidebar ───────────────────────────────────────────────────────── */}
-      <div className="hidden md:flex w-56 flex-col border-r border-slate-200 bg-white p-3 gap-1 shrink-0">
+      <div className="hidden md:flex md:w-[220px] min-[1440px]:w-[232px] min-[1680px]:w-[240px] flex-col border-r border-slate-200 bg-white p-3 gap-1 shrink-0">
         <div className="px-2 py-2 mb-1">
           <button onClick={() => navigate(`/projects/${projectId}`)} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors">
             <ArrowLeft size={12} /> Volver al proyecto
@@ -662,1191 +957,71 @@ export function Step3Page() {
         <div className="mt-auto pt-3 border-t border-slate-100"><AutosaveIndicator state={saveState} /></div>
       </div>
 
-      {/* ── Main content ──────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-5 md:p-6">
-        <div className="max-w-2xl mx-auto">
-          <button onClick={() => navigate(`/projects/${projectId}`)} className="flex md:hidden items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors">
-            <ArrowLeft size={14} /> Volver al proyecto
-          </button>
-          <div className="flex gap-1 mb-5 md:hidden overflow-x-auto pb-1">
-            {modules.map(m => (
-              <button key={m.id} onClick={() => setActiveModule(m.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-xs transition-colors ${activeModule === m.id ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}
-                style={{ fontWeight: activeModule === m.id ? 600 : 400 }}>
-                {m.label}
+      <div className="flex-1 overflow-y-auto px-5 py-6 min-[1440px]:px-6 min-[1680px]:px-8">
+        <div className="mx-auto w-full max-w-[1460px] min-[1440px]:max-w-[1560px] min-[1680px]:max-w-[1680px]">
+          <div className="grid min-w-0 grid-cols-1 items-start gap-6 min-[1280px]:grid-cols-[minmax(0,820px)_300px] min-[1440px]:grid-cols-[minmax(0,900px)_320px] min-[1680px]:grid-cols-[minmax(0,940px)_340px] min-[1680px]:gap-8">
+            <div className="min-w-0">
+              <button onClick={() => navigate(`/projects/${projectId}`)} className="flex md:hidden items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors">
+                <ArrowLeft size={14} /> Volver al proyecto
               </button>
-            ))}
-          </div>
-
-          {/* Test Card reference — siempre visible */}
-          <div className="border border-violet-100 bg-violet-50 rounded-xl p-4 mb-5">
-            <div className="flex items-center gap-2 mb-2">
-              <FileText size={13} className="text-violet-500" />
-              <p className="text-xs text-violet-700" style={{ fontWeight: 600 }}>Resumen del experimento · del Step 2</p>
-              <span className="text-xs text-violet-400 ml-auto">(Contenido de ejemplo para prototipo)</span>
-            </div>
-            <div className="space-y-1.5">
-              {[
-                { label: 'Hipótesis', value: MOCK_TESTCARD.hipotesis },
-                { label: 'Experimento', value: MOCK_TESTCARD.experimento },
-                { label: 'Métrica + umbral go/no-go', value: MOCK_TESTCARD.metrica },
-                { label: 'Evidencia a capturar', value: MOCK_TESTCARD.evidencia },
-              ].map(({ label, value }) => (
-                <div key={label}>
-                  <p className="text-xs text-violet-500" style={{ fontWeight: 600 }}>{label}</p>
-                  <p className="text-xs text-violet-800">{value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ════════════════════════════════════════════════════════════════════
-              MÓDULO A — Plan del experimento
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeModule === 'A' && (
-            <div className="space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>A · Plan del experimento</h1>
-                  <StatusChip status={moduloACompleto ? 'Completado' : 'En progreso'} size="sm" />
-                </div>
-                <p className="text-sm text-slate-500">Conceptualiza el experimento: formato, artefactos, logística e instrumentación.</p>
-              </div>
-
-              {/* S3A_Formato ──────────────────────────────────────────────────── */}
-              <SectionCard title="Formato del experimento" icon={Layers}>
-                <p className="text-xs text-slate-400 mb-3">¿Qué tipo de artefacto usarás para probar tu hipótesis?</p>
-                <div className="flex flex-wrap gap-2">
-                  {FORMATOS_EXP.map(f => (
-                    <button key={f} onClick={() => setFormatoExp(f)}
-                      className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${formatoExp === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
-                      style={{ fontWeight: formatoExp === f ? 600 : 400 }}>
-                      {f}
-                    </button>
-                  ))}
-                </div>
-                {formatoExp && (
-                  <div className="mt-3 flex items-center gap-2 p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl">
-                    <CheckCircle2 size={13} className="text-indigo-500 shrink-0" />
-                    <p className="text-xs text-indigo-700">Formato seleccionado: <span style={{ fontWeight: 600 }}>{formatoExp}</span></p>
-                  </div>
-                )}
-              </SectionCard>
-
-              {/* S3A_Componentes ──────────────────────────────────────────────── */}
-              <SectionCard title="Componentes del experimento (artefactos)" icon={FlaskConical}>
-                <p className="text-xs text-slate-400 mb-3">Piezas que componen el experimento: cada una con propósito, canal, dueño y definición de listo.</p>
-                <div className="space-y-2 mb-3">
-                  {componentes.map(c => (
-                    <div key={c.id} className="border border-slate-200 rounded-xl p-3">
-                      <div className="flex items-start gap-2 mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm text-slate-800" style={{ fontWeight: 500 }}>{c.nombre}</p>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${c.estado === 'Listo' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`} style={{ fontWeight: 600 }}>{c.estado}</span>
-                          </div>
-                          <p className="text-xs text-slate-500 mt-0.5">{c.proposito}</p>
-                        </div>
-                        <button onClick={() => setComponentes(p => p.filter(x => x.id !== c.id))} className="p-1 hover:bg-slate-100 rounded transition-colors">
-                          <X size={12} className="text-slate-300 hover:text-red-400" />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
-                        <div><span className="text-slate-400">Canal:</span> <span className="text-slate-600">{c.canal}</span></div>
-                        <div><span className="text-slate-400">Owner:</span> <span className="text-slate-600">{c.owner}</span></div>
-                        <div><span className="text-slate-400">DoD:</span> <span className="text-slate-600">{c.dod}</span></div>
-                      </div>
-                      {c.link && (
-                        <p className="text-xs text-indigo-500 mt-1 truncate"><Link size={10} className="inline mr-1" />{c.link}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => setShowComponenteModal(true)} className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors" style={{ fontWeight: 500 }}>
-                  <Plus size={13} /> Agregar componente
-                </button>
-              </SectionCard>
-
-              {/* S3A_Checklist ────────────────────────────────────────────────── */}
-              <SectionCard title="Lista de preparación" icon={CheckCircle2}>
-                <p className="text-xs text-slate-400 mb-3">Confirma que cada punto está resuelto antes de comenzar.</p>
-                <div className="space-y-0 -mx-4">
-                  {PREP_ITEMS.map((item, i) => (
-                    <label key={i} className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
-                      <input type="checkbox" checked={prepChecks[i]}
-                        onChange={e => { const n = [...prepChecks]; n[i] = e.target.checked; setPrepChecks(n); }}
-                        className="w-4 h-4 mt-0.5 shrink-0 accent-indigo-600" />
-                      <span className={`text-sm transition-colors ${prepChecks[i] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{item}</span>
-                    </label>
-                  ))}
-                </div>
-                <p className={`text-xs mt-3 ${prepChecks.every(Boolean) ? 'text-emerald-600' : 'text-slate-400'}`} style={{ fontWeight: 500 }}>
-                  {prepChecks.filter(Boolean).length}/{PREP_ITEMS.length} confirmados{prepChecks.every(Boolean) && ' · ¡Listo para ejecutar!'}
-                </p>
-              </SectionCard>
-
-              {/* S3A_Logistica ────────────────────────────────────────────────── */}
-              <SectionCard title="Logística (dónde y cuándo)" icon={MapPin}>
-                <div className="space-y-3">
-                  {([
-                    { key: 'donde', label: 'Dónde (contexto / canal)', placeholder: 'Ej. Oficina central — en persona + videollamada para casos remotos' },
-                    { key: 'cuando', label: 'Cuándo (fecha / ventana)', placeholder: 'Ej. Semana del 3 de marzo, lunes a viernes' },
-                    { key: 'duracion', label: 'Duración', placeholder: 'Ej. 5 días hábiles' },
-                    { key: 'quienDispara', label: 'Quién dispara el piloto', placeholder: 'Ej. RRHH notifica a TI con el formulario completo' },
-                    { key: 'contingencia', label: 'Contingencia (1 línea)', placeholder: 'Ej. Si TI no responde en 24h, escalar al líder de área' },
-                  ] as const).map(({ key, label, placeholder }) => (
-                    <div key={key}>
-                      <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>{label}</label>
-                      <input value={logistica[key]} onChange={e => setLogistica(p => ({ ...p, [key]: e.target.value }))}
-                        placeholder={placeholder}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                  ))}
-                </div>
-              </SectionCard>
-
-              {/* S3A_Instrumentacion ──────────────────────────────────────────── */}
-              <SectionCard title="Captura de evidencia (instrumentación)" icon={Paperclip}>
-                <p className="text-xs text-slate-400 mb-3">¿Qué datos vas a capturar, de dónde y quién es responsable?</p>
-                <div className="border border-slate-200 rounded-xl overflow-hidden mb-3">
-                  <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-400" style={{ fontWeight: 600 }}>
-                    <span className="col-span-3">Dato</span>
-                    <span className="col-span-3">Fuente</span>
-                    <span className="col-span-2">Resp.</span>
-                    <span className="col-span-4">Evidencia</span>
-                  </div>
-                  {instrumentacion.map(row => (
-                    <div key={row.id} className="grid grid-cols-12 gap-2 px-3 py-2.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors group text-xs">
-                      <span className="col-span-3 text-slate-700">{row.dato}</span>
-                      <span className="col-span-3 text-slate-500">{row.fuente}</span>
-                      <span className="col-span-2 text-slate-500">{row.responsable}</span>
-                      <div className="col-span-4 flex items-center gap-1">
-                        {row.evidencia ? (
-                          <span className="text-indigo-500 truncate">{row.evidencia}</span>
-                        ) : (
-                          <button onClick={() => { setInstrRowId(row.id); setShowInstrOverlay(true); }}
-                            className="text-slate-400 hover:text-indigo-500 transition-colors flex items-center gap-1">
-                            <Paperclip size={10} /> Adjuntar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => { setInstrRowId('new'); setShowInstrOverlay(true); }}
-                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 px-3 py-2 border border-slate-200 rounded-lg hover:border-indigo-300 transition-colors"
-                  style={{ fontWeight: 500 }}>
-                  <Paperclip size={12} /> Adjuntar evidencia
-                </button>
-              </SectionCard>
-
-              {/* CTAs */}
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => toast.success('Borrador guardado')}
-                  className="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                  Guardar borrador
-                </button>
-                <button
-                  onClick={() => { setModuloACompleto(true); toast.success('Módulo A marcado como completo'); setActiveModule('B'); }}
-                  disabled={!formatoExp || !prepChecks.some(Boolean)}
-                  className={`flex-1 rounded-xl py-2.5 text-sm transition-colors flex items-center justify-center gap-2 ${formatoExp && prepChecks.some(Boolean) ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
-                  style={{ fontWeight: 500 }}>
-                  {moduloACompleto ? <><CheckCircle2 size={14} /> Completo</> : <>Marcar como completo <ChevronRight size={14} /></>}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ════════════════════════════════════════════════════════════════════
-              MÓDULO B — Ejecutar y capturar evidencia
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeModule === 'B' && (
-            <div className="space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>B · Ejecutar y capturar evidencia</h1>
-                  <StatusChip status={moduleBReady ? 'Completado' : 'En progreso'} size="sm" />
-                </div>
-                <p className="text-sm text-slate-500">Aquí ejecutas el acercamiento en campo, recoges evidencia, lees la señal y decides qué mejorar en el siguiente testeo.</p>
-              </div>
-
-              <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-5">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div>
-                    <p className="text-sm text-indigo-900" style={{ fontWeight: 700 }}>Bitácora de aprendizaje en campo</p>
-                    <p className="text-sm text-slate-600 mt-1 max-w-2xl">Usa este espacio para registrar cada testeo como un ciclo corto de aprendizaje: qué quisiste validar, con quién lo probaste, qué señal viste, qué aprendiste y qué harás después.</p>
-                  </div>
-                  <button
-                    onClick={addTestCycle}
-                    className="flex items-center gap-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 rounded-xl border border-indigo-600 transition-colors shadow-sm"
-                    style={{ fontWeight: 600 }}
-                  >
-                    <Plus size={15} /> Agregar testeo
+              <div className="flex gap-1 mb-5 md:hidden overflow-x-auto pb-1">
+                {modules.map(m => (
+                  <button key={m.id} onClick={() => setActiveModule(m.id)}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs transition-colors ${activeModule === m.id ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500'}`}
+                    style={{ fontWeight: activeModule === m.id ? 600 : 400 }}>
+                    {m.label}
                   </button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {[
-                    '1. Qué vas a validar',
-                    '2. Con quién lo probarás',
-                    '3. Qué señal observarás',
-                    '4. Qué hallazgos aparecieron',
-                    '5. Qué aprendiste',
-                    '6. Qué cambiarás después',
-                  ].map(step => (
-                    <span key={step} className="text-xs px-3 py-1.5 rounded-full bg-white border border-indigo-100 text-slate-600" style={{ fontWeight: 500 }}>
-                      {step}
-                    </span>
-                  ))}
-                </div>
-                <div className={`mt-4 rounded-xl border px-4 py-3 ${needsSecondCycle ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
-                  <p className={`text-xs ${needsSecondCycle ? 'text-amber-800' : 'text-emerald-800'}`} style={{ fontWeight: 600 }}>
-                    {needsSecondCycle
-                      ? 'Necesitas al menos 2 testeos completos para contrastar resultados antes de analizar conclusiones.'
-                      : 'Ya tienes 2 o más testeos completos. Puedes seguir iterando o pasar a analizar resultados.'}
-                  </p>
-                </div>
+                ))}
               </div>
 
-              {testCycles.map((cycle, cycleIndex) => {
-                const open = cycleAbiertoId === cycle.id;
-                const cycleReady = isCycleComplete(cycle);
-                return (
-                  <div key={cycle.id} className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
-                    <button
-                      onClick={() => {
-                        setActiveCycleId(cycle.id);
-                        setCycleAbiertoId(open ? null : cycle.id);
-                      }}
-                      className="w-full px-4 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-3 text-left"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm text-slate-900" style={{ fontWeight: 600 }}>{cycle.nombre}</p>
-                          <span className={`text-[11px] px-2 py-0.5 rounded-full ${cycleReady ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`} style={{ fontWeight: 600 }}>
-                            {cycleStatusLabel(cycle)}
-                          </span>
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-500" style={{ fontWeight: 600 }}>
-                            {cycleIndex === 0 ? 'Primer acercamiento' : 'Iteración'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1">{cycle.queValidamos || 'Define aquí el foco de este ciclo.'}</p>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          <span className="text-[11px] px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500">
-                            Muestra: {cycle.contextoPrueba || 'Define con quién y en qué alcance se probó'}
-                          </span>
-                          <span className="text-[11px] px-2 py-1 rounded-full bg-white border border-slate-200 text-slate-500">
-                            Métrica: {cycle.metricaPrincipal || 'Define qué observarás'}
-                          </span>
-                        </div>
-                      </div>
-                      {open ? <ChevronUp size={16} className="text-slate-400 shrink-0" /> : <ChevronDown size={16} className="text-slate-400 shrink-0" />}
-                    </button>
-
-                    {open && (
-                      <div className="p-4 space-y-4">
-                        <SectionCard title="Qué quisimos validar" icon={Target}>
-                          <p className="text-xs text-slate-400 mb-3">Escribe en simple qué querías comprobar, con quién lo probaste y qué señal esperabas ver para pensar que iba bien.</p>
-                          <div className="grid gap-3">
-                            {[
-                              { field: 'queValidamos', label: '¿Qué quisimos validar en este acercamiento?', value: cycle.queValidamos, rows: 2, placeholder: 'Ej. Queríamos ver si el nuevo flujo reducía tiempos en casos especiales.' },
-                              { field: 'contextoPrueba', label: '¿A quién y en qué alcance lo probamos?', value: cycle.contextoPrueba, rows: 2, placeholder: 'Ej. 3 ingresos nuevos, 1 caso especial, durante la primera semana.' },
-                              { field: 'metricaPrincipal', label: '¿Qué observamos para saber si funcionó?', value: cycle.metricaPrincipal, rows: 2, placeholder: 'Ej. Tiempo desde la solicitud hasta accesos activos.' },
-                              { field: 'criterioDecision', label: '¿Qué resultado esperábamos ver?', value: cycle.criterioDecision, rows: 2, placeholder: 'Ej. Resolver al menos 80% de los casos en menos de 24 horas.' },
-                            ].map(item => (
-                              <div key={item.field}>
-                                <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>{item.label}</label>
-                                <textarea
-                                  value={item.value}
-                                  onChange={e => updateCycle(cycle.id, current => ({ ...current, [item.field]: e.target.value, estado: 'Actualizado' } as TestCycle))}
-                                  rows={item.rows}
-                                  placeholder={item.placeholder}
-                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </SectionCard>
-
-                        <SectionCard title={cycleIndex === 0 ? 'Qué mecanismo pusimos a prueba' : 'Qué cambió respecto al testeo anterior'} icon={Edit2}>
-                          <p className="text-xs text-slate-400 mb-3">
-                            {cycleIndex === 0
-                              ? 'Describe de forma breve qué pusiste en campo por primera vez.'
-                              : 'Resume qué ajustaste en este acercamiento para que se entienda la iteración.'}
-                          </p>
-                          <textarea
-                            value={cycle.versionProbada}
-                            onChange={e => updateCycle(cycle.id, current => ({ ...current, versionProbada: e.target.value, estado: 'Actualizado' }))}
-                            rows={2}
-                            placeholder={cycleIndex === 0 ? 'Ej. Probamos un formulario unificado conectado al equipo de TI.' : 'Ej. Agregamos un flujo especial para accesos fuera del catálogo.'}
-                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                          />
-
-                          <div className="mt-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-sm text-slate-700" style={{ fontWeight: 500 }}>Registro rápido del ciclo</p>
-                              <button
-                                onClick={() => {
-                                  setActiveCycleId(cycle.id);
-                                  setShowBitacoraModal(true);
-                                }}
-                                className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
-                                style={{ fontWeight: 500 }}
-                              >
-                                <Plus size={12} /> Registrar evento
-                              </button>
-                            </div>
-                            <div className="space-y-2">
-                              {cycle.bitacora.length === 0 && <p className="text-xs text-slate-400">Todavía no registras acciones dentro de este testeo.</p>}
-                              {cycle.bitacora.map((event, eventIndex) => (
-                                <div key={event.id} className="flex gap-3 rounded-xl border border-slate-200 p-3 group">
-                                  <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] shrink-0" style={{ fontWeight: 700 }}>{eventIndex + 1}</div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <p className="text-sm text-slate-800" style={{ fontWeight: 500 }}>{event.accion}</p>
-                                      <button
-                                        onClick={() => updateCycle(cycle.id, current => ({ ...current, bitacora: current.bitacora.filter(item => item.id !== event.id), estado: 'Actualizado' }))}
-                                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                      >
-                                        <X size={12} className="text-slate-300 hover:text-red-400" />
-                                      </button>
-                                    </div>
-                                    <p className="text-xs text-slate-400 mt-1">{event.fecha}{event.hora ? ` · ${event.hora}` : ''}{event.responsable ? ` · ${event.responsable}` : ''}</p>
-                                    {event.nota && <p className="text-xs text-slate-500 mt-1 italic">{event.nota}</p>}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </SectionCard>
-
-                        <SectionCard title="Evidencia y hallazgos de campo" icon={Paperclip}>
-                          <div className="flex items-center justify-between mb-3">
-                            <p className="text-xs text-slate-500">Adjunta solo la evidencia de este acercamiento y registra lo que viste en campo.</p>
-                            <button
-                              onClick={() => {
-                                setActiveCycleId(cycle.id);
-                                setShowAdjuntarOverlay(true);
-                              }}
-                              className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
-                              style={{ fontWeight: 500 }}
-                            >
-                              <Paperclip size={12} /> Adjuntar evidencia
-                            </button>
-                          </div>
-                          <div className="border border-slate-200 rounded-xl overflow-hidden">
-                            <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100 text-xs text-slate-400" style={{ fontWeight: 600 }}>
-                              <span className="col-span-2">Tipo</span><span className="col-span-7">Descripcion</span><span className="col-span-3">Fecha</span>
-                            </div>
-                            {cycle.evidencias.map(ev => (
-                              <div key={ev.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors group">
-                                <div className="col-span-2 flex items-start">
-                                  <span className={`text-xs px-1.5 py-0.5 rounded ${ev.tipo === 'Archivo' ? 'bg-slate-100 text-slate-600' : ev.tipo === 'Link' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-700'}`} style={{ fontWeight: 500 }}>{ev.tipo}</span>
-                                </div>
-                                <p className="col-span-7 text-xs text-slate-700 self-center">{ev.descripcion}</p>
-                                <div className="col-span-3 flex items-center justify-between">
-                                  <p className="text-xs text-slate-400">{ev.fecha}</p>
-                                  <button
-                                    onClick={() => updateCycle(cycle.id, current => ({ ...current, evidencias: current.evidencias.filter(item => item.id !== ev.id), estado: 'Actualizado' }))}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                  >
-                                    <X size={12} className="text-slate-300 hover:text-red-400" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                            {cycle.evidencias.length === 0 && <div className="px-4 py-8 text-center text-xs text-slate-400">Todavía no hay evidencias. Adjunta archivos, links o notas de este testeo.</div>}
-                          </div>
-                        </SectionCard>
-
-                        <div className="border border-slate-200 rounded-xl overflow-hidden">
-                          <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Sparkles size={14} className="text-violet-500" />
-                              <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Hallazgos de campo</p>
-                            </div>
-                            <button
-                              onClick={() => {
-                                setActiveCycleId(cycle.id);
-                                setShowMallaModal(true);
-                              }}
-                              className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 px-2 py-1 bg-violet-50 rounded-lg border border-violet-200 transition-colors"
-                              style={{ fontWeight: 500 }}
-                            >
-                              <Plus size={11} /> Agregar hallazgo
-                            </button>
-                          </div>
-                          <div className="px-4 py-3 border-b border-slate-100 bg-white">
-                            <p className="text-xs text-slate-500">Aquí separas lo observado en campo: ideas, fricciones, preguntas nuevas y mejoras sugeridas.</p>
-                          </div>
-                          <div className="divide-y divide-slate-50">
-                            {MALLA_SECCIONES.map(({ key, label, color, icon: Icon }) => {
-                              const items = mallaByTipo(cycle, key);
-                              const sectionId = `${cycle.id}:${key}`;
-                              const openSection = mallaSeccionAbierta === sectionId;
-                              return (
-                                <div key={sectionId}>
-                                  <button
-                                    onClick={() => setMallaSeccionAbierta(openSection ? null : sectionId)}
-                                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors text-left"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${colorMap[color].split(' ')[0]}`}>
-                                        <Icon size={12} className={colorMap[color].split(' ')[2]} />
-                                      </div>
-                                      <span className="text-sm text-slate-700" style={{ fontWeight: 500 }}>{label}</span>
-                                      <span className={`text-xs px-1.5 py-0.5 rounded-full ml-1 ${colorMap[color]}`} style={{ fontWeight: 600 }}>{items.length}</span>
-                                    </div>
-                                    {openSection ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
-                                  </button>
-                                  {openSection && (
-                                    <div className="px-4 pb-3 space-y-2">
-                                      {items.length === 0 && <p className="text-xs text-slate-400 italic">Sin registros aún. Agrega lo que observaste en este testeo.</p>}
-                                      {items.map(item => (
-                                        <div key={item.id} className={`flex items-start gap-2 p-2.5 rounded-xl border ${colorMap[color]} group`}>
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-xs text-slate-700">{item.descripcion}</p>
-                                            {item.severidad && (
-                                              <span className={`text-xs px-1.5 py-0.5 rounded mt-1 inline-block ${severidadMap[item.severidad]}`} style={{ fontWeight: 500 }}>
-                                                Impacto {item.severidad}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <button
-                                            onClick={() => updateCycle(cycle.id, current => ({ ...current, hallazgos: current.hallazgos.filter(entry => entry.id !== item.id), estado: 'Actualizado' }))}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                          >
-                                            <X size={11} className="text-slate-300 hover:text-red-400" />
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <SectionCard title="Lectura del resultado" icon={TrendingUp}>
-                          <div className="grid gap-3">
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>Señal esperada</label>
-                              <textarea
-                                value={cycle.resultadoEsperado}
-                                onChange={e => updateCycle(cycle.id, current => ({ ...current, resultadoEsperado: e.target.value, estado: 'Actualizado' }))}
-                                rows={2}
-                                placeholder="Ej. Esperábamos resolver 4 de 5 casos en menos de 24 horas."
-                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>¿Qué pasó realmente?</label>
-                              <textarea
-                                value={cycle.resultadoObservado}
-                                onChange={e => updateCycle(cycle.id, current => ({ ...current, resultadoObservado: e.target.value, estado: 'Actualizado' }))}
-                                rows={2}
-                                placeholder="Ej. Observamos 4 de 5 casos resueltos en menos de 24 horas."
-                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                              />
-                            </div>
-                          </div>
-                        </SectionCard>
-
-                        <SectionCard title="Aprendizaje del testeo" icon={BookOpen}>
-                          <p className="text-xs text-slate-400 mb-3">No repitas solo lo que viste. Escribe la interpretación útil que te ayuda a decidir qué sostener, qué ajustar o qué descartar.</p>
-                          <textarea
-                            value={cycle.aprendizaje}
-                            onChange={e => updateCycle(cycle.id, current => ({ ...current, aprendizaje: e.target.value, estado: 'Actualizado' }))}
-                            rows={3}
-                            placeholder="Ej. El flujo base funciona, pero sigue fallando cuando la solicitud depende de una aprobacion especial."
-                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                          />
-                        </SectionCard>
-
-                        <SectionCard title="Decisión y siguiente paso" icon={Zap}>
-                          <p className="text-xs text-slate-400 mb-3">Cierra este acercamiento con una decisión clara y deja escrito qué necesitas validar o mejorar en el siguiente testeo.</p>
-                          <div className="flex flex-wrap gap-2 mb-3">
-                            {decisionOptions.map(option => (
-                              <button
-                                key={option.value}
-                                onClick={() => updateCycle(cycle.id, current => ({ ...current, decision: option.value, estado: 'Actualizado' }))}
-                                className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${cycle.decision === option.value ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
-                                style={{ fontWeight: cycle.decision === option.value ? 600 : 400 }}
-                              >
-                                {option.label}
-                              </button>
-                            ))}
-                          </div>
-                          <textarea
-                            value={cycle.decisionJustificacion}
-                            onChange={e => updateCycle(cycle.id, current => ({ ...current, decisionJustificacion: e.target.value, estado: 'Actualizado' }))}
-                            rows={2}
-                            placeholder="Explica por que mantienes, iteras, pivoteas o detienes este acercamiento."
-                            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                          />
-                        </SectionCard>
-
-                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 space-y-4">
-                          <div className="flex items-start justify-between gap-3 flex-wrap">
-                            <div>
-                              <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Siguiente paso</p>
-                              <p className="text-xs text-slate-400 mt-0.5 max-w-sm">Conecta este aprendizaje con el próximo acercamiento: qué vas a volver a validar, qué ajustarás y cómo lo probarás mejor.</p>
-                            </div>
-                            <button
-                              onClick={() => {
-                                setActiveCycleId(cycle.id);
-                                setShowIANextOverlay(true);
-                                if (!iaNextListo) { setIaNextLoading(true); setTimeout(() => { setIaNextLoading(false); setIaNextListo(true); }, 1800); }
-                              }}
-                              className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 transition-colors shrink-0"
-                              style={{ fontWeight: 500 }}
-                            >
-                              <Sparkles size={12} /> Definir que sigue con IA
-                            </button>
-                          </div>
-                          {iaNextSelected !== null && activeCycleId === cycle.id && (
-                            <div className="flex items-center gap-2 p-2 bg-violet-50 border border-violet-100 rounded-xl text-xs text-violet-700">
-                              <CheckCircle2 size={12} className="shrink-0 text-violet-500" />
-                              Sugerencia IA aplicada: <span style={{ fontWeight: 600 }}>{IA_SUGERENCIAS_NEXT[iaNextSelected].titulo}</span>
-                            </div>
-                          )}
-                          <div className="space-y-3">
-                            {[
-                              { field: 'siguientePaso', label: '¿Qué conviene validar ahora?', placeholder: 'Ej. Confirmar si el nuevo flujo reduce tiempos en casos especiales.' },
-                              { field: 'siguienteCambio', label: '¿Qué cambiaremos para el siguiente acercamiento?', placeholder: 'Ej. Agregar campo y escalado específico para accesos especiales.' },
-                              { field: 'siguienteMetodo', label: '¿Cómo lo volveremos a probar?', placeholder: 'Ej. Misma base, nueva muestra y comparación separada por tipo de caso.' },
-                              { field: 'siguienteCuando', label: '¿Cuándo o en qué ventana lo probaremos?', placeholder: 'Ej. Semana del 10 de marzo con 3 nuevos ingresos.' },
-                            ].map(item => (
-                              <div key={item.field}>
-                                <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>{item.label}</label>
-                                <textarea
-                                  value={(cycle as unknown as Record<string, string>)[item.field] ?? ''}
-                                  onChange={e => updateCycle(cycle.id, current => ({ ...current, [item.field]: e.target.value, estado: 'Actualizado' } as TestCycle))}
-                                  rows={2}
-                                  placeholder={item.placeholder}
-                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className={`rounded-2xl border px-4 py-4 ${testCycles.length === cycleIndex + 1 ? 'border-indigo-200 bg-indigo-50' : 'border-slate-200 bg-slate-50'}`}>
-                          <div className="flex items-start justify-between gap-3 flex-wrap">
-                            <div className="max-w-xl">
-                              <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
-                                {testCycles.length === cycleIndex + 1
-                                  ? `Continúa con ${`Testeo ${cycleIndex + 2}`}`
-                                  : 'Ya tienes un siguiente testeo creado'}
-                              </p>
-                              <p className="text-xs text-slate-500 mt-1">
-                                {testCycles.length === cycleIndex + 1
-                                  ? 'Ya cerraste este acercamiento. Ahora crea el siguiente testeo para probar el ajuste y comparar lo aprendido.'
-                                  : 'Este ciclo ya tiene continuidad. Usa el siguiente testeo para contrastar si el cambio mejora la señal observada.'}
-                              </p>
-                              {completedCyclesCount < 2 && cycleIndex === 0 && (
-                                <p className="text-xs text-amber-700 mt-2" style={{ fontWeight: 600 }}>
-                                  Necesitas al menos 2 testeos completos para poder analizar resultados con mayor claridad.
-                                </p>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => {
-                                if (testCycles.length === cycleIndex + 1) {
-                                  addTestCycle();
-                                } else {
-                                  const nextCycle = testCycles[cycleIndex + 1];
-                                  if (!nextCycle) return;
-                                  setActiveCycleId(nextCycle.id);
-                                  setCycleAbiertoId(nextCycle.id);
-                                }
-                              }}
-                              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-colors ${testCycles.length === cycleIndex + 1 ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'}`}
-                              style={{ fontWeight: 600 }}
-                            >
-                              <Plus size={14} />
-                              {testCycles.length === cycleIndex + 1 ? `Crear Testeo ${cycleIndex + 2}` : `Ir a Testeo ${cycleIndex + 2}`}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+              <div className="mb-5 min-[1280px]:hidden">
+                <div className="border border-violet-100 bg-violet-50 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText size={13} className="text-violet-500" />
+                    <p className="text-xs text-violet-700" style={{ fontWeight: 600 }}>Resumen del experimento · del Step 2</p>
                   </div>
-                );
-              })}
-
-              <button
-                onClick={() => { toast.success('Ciclos guardados'); setActiveModule('C'); }}
-                disabled={!moduleBReady}
-                className={`w-full rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors ${moduleBReady ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
-                style={{ fontWeight: 500 }}>
-                {moduleBReady
-                  ? <>Modulo B listo para analizar resultados <ChevronRight size={15} /></>
-                  : <><AlertCircle size={14} /> Completa al menos 2 testeos con evidencia, resultado, aprendizaje y decision</>}
-              </button>
-            </div>
-          )}
-
-          {false && activeModule === 'B' && (
-            <div className="space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>B · Ejecutar y capturar evidencia</h1>
-                  <StatusChip status={evidencias.length >= 1 && valorMedido.trim().length > 10 ? 'Completado' : 'En progreso'} size="sm" />
-                </div>
-                <p className="text-sm text-slate-500">Bitácora operativa, evidencias, malla de aprendizajes y siguiente iteración.</p>
-              </div>
-
-              {/* S3B_Bitacora ─────────────────────────────────────────────────── */}
-              <SectionCard title="Bitácora de ejecución (qué se hizo)" icon={BookOpen}>
-                <p className="text-xs text-slate-400 mb-3">Registra lo ejecutado en tiempo real. El objetivo es tener una traza del proceso, no solo el resultado final.</p>
-                <div className="space-y-0 relative">
-                  <div className="absolute left-[19px] top-2 bottom-2 w-px bg-slate-200" />
-                  {bitacora.map((ev, i) => (
-                    <div key={ev.id} className="relative flex gap-3 pb-4 last:pb-0 group">
-                      <div className="w-10 shrink-0 flex flex-col items-center pt-0.5">
-                        <div className="w-5 h-5 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center z-10">
-                          <span className="text-indigo-600" style={{ fontSize: 9, fontWeight: 700 }}>{i + 1}</span>
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm text-slate-800" style={{ fontWeight: 500 }}>{ev.accion}</p>
-                          <button onClick={() => setBitacora(p => p.filter(e => e.id !== ev.id))}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                            <X size={12} className="text-slate-300 hover:text-red-400" />
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-3 mt-0.5">
-                          <span className="text-xs text-slate-400"><Clock size={9} className="inline mr-0.5" />{ev.fecha}{ev.hora && ` · ${ev.hora}`}</span>
-                          {ev.responsable && <span className="text-xs text-slate-400"><Users size={9} className="inline mr-0.5" />{ev.responsable}</span>}
-                        </div>
-                        {ev.nota && <p className="text-xs text-slate-500 mt-0.5 italic">"{ev.nota}"</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => setShowBitacoraModal(true)}
-                  className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors mt-4"
-                  style={{ fontWeight: 500 }}>
-                  <Plus size={13} /> Registrar evento
-                </button>
-              </SectionCard>
-
-              {/* S3B_Evidencias (existente) ─────────────────────────────────────── */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-slate-700" style={{ fontWeight: 500 }}>Evidencias adjuntas ({evidencias.length})</p>
-                  <button onClick={() => setShowAdjuntarOverlay(true)}
-                    className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
-                    style={{ fontWeight: 500 }}>
-                    <Paperclip size={12} /> Adjuntar evidencia
-                  </button>
-                </div>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100 text-xs text-slate-400" style={{ fontWeight: 600 }}>
-                    <span className="col-span-2">Tipo</span><span className="col-span-7">Descripción</span><span className="col-span-3">Fecha</span>
-                  </div>
-                  {evidencias.map(ev => (
-                    <div key={ev.id} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors group">
-                      <div className="col-span-2 flex items-start">
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${ev.tipo === 'Archivo' ? 'bg-slate-100 text-slate-600' : ev.tipo === 'Link' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-700'}`} style={{ fontWeight: 500 }}>{ev.tipo}</span>
-                      </div>
-                      <p className="col-span-7 text-xs text-slate-700 self-center">{ev.descripcion}</p>
-                      <div className="col-span-3 flex items-center justify-between">
-                        <p className="text-xs text-slate-400">{ev.fecha}</p>
-                        <button onClick={() => setEvidencias(p => p.filter(e => e.id !== ev.id))} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          <X size={12} className="text-slate-300 hover:text-red-400" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {evidencias.length === 0 && <div className="px-4 py-8 text-center text-xs text-slate-400">Sin evidencias aún. Adjunta archivos, links o notas.</div>}
-                </div>
-              </div>
-
-              {/* S3B_MallaReceptora ──────────────────────────────────────────── */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={14} className="text-violet-500" />
-                    <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Malla receptora (lo que aprendimos en campo)</p>
-                  </div>
-                  <button onClick={() => setShowMallaModal(true)}
-                    className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 px-2 py-1 bg-violet-50 rounded-lg border border-violet-200 transition-colors"
-                    style={{ fontWeight: 500 }}>
-                    <Plus size={11} /> Agregar
-                  </button>
-                </div>
-                <div className="divide-y divide-slate-50">
-                  {MALLA_SECCIONES.map(({ key, label, color, icon: Icon }) => {
-                    const items = mallaByTipo(key);
-                    const open = mallaSeccionAbierta === key;
-                    return (
-                      <div key={key}>
-                        <button onClick={() => setMallaSeccionAbierta(open ? null : key)}
-                          className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors text-left">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${colorMap[color].split(' ')[0]}`}>
-                              <Icon size={12} className={colorMap[color].split(' ')[2]} />
-                            </div>
-                            <span className="text-sm text-slate-700" style={{ fontWeight: 500 }}>{label}</span>
-                            <span className={`text-xs px-1.5 py-0.5 rounded-full ml-1 ${colorMap[color]}`} style={{ fontWeight: 600 }}>{items.length}</span>
-                          </div>
-                          {open ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
-                        </button>
-                        {open && (
-                          <div className="px-4 pb-3 space-y-2">
-                            {items.length === 0 && <p className="text-xs text-slate-400 italic">Sin registros aún. Agrega lo que observaste en campo.</p>}
-                            {items.map(item => (
-                              <div key={item.id} className={`flex items-start gap-2 p-2.5 rounded-xl border ${colorMap[color]} group`}>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-slate-700">{item.descripcion}</p>
-                                  {item.severidad && (
-                                    <span className={`text-xs px-1.5 py-0.5 rounded mt-1 inline-block ${severidadMap[item.severidad]}`} style={{ fontWeight: 500 }}>
-                                      Impacto {item.severidad}
-                                    </span>
-                                  )}
-                                </div>
-                                <button onClick={() => setMalla(p => p.filter(m => m.id !== item.id))} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                  <X size={11} className="text-slate-300 hover:text-red-400" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Registro de resultados (existente) ─────────────────────────────── */}
-              <SectionCard title="Registro de resultados" icon={TrendingUp}>
-                <div className="space-y-3">
-                  {([
-                    { key: 'valorMedido', label: 'Valor medido', value: valorMedido, set: setValorMedido, placeholder: 'Ej. 4/5 casos resueltos en menos de 24 horas (80%)', rows: 1 },
-                    { key: 'observaciones', label: 'Observaciones', value: observaciones, set: setObservaciones, placeholder: '¿Qué pasó durante el experimento?', rows: 3 },
-                    { key: 'incidencias', label: 'Incidencias', value: incidencias, set: setIncidencias, placeholder: '¿Hubo problemas, desvíos o excepciones?', rows: 2 },
-                  ] as const).map(({ key, label, value, set, placeholder, rows }) => (
-                    <div key={key}>
-                      <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>{label}</label>
-                      <textarea value={value} onChange={e => (set as (v: string) => void)(e.target.value)} rows={rows}
-                        placeholder={placeholder}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-                    </div>
-                  ))}
-                </div>
-              </SectionCard>
-
-              {/* S3B_SiguienteIteracion ──────────────────────────────────────── */}
-              <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 space-y-4">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div>
-                    <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Siguiente iteración (re-test)</p>
-                    <p className="text-xs text-slate-400 mt-0.5 max-w-sm">No busques lo perfecto. Apunta al MVP: lo mínimo que resuelve y se puede probar.</p>
-                  </div>
-                  <button onClick={() => {
-                    setShowIANextOverlay(true);
-                    if (!iaNextListo) { setIaNextLoading(true); setTimeout(() => { setIaNextLoading(false); setIaNextListo(true); }, 1800); }
-                  }}
-                    className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200 transition-colors shrink-0"
-                    style={{ fontWeight: 500 }}>
-                    <Sparkles size={12} /> Definir qué sigue con IA
-                  </button>
-                </div>
-                {iaNextSelected !== null && (
-                  <div className="flex items-center gap-2 p-2 bg-violet-50 border border-violet-100 rounded-xl text-xs text-violet-700">
-                    <CheckCircle2 size={12} className="shrink-0 text-violet-500" />
-                    Sugerencia IA aplicada: <span style={{ fontWeight: 600 }}>{IA_SUGERENCIAS_NEXT[iaNextSelected].titulo}</span>
-                  </div>
-                )}
-                <div className="space-y-3">
-                  {([
-                    { key: 'quePunto', label: 'Qué punto pendiente validaremos ahora', placeholder: '(Placeholder) Ej. Reducir tiempo de resolución de accesos especiales de 36h a ≤24h' },
-                    { key: 'queCambia', label: 'Qué cambiaremos del experimento (1–3 cambios)', placeholder: '(Placeholder) Ej. Agregar campo "tipo de acceso especial" + flujo de escalado directo a TI Senior' },
-                    { key: 'comoPrueba', label: 'Cómo lo volveremos a probar (método / canal)', placeholder: '(Placeholder) Ej. Mismo formulario con nuevo campo + seguimiento en Sheets' },
-                    { key: 'cuando', label: 'Cuándo lo probaremos (fecha / ventana)', placeholder: '(Placeholder) Ej. Semana del 10 de marzo — próximos 3 ingresos' },
-                  ] as const).map(({ key, label, placeholder }) => (
-                    <div key={key}>
-                      <label className="block text-xs text-slate-600 mb-1" style={{ fontWeight: 500 }}>{label}</label>
-                      <textarea value={sigIter[key]} onChange={e => setSigIter(p => ({ ...p, [key]: e.target.value }))}
-                        rows={2} placeholder={placeholder}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                onClick={() => { toast.success('Evidencias guardadas'); setActiveModule('C'); }}
-                disabled={evidencias.length < 1 || valorMedido.trim().length < 10}
-                className={`w-full rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors ${evidencias.length >= 1 && valorMedido.trim().length > 10 ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
-                style={{ fontWeight: 500 }}>
-                {evidencias.length >= 1 && valorMedido.trim().length > 10
-                  ? <>Módulo B listo → Analizar resultados <ChevronRight size={15} /></>
-                  : <><AlertCircle size={14} /> Registra al menos 1 evidencia y el valor medido</>}
-              </button>
-            </div>
-          )}
-
-          {/* ════════════════════════════════════════════════════════════════════
-              MÓDULO C — Resultados y decisión
-          ════════════════════════════════════════════════════════════════════ */}
-          {activeModule === 'C' && (
-            <div className="space-y-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-xl text-slate-900" style={{ fontWeight: 700 }}>C · Resultados y decisión</h1>
-                  <StatusChip status={goNoGo && hasFeedback ? 'Completado' : 'En progreso'} size="sm" />
-                </div>
-                <p className="text-sm text-slate-500">Compara lo que planeabas con lo que pasó en campo, interpreta la evidencia y cierra con una decisión clara para pasar al Step 4.</p>
-              </div>
-
-              {/* S3C_Comparativo ─────────────────────────────────────────────── */}
-              <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-5">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="max-w-2xl">
-                    <p className="text-sm text-violet-900" style={{ fontWeight: 700 }}>Compara, interpreta y decide</p>
-                    <p className="text-sm text-slate-600 mt-1">Primero trae los resultados desde los testeos, luego interpreta qué significan y cierra con una decisión que deje listo el relato final.</p>
-                  </div>
-                  <button
-                    onClick={buildResultsFromTests}
-                    className="flex items-center gap-2 text-sm text-white bg-violet-600 hover:bg-violet-700 px-4 py-2.5 rounded-xl border border-violet-600 transition-colors shadow-sm"
-                    style={{ fontWeight: 600 }}>
-                    <Sparkles size={15} /> Traer resultados del testeo
-                  </button>
-                </div>
-              </div>
-
-              <SectionCard title="Plan vs realidad" icon={TrendingUp}>
-                <p className="text-xs text-slate-400 mb-3">Mira lado a lado lo que esperabas ver y lo que realmente ocurrió. Si ya corriste testeos, puedes traer esa base con el botón superior.</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>LO QUE ESPERÁBAMOS</p>
-                    <div className="space-y-2">
-                      {comparisonPlan.map(({ label, value }) => (
-                        <div key={label} className="p-2.5 bg-blue-50 border border-blue-100 rounded-xl">
-                          <p className="text-xs text-blue-400 mb-0.5" style={{ fontWeight: 600 }}>{label}</p>
-                          <p className="text-xs text-blue-800">{value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>LO QUE PASÓ</p>
-                    <div className="space-y-2">
-                      {comparisonReality.map(({ label, value }) => (
-                        <div key={label} className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
-                          <p className="text-xs text-emerald-500 mb-0.5" style={{ fontWeight: 600 }}>{label}</p>
-                          <p className="text-xs text-emerald-800">{value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </SectionCard>
-
-              {/* Comparación vs umbral (existente) ─────────────────────────────── */}
-              <SectionCard title="Lectura rápida del resultado" icon={Target}>
-                <div className="grid grid-cols-3 gap-4">
-                  {[
-                    { label: 'Señal esperada', value: comparisonPlan[1]?.value || umbral },
-                    { label: 'Resultado observado', value: comparisonReality[0]?.value || resultado },
-                    { label: 'Lectura actual', value: goNoGo ?? 'Aún sin decidir', chip: true, chipColor: goNoGo === 'Go' ? 'bg-emerald-100 text-emerald-700' : goNoGo === 'Iterar' ? 'bg-amber-100 text-amber-700' : goNoGo === 'No-Go' ? 'bg-red-100 text-red-700' : goNoGo === 'Pivote' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600' },
-                  ].map(({ label, value, chip, chipColor }) => (
-                    <div key={label} className="text-center">
-                      <p className="text-xs text-slate-400 mb-1" style={{ fontWeight: 500 }}>{label}</p>
-                      {chip ? (
-                        <span className={`text-sm px-3 py-1 rounded-full ${chipColor}`} style={{ fontWeight: 700 }}>{value}</span>
-                      ) : (
-                        <p className="text-xs text-slate-700" style={{ fontWeight: 600 }}>{value}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </SectionCard>
-
-              {/* S3C_DiagnosticoIA ───────────────────────────────────────────── */}
-              <div className="border border-violet-200 bg-violet-50 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-violet-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={14} className="text-violet-500" />
-                    <p className="text-sm text-violet-800" style={{ fontWeight: 600 }}>Interpretación inicial de resultados</p>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-violet-200 text-violet-700" style={{ fontWeight: 600 }}>Editable</span>
-                  </div>
-                  <button onClick={() => setEditandoDiag(p => !p)}
-                    className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-800 px-2 py-1 bg-white border border-violet-200 rounded-lg transition-colors"
-                    style={{ fontWeight: 500 }}>
-                    <Edit2 size={11} /> {editandoDiag ? 'Guardar' : 'Editar interpretación'}
-                  </button>
-                </div>
-                <div className="px-4 py-4 space-y-3">
-                  {([
-                    { key: 'senales' as const, label: 'Qué señales favorables aparecen', color: 'text-emerald-700' },
-                    { key: 'riesgos' as const, label: 'Qué riesgos o fricciones aparecen', color: 'text-amber-700' },
-                    { key: 'queFalta' as const, label: 'Qué falta validar todavía', color: 'text-blue-700' },
-                  ]).map(({ key, label, color }) => (
-                    <div key={key}>
-                      <p className={`text-xs mb-1.5 ${color}`} style={{ fontWeight: 600 }}>{label}</p>
-                      <div className="space-y-1.5">
-                        {diagnostico[key].map((item, i) => (
-                          <div key={i} className="flex items-start gap-2">
-                            <span className="text-slate-300 mt-0.5 shrink-0">·</span>
-                            {editandoDiag ? (
-                              <input value={item}
-                                onChange={e => {
-                                  const next = [...diagnostico[key]];
-                                  next[i] = e.target.value;
-                                  setDiagnostico(p => ({ ...p, [key]: next }));
-                                }}
-                                className="flex-1 border border-violet-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400" />
-                            ) : (
-                              <p className="text-xs text-slate-700">{item}</p>
-                            )}
-                          </div>
-                        ))}
-                        {editandoDiag && (
-                          <button onClick={() => setDiagnostico(p => ({ ...p, [key]: [...p[key], ''] }))}
-                            className="flex items-center gap-1 text-xs text-violet-500 hover:text-violet-700 ml-4 transition-colors">
-                            <Plus size={10} /> Agregar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Aprendizajes clave (existente) ──────────────────────────────── */}
-              <div>
-                <p className="text-sm text-slate-700 mb-2" style={{ fontWeight: 500 }}>Aprendizajes clave</p>
-                <p className="text-xs text-slate-400 mb-3">No repitas solo hallazgos de campo. Resume qué aprendiste de verdad al comparar lo esperado con lo observado.</p>
-                <div className="space-y-2">
-                  {aprendizajes.map((a, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-xs flex items-center justify-center shrink-0 mt-0.5" style={{ fontWeight: 700 }}>{i + 1}</span>
-                      <textarea value={a} onChange={e => { const n = [...aprendizajes]; n[i] = e.target.value; setAprendizajes(n); }}
-                        rows={2} className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-                    </div>
-                  ))}
-                  <button onClick={() => setAprendizajes(p => [...p, ''])}
-                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-600 transition-colors ml-8">
-                    <Plus size={12} /> Agregar aprendizaje
-                  </button>
-                </div>
-              </div>
-
-              {/* Decisión (existente + Pivote) ───────────────────────────────── */}
-              <div>
-                <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
-                  <div>
-                    <p className="text-sm text-slate-700 mb-1" style={{ fontWeight: 600 }}>Decisión final del experimento</p>
-                    <p className="text-xs text-slate-400">Este es el output principal del módulo. La decisión que tomes aquí será la base para construir el relato del Step 4.</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {([
-                    { key: 'Go' as const, label: '🚀 Go', desc: 'Escalamos', active: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
-                    { key: 'Iterar' as const, label: '🔄 Iterar', desc: 'Re-testeamos', active: 'border-amber-500 bg-amber-50 text-amber-800' },
-                    { key: 'No-Go' as const, label: '🛑 No-Go', desc: 'Descartamos', active: 'border-red-500 bg-red-50 text-red-800' },
-                    { key: 'Pivote' as const, label: '🔀 Pivote', desc: 'Cambiamos variable', active: 'border-indigo-500 bg-indigo-50 text-indigo-800' },
-                  ]).map(({ key, label, desc, active }) => (
-                    <button key={key} onClick={() => setGoNoGo(key)}
-                      className={`rounded-xl p-3 text-center border-2 transition-colors ${goNoGo === key ? active : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}>
-                      <p className="text-sm" style={{ fontWeight: 600 }}>{label}</p>
-                      <p className={`text-xs mt-0.5 ${goNoGo === key ? 'opacity-70' : 'text-slate-400'}`}>{desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* S3C_RecomendacionIA ─────────────────────────────────────────── */}
-              {goNoGo && (
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <Zap size={14} className="text-indigo-500" />
-                      <p className="text-sm text-slate-700" style={{ fontWeight: 600 }}>Recomendación IA: qué hacer ahora</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${goNoGo === 'Go' ? 'bg-emerald-100 text-emerald-700' : goNoGo === 'Iterar' ? 'bg-amber-100 text-amber-700' : goNoGo === 'No-Go' ? 'bg-red-100 text-red-700' : 'bg-indigo-100 text-indigo-700'}`} style={{ fontWeight: 600 }}>{goNoGo}</span>
-                    </div>
-                    <button onClick={() => { setShowRefinarOverlay(true); if (!refinarListo) { setRefinarLoading(true); setTimeout(() => { setRefinarLoading(false); setRefinarListo(true); }, 1500); } }}
-                      className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 px-3 py-1.5 bg-indigo-50 rounded-lg border border-indigo-200 transition-colors"
-                      style={{ fontWeight: 500 }}>
-                      <Sparkles size={11} /> Refinar recomendación con IA
-                    </button>
-                  </div>
-                  <div className="px-4 py-4 space-y-3">
-                    {(recomendaciones[goNoGo] || []).map(({ titulo, items }) => (
-                      <div key={titulo}>
-                        <p className="text-xs text-slate-600 mb-1.5" style={{ fontWeight: 600 }}>{titulo}</p>
-                        <ul className="space-y-1">
-                          {items.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
-                              <span className="text-slate-300 mt-0.5 shrink-0">·</span>{cleanVisibleText(item)}
-                            </li>
-                          ))}
-                        </ul>
+                  <div className="space-y-1.5">
+                    {[
+                      { label: 'Hipótesis', value: MOCK_TESTCARD.hipotesis },
+                      { label: 'Experimento', value: MOCK_TESTCARD.experimento },
+                      { label: 'Métrica + umbral go/no-go', value: MOCK_TESTCARD.metrica },
+                      { label: 'Evidencia a capturar', value: MOCK_TESTCARD.evidencia },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <p className="text-xs text-violet-500" style={{ fontWeight: 600 }}>{label}</p>
+                        <p className="text-xs text-violet-800">{value}</p>
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
-
-              {/* ── Overlay_S3_MentorComplete_Demo trigger ── */}
-              <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-emerald-800" style={{ fontWeight: 600 }}>¿Listo para cerrar el Step 3?</p>
-                  <p className="text-xs text-emerald-600 mt-0.5">Marca la sesión con mentor como completada para desbloquear el Step 4.</p>
-                </div>
-                <button
-                  onClick={() => setShowFinalizarDemo(true)}
-                  className="shrink-0 flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm transition-colors"
-                  style={{ fontWeight: 600 }}>
-                  <CheckCircle2 size={14} /> Finalizar Step 3 (demo)
-                </button>
               </div>
-
-              {/* Enviar a revisión IA ──────────────────────────────────────────── */}
-              {!hasFeedback && (
-                <div className="border-t border-slate-200 pt-4">
-                  <button onClick={() => setShowSendModal(true)} disabled={!goNoGo}
-                    className={`w-full rounded-xl py-3 text-sm flex items-center justify-center gap-2 transition-colors ${goNoGo ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
-                    style={{ fontWeight: 500 }}>
-                    {goNoGo ? <><Send size={14} /> Enviar a revisión IA</> : <><Lock size={14} /> Elige una decisión para enviar</>}
-                  </button>
-                </div>
-              )}
-              {hasFeedback && <FeedbackIAPanel feedback={MOCK_FEEDBACK_S3} />}
-
-              {/* S3C_Pack_Step4 ──────────────────────────────────────────────── */}
-              {hasFeedback && (
-                <div className="border-2 border-indigo-200 bg-indigo-50 rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 bg-indigo-100 border-b border-indigo-200 flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <BookOpen size={14} className="text-indigo-600" />
-                      <p className="text-sm text-indigo-800" style={{ fontWeight: 600 }}>Preparar Step 4 — Contar la historia</p>
-                    </div>
-                    <button onClick={() => { setShowDeckOverlay(true); if (!deckSlides.length) { setDeckLoading(true); setTimeout(() => { setDeckLoading(false); setDeckSlides(MOCK_DECK_SLIDES); }, 1800); } }}
-                      className="flex items-center gap-1.5 text-xs text-indigo-700 hover:text-indigo-900 px-3 py-1.5 bg-white border border-indigo-300 rounded-lg transition-colors"
-                      style={{ fontWeight: 500 }}>
-                      <Sparkles size={11} /> Generar borrador de presentación con IA
-                    </button>
-                  </div>
-                  <div className="px-4 py-4 space-y-4">
-                    <div>
-                      <p className="text-xs text-indigo-600 mb-2" style={{ fontWeight: 600 }}>Story outline</p>
-                      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                        {['Problema', 'Hipótesis', 'Experimento', 'Resultados', 'Decisión', 'Aprendizajes', 'Próximo paso'].map((s, i) => (
-                          <div key={s} className="flex items-center gap-1.5 bg-white border border-indigo-100 rounded-lg px-2 py-1.5">
-                            <span className="w-4 h-4 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center shrink-0" style={{ fontSize: 9, fontWeight: 700 }}>{i + 1}</span>
-                            <span className="text-xs text-indigo-700" style={{ fontWeight: 500 }}>{s}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs text-indigo-600 mb-2" style={{ fontWeight: 600 }}>Bullets sugeridos para slides</p>
-                      <ul className="space-y-1">
-                        {['(Placeholder) El proceso tardaba 7–21 días · ahora ≤24h en 80% de casos.',
-                          '(Placeholder) NPS de 82 — alta aceptación del proceso simplificado.',
-                          '(Placeholder) Accesos especiales: cuello de botella identificado y aislado.',
-                          '(Placeholder) TI adoptó el proceso — SLA informal establecido.',
-                          '(Placeholder) Próximo ciclo: automatización de accesos especiales.'].map((b, i) => (
-                          <li key={i} className="flex items-start gap-2 text-xs text-indigo-700">
-                            <span className="text-indigo-300 mt-0.5 shrink-0">·</span>{cleanVisibleText(b)}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="text-xs text-indigo-600 mb-2" style={{ fontWeight: 600 }}>Evidencias a mostrar</p>
-                      <div className="space-y-1">
-                        {evidencias.slice(0, 3).map(ev => (
-                          <div key={ev.id} className="flex items-center gap-2 text-xs">
-                            <Paperclip size={10} className="text-indigo-400 shrink-0" />
-                            <span className="text-indigo-700">{ev.descripcion}</span>
-                            <span className="text-indigo-300">· {ev.fecha}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    {/* Ir al Step 4 */}
-                    <div className="pt-2 border-t border-indigo-200">
-                      <button
-                        onClick={() => {
-                          const step3approved = project?.steps.find(s => s.number === 3)?.status === 'Aprobado';
-                          if (!step3approved) {
-                            toast.error('Finaliza el Step 3 primero usando el botón "Finalizar Step 3 (demo)".');
-                            return;
-                          }
-                          navigate(`/projects/${projectId}/step/4`);
-                        }}
-                        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm transition-colors"
-                        style={{ fontWeight: 600 }}>
-                        Ir al Step 4 — Contar la historia <ChevronRight size={15} />
-                      </button>
-                    </div>
-
-                    {deckAplicado && deckSlides.length > 0 && (
-                      <div>
-                        <p className="text-xs text-indigo-600 mb-2" style={{ fontWeight: 600 }}>Estructura de presentación generada por IA</p>
-                        <div className="space-y-2">
-                          {deckSlides.map((slide, i) => (
-                            <div key={i} className="bg-white border border-indigo-100 rounded-xl p-3">
-                              <p className="text-xs text-indigo-700 mb-1" style={{ fontWeight: 600 }}>Lámina {i + 1}: {slide.titulo}</p>
-                              <ul className="space-y-0.5">
-                                {slide.bullets.map((b, j) => (
-                                  <li key={j} className="flex items-start gap-1.5 text-xs text-slate-600">
-                                    <span className="text-slate-300 shrink-0">·</span>{b}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Sesión con experto Step 3 ─────────────────────────────────────── */}
-              {hasFeedback && MOCK_FEEDBACK_S3.status === 'Aprobado' && (
-                s3SessionBooked ? (
-                  <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0"><CheckCircle2 size={15} className="text-emerald-600" /></div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm text-emerald-800" style={{ fontWeight: 600 }}>Sesión agendada</p>
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800" style={{ fontWeight: 600 }}>✓ Step 3 aprobado</span>
-                        </div>
-                        {s3MentorDate && <p className="text-xs text-emerald-600 mt-0.5"><Clock size={10} className="inline mr-1" />{s3MentorDate}{s3MentorTime ? ` · ${s3MentorTime}` : ''}</p>}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
-                    <p className="text-sm text-amber-800 mb-1" style={{ fontWeight: 600 }}>Sesión con experto obligatoria</p>
-                    <p className="text-xs text-amber-600 mb-3">Agenda la sesión con tu mentor para cerrar el Step 3 y decidir el camino a seguir.</p>
-                    <button onClick={() => setShowS3MentorModal(true)}
-                      className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-4 py-2 text-sm transition-colors"
-                      style={{ fontWeight: 500 }}>
-                      <Calendar size={14} /> Agendar sesión con mentor
-                    </button>
-                    <p className="text-xs text-amber-500 mt-2 italic">Modo demo: al agendar se cierra el Step 3.</p>
-                  </div>
-                )
-              )}
             </div>
-          )}
+            <aside className="hidden min-[1280px]:block min-w-0">
+              <div className="sticky top-6">
+                <div className="border border-violet-100 bg-violet-50 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText size={13} className="text-violet-500" />
+                    <p className="text-xs text-violet-700" style={{ fontWeight: 600 }}>Resumen del experimento · del Step 2</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    {[
+                      { label: 'Hipótesis', value: MOCK_TESTCARD.hipotesis },
+                      { label: 'Experimento', value: MOCK_TESTCARD.experimento },
+                      { label: 'Métrica + umbral go/no-go', value: MOCK_TESTCARD.metrica },
+                      { label: 'Evidencia a capturar', value: MOCK_TESTCARD.evidencia },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <p className="text-xs text-violet-500" style={{ fontWeight: 600 }}>{label}</p>
+                        <p className="text-xs text-violet-800">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
         </div>
       </div>
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          MODALES Y OVERLAYS
-      ══════════════════════════════════════════════════════════════════════ */}
 
       {/* Modal: Agregar componente (S3A) */}
       {showComponenteModal && (
@@ -1886,49 +1061,6 @@ export function Step3Page() {
               <button onClick={() => setShowComponenteModal(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>Cancelar</button>
               <button onClick={addComponente} disabled={!nuevoComp.nombre.trim()}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>Guardar componente</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Overlay: Adjuntar evidencia instrumentación (S3A) */}
-      {showInstrOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
-              <h3 className="text-slate-900" style={{ fontWeight: 600 }}>Adjuntar evidencia</h3>
-              <button onClick={() => { setShowInstrOverlay(false); setInstrTipo(null); setInstrDesc(''); }}><X size={16} className="text-slate-400" /></button>
-            </div>
-            <div className="px-5 py-4 space-y-4">
-              <div className="grid grid-cols-2 gap-2">
-                {([{ key: 'archivo' as const, icon: Upload, label: 'Subir archivo' }, { key: 'link' as const, icon: Link, label: 'Pegar link' }]).map(({ key, icon: Icon, label }) => (
-                  <button key={key} onClick={() => setInstrTipo(key)}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-colors ${instrTipo === key ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                    <Icon size={18} className={instrTipo === key ? 'text-indigo-600' : 'text-slate-400'} />
-                    <span className={`text-xs ${instrTipo === key ? 'text-indigo-700' : 'text-slate-500'}`} style={{ fontWeight: instrTipo === key ? 600 : 400 }}>{label}</span>
-                  </button>
-                ))}
-              </div>
-              <div>
-                <label className="block text-xs text-slate-600 mb-1.5" style={{ fontWeight: 500 }}>{instrTipo === 'link' ? 'URL o link' : 'Descripción'}</label>
-                <input value={instrDesc} onChange={e => setInstrDesc(e.target.value)}
-                  placeholder={instrTipo === 'link' ? 'https://...' : 'Describe brevemente qué es...'}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-            </div>
-            <div className="flex gap-3 px-5 pb-5">
-              <button onClick={() => { setShowInstrOverlay(false); setInstrTipo(null); setInstrDesc(''); }} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm" style={{ fontWeight: 500 }}>Cancelar</button>
-              <button onClick={() => {
-                if (!instrTipo || !instrDesc.trim()) return;
-                if (instrRowId === 'new') {
-                  setInstrumentacion(p => [...p, { id: Date.now().toString(), dato: instrDesc.trim(), fuente: '(Placeholder)', responsable: '—', evidencia: '' }]);
-                } else {
-                  setInstrumentacion(p => p.map(r => r.id === instrRowId ? { ...r, evidencia: instrDesc.trim() } : r));
-                }
-                setShowInstrOverlay(false); setInstrTipo(null); setInstrDesc('');
-                toast.success('Evidencia adjuntada');
-              }} disabled={!instrTipo || !instrDesc.trim()}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>Adjuntar</button>
             </div>
           </div>
         </div>

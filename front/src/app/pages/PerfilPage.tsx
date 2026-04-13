@@ -73,7 +73,7 @@ export function PerfilPage() {
             <p className="text-sm text-slate-500">{user?.email}</p>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full" style={{ fontWeight: 500 }}>
-                {user?.role === 'participante' ? 'Participante' : user?.role === 'mentor' ? 'Mentor' : user?.role === 'admin' ? 'Administrador' : user?.role === 'colaborador' ? 'Colaborador' : user?.role === 'viewer' ? 'Observador' : 'Sponsor'}
+                {user?.role === 'owner' ? 'Participante' : user?.role === 'mentor' ? 'Mentor' : user?.role === 'admin' ? 'Administrador' : 'Sponsor'}
               </span>
               {user?.cohort && <span className="text-xs text-slate-400">{user.cohort}</span>}
             </div>

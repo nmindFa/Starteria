@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Sparkles } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { ResearchFront, ResearchGuide, ResearchSourceType } from './step1ResearchV2.types';
 import { ResearchFrontCard } from './ResearchFrontCard';
 
@@ -7,15 +7,16 @@ interface ResearchFrontsSectionProps {
   fronts: ResearchFront[];
   expandedFrontId: string | null;
   iaLoading: boolean;
+  focusEditable?: boolean;
+  onGoToModuleA?: () => void;
   onToggleFront: (frontId: string) => void;
   onAddFront: () => void;
-  onSuggestFronts: () => void;
   onMoveFront: (frontId: string, direction: 'up' | 'down') => void;
   onChangeFrontField: (frontId: string, field: 'title' | 'whyItMatters' | 'learningGoal', value: string) => void;
   onChangeFrontMode: (frontId: string, mode: ResearchFront['sourceMode']) => void;
   onToggleSource: (frontId: string, sourceId: string) => void;
   onAddSource: (frontId: string, type: ResearchSourceType) => void;
-  onUpdateSource: (frontId: string, sourceId: string, field: 'label' | 'detail', value: string) => void;
+  onUpdateSource: (frontId: string, sourceId: string, field: 'label' | 'detail' | 'owner' | 'accessPoint' | 'expectedLearning', value: string) => void;
   onRemoveSource: (frontId: string, sourceId: string) => void;
   onMoveSource: (frontId: string, sourceId: string, direction: 'up' | 'down') => void;
   onGenerateGuides: (frontId: string) => void;
@@ -28,9 +29,10 @@ export function ResearchFrontsSection({
   fronts,
   expandedFrontId,
   iaLoading,
+  focusEditable = true,
+  onGoToModuleA,
   onToggleFront,
   onAddFront,
-  onSuggestFronts,
   onMoveFront,
   onChangeFrontField,
   onChangeFrontMode,
@@ -46,22 +48,18 @@ export function ResearchFrontsSection({
 }: ResearchFrontsSectionProps) {
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2.5">
-          <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs shrink-0 mt-0.5" style={{ fontWeight: 700 }}>2</span>
-          <div>
-            <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>Frentes de investigacion alineados</p>
-            <p className="text-xs text-slate-500">
-              Cada frente se organiza en tema, criterios a investigar y fuentes de datos o evidencia. Su estado se calcula automaticamente segun lo que completes.
-            </p>
-          </div>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="space-y-1">
+          <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>
+            Estos temas vienen del Modulo A; aqui defines como capturar la informacion que necesitas validar
+          </p>
+          <p className="text-xs text-slate-500">
+            Para cada tema, organiza fuentes, personas, lugares y guias base para salir a campo con foco.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={onAddFront} className="flex items-center gap-1.5 text-xs text-indigo-600 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors" style={{ fontWeight: 500 }}>
-            <Plus size={11} /> Agregar frente
-          </button>
-          <button onClick={onSuggestFronts} disabled={iaLoading} className="flex items-center gap-1.5 text-xs text-violet-600 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-100 transition-colors disabled:opacity-50" style={{ fontWeight: 500 }}>
-            {iaLoading ? 'Generando...' : <><Sparkles size={11} /> IA sugiere</>}
+            <Plus size={11} /> Agregar tema operativo
           </button>
         </div>
       </div>
@@ -74,6 +72,8 @@ export function ResearchFrontsSection({
             index={index}
             expanded={expandedFrontId === front.id}
             iaLoading={iaLoading}
+            focusEditable={focusEditable}
+            onGoToModuleA={onGoToModuleA}
             onToggle={() => onToggleFront(front.id)}
             onMove={direction => onMoveFront(front.id, direction)}
             canMoveUp={index > 0}

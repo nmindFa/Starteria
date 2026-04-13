@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -28,9 +28,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
-import { AutosaveIndicator } from '../components/AutosaveIndicator';
-import { useAutosave } from '../hooks/useAutosave';
-import * as stepService from '../services/stepService';
+import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
 
 type ModuleId = 'overview' | 'A' | 'B' | 'C';
 type Audiencia =
@@ -631,7 +629,7 @@ export function Step4Page() {
   const [pitchVideoLink, setPitchVideoLink] = useState('');
   const [pitchAnalysisReady, setPitchAnalysisReady] = useState(false);
 
-  const step4FormData = {
+  const saveState = useAutosave({
     audience,
     meetingGoal,
     decision,
@@ -652,21 +650,6 @@ export function Step4Page() {
     meetingStatus,
     stepFinalized,
     executiveDecisionReady,
-  };
-
-  const autosaveFn = useCallback(async (data: typeof step4FormData) => {
-    if (!projectId) return;
-    await stepService.saveStepData(projectId, 4, {
-      _meta: { version: 1, lastSavedAt: new Date().toISOString(), lastSavedBy: 'user' },
-      formData: data,
-    });
-  }, [projectId]);
-
-  const { state: saveState } = useAutosave({
-    data: step4FormData,
-    saveFn: autosaveFn,
-    delay: 2000,
-    enabled: !!projectId,
   });
 
   if (!project) {
@@ -1124,8 +1107,8 @@ ${meetingOwner} / ${meetingRole}
   );
 
   return (
-    <div className="flex h-full">
-      <div className="hidden md:flex w-64 flex-col border-r border-slate-200 bg-white p-3 gap-1 shrink-0">
+    <div className="h-full md:grid md:grid-cols-[232px_minmax(0,1fr)] min-[1440px]:grid-cols-[244px_minmax(0,1fr)] min-[1680px]:grid-cols-[256px_minmax(0,1fr)]">
+      <div className="hidden md:flex min-h-0 flex-col border-r border-slate-200 bg-white p-3 gap-1">
         <div className="px-2 py-2 mb-1">
           <button
             onClick={() => navigate(`/projects/${projectId}`)}
@@ -1178,8 +1161,8 @@ ${meetingOwner} / ${meetingRole}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-5 md:p-6">
-        <div className="max-w-5xl mx-auto">
+      <div className="min-w-0 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1420px] px-5 py-6 min-[1440px]:max-w-[1520px] min-[1440px]:px-6 min-[1680px]:max-w-[1640px] min-[1680px]:px-8">
           <button
             onClick={() => navigate(`/projects/${projectId}`)}
             className="flex md:hidden items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors"

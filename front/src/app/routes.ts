@@ -1,6 +1,7 @@
 import { createBrowserRouter, redirect } from 'react-router';
 import { RootLayout } from './layout/RootLayout';
 import { AppLayout } from './layout/AppLayout';
+import { PortfolioLeadLayout } from './layout/PortfolioLeadLayout';
 import { AuthPage } from './pages/AuthPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { CreateProjectPage } from './pages/CreateProjectPage';
@@ -14,6 +15,13 @@ import { EvidenciasPage } from './pages/EvidenciasPage';
 import { MentorPanelPage } from './pages/MentorPanelPage';
 import { AdminCohorte } from './pages/AdminCohorte';
 import { PerfilPage } from './pages/PerfilPage';
+import { PortfolioLeadHomePage } from './pages/PortfolioLeadHomePage';
+import { PortfolioLeadSectionPage } from './pages/PortfolioLeadSectionPage';
+import { PortfolioLeadStrategicFrontsPage } from './pages/PortfolioLeadStrategicFrontsPage';
+import { PortfolioLeadChallengesPage } from './pages/PortfolioLeadChallengesPage';
+import { PortfolioLeadInitiativesPage } from './pages/PortfolioLeadInitiativesPage';
+import { PortfolioLeadDecisionsPage } from './pages/PortfolioLeadDecisionsPage';
+import { PortfolioLeadExecutiveOutputPage } from './pages/PortfolioLeadExecutiveOutputPage';
 
 export const router = createBrowserRouter([
   {
@@ -42,6 +50,21 @@ export const router = createBrowserRouter([
           { path: 'mentor', Component: MentorPanelPage },
           { path: 'admin', Component: AdminCohorte },
           { path: 'perfil', Component: PerfilPage },
+        ],
+      },
+      {
+        path: '/portfolio',
+        Component: PortfolioLeadLayout,
+        children: [
+          { index: true, loader: () => redirect('/portfolio/inicio') },
+          { path: 'inicio', Component: PortfolioLeadHomePage },
+          { path: 'frentes-estrategicos', Component: PortfolioLeadStrategicFrontsPage },
+          { path: 'retos', Component: PortfolioLeadChallengesPage },
+          { path: 'iniciativas', Component: PortfolioLeadInitiativesPage },
+          { path: 'decisiones', Component: PortfolioLeadDecisionsPage },
+          { path: 'salida-ejecutiva', Component: PortfolioLeadExecutiveOutputPage },
+          { path: 'sponsors', Component: PortfolioLeadSectionPage },
+          { path: 'reportes', Component: PortfolioLeadSectionPage },
         ],
       },
     ],

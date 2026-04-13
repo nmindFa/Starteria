@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   ArrowLeft, Sparkles, CheckCircle2, Info, Calendar, CreditCard,
@@ -9,10 +9,7 @@ import type { Step0Data } from '../context/AppContext';
 import { BannerPorDefinir } from '../components/BannerPorDefinir';
 import { MentorVirtualPanel } from '../components/MentorVirtualPanel';
 import { MentorSupportModal } from '../components/MentorSupportModal';
-import { AutosaveIndicator } from '../components/AutosaveIndicator';
-import { useAutosave } from '../hooks/useAutosave';
-import * as projectService from '../services/projectService';
-import * as stepService from '../services/stepService';
+import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -139,19 +136,7 @@ export function Step0Page() {
   const [copyMsg, setCopyMsg] = useState(false);
   const [deliveryEmail, setDeliveryEmail] = useState('');
 
-  // Real autosave: debounced PUT to backend every 2s
-  const autosaveFn = useCallback(async (data: Step0Data) => {
-    if (!projectId) return;
-    await projectService.updateStep0(projectId, data, project?.step0Status === 'Completado' ? 'COMPLETED' : 'IN_PROGRESS');
-  }, [projectId, project?.step0Status]);
-
-  const { state: saveState } = useAutosave({
-    data: form,
-    saveFn: autosaveFn,
-    delay: 2000,
-    enabled: !!projectId,
-  });
-
+  const saveState = useAutosave([form]);
   const firstName = form.nombreParticipante.trim().split(/\s+/)[0];
 
   if (!project) {
@@ -190,16 +175,11 @@ export function Step0Page() {
 
   const handleSave = async () => {
     setSaving(true);
-    try {
-      await projectService.updateStep0(project.id, form, 'COMPLETED');
-      updateStep0(project.id, form, 'Completado');
-      setSaved(true);
-      setTimeout(() => navigate(`/projects/${project.id}`), 600);
-    } catch (err) {
-      console.error('Error saving Step 0:', err);
-    } finally {
-      setSaving(false);
-    }
+    await new Promise(r => setTimeout(r, 500));
+    updateStep0(project.id, form, 'Completado');
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => navigate(`/projects/${project.id}`), 600);
   };
 
   // ── IA Analysis helpers ────────────────────────────────────────────────────
@@ -326,8 +306,8 @@ export function Step0Page() {
       <div className="flex-1 overflow-y-auto">
 
         {/* Page header */}
-        <div className="px-6 pt-6 pb-5 bg-white border-b border-slate-100">
-          <div className="max-w-5xl mx-auto">
+        <div className="px-5 pt-6 pb-5 bg-white border-b border-slate-100 min-[1440px]:px-6 min-[1680px]:px-8">
+          <div className="mx-auto w-full max-w-[1380px] min-[1440px]:max-w-[1480px] min-[1680px]:max-w-[1560px]">
             <button
               onClick={() => navigate(`/projects/${project.id}`)}
               className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-700 mb-4 transition-colors"
@@ -371,8 +351,8 @@ export function Step0Page() {
         </div>
 
         {/* 2-column content */}
-        <div className="max-w-5xl mx-auto px-6 py-6">
-          <div className="flex gap-6 items-start">
+        <div className="mx-auto w-full max-w-[1380px] px-5 py-6 min-[1440px]:max-w-[1480px] min-[1440px]:px-6 min-[1680px]:max-w-[1560px] min-[1680px]:px-8">
+          <div className="grid items-start gap-6 min-[1280px]:grid-cols-[minmax(0,880px)_300px] min-[1440px]:grid-cols-[minmax(0,920px)_320px] min-[1680px]:grid-cols-[minmax(0,980px)_340px] min-[1680px]:gap-8">
 
             {/* ── LEFT: Form ─────────────────────────────────────────────── */}
             <div className="flex-1 min-w-0 space-y-0">
@@ -895,7 +875,7 @@ export function Step0Page() {
             </div>
 
             {/* ── RIGHT: Tu ficha inicial ─────────────────────────────────── */}
-            <div className="hidden lg:block w-72 shrink-0">
+            <div className="hidden min-[1280px]:block min-w-0">
               <div className="sticky top-4 space-y-3">
 
                 {/* Preview card */}
@@ -979,8 +959,8 @@ export function Step0Page() {
       </div>
 
       {/* ── Sticky footer ── */}
-      <div className="border-t border-slate-200 bg-white px-6 py-4 shrink-0">
-        <div className="max-w-5xl mx-auto flex items-center gap-3 flex-wrap">
+      <div className="border-t border-slate-200 bg-white px-5 py-4 shrink-0 min-[1440px]:px-6 min-[1680px]:px-8">
+        <div className="mx-auto flex w-full max-w-[1380px] items-center gap-3 flex-wrap min-[1440px]:max-w-[1480px] min-[1680px]:max-w-[1560px]">
           <button
             onClick={handleSave}
             disabled={!canSave || saving || saved}
