@@ -7,3 +7,17 @@ k8s/image.png
 docs/*
 BHIL-AI-First-Development-Toolkit/*
 .agents/
+agentdb.rvf
+.gitignore
+.swarm/memory.db-wal
+.swarm/memory.db-shm
+.swarm/memory.db
+.swarm/hnsw.index
+.claude-flow/routing-outcomes.json
+.gitignore
+ruvector.db
+agentdb.rvf.lock
+.claude-flow/swarm/swarm-state.json
+skills-lock.json
+.swarm/memory.db
+.swarm/hnsw.index
