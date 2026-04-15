@@ -31,6 +31,12 @@ export const projectIdParam = z.object({
   id: z.string().uuid(),
 });
 
+export const updateSponsorDataSchema = z.object({
+  sponsorTouchpoints: z.array(z.record(z.unknown())).optional(),
+  sponsorComments: z.array(z.record(z.unknown())).optional(),
+});
+
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type UpdateStep0Input = z.infer<typeof updateStep0Schema>;
+export type UpdateSponsorDataInput = z.infer<typeof updateSponsorDataSchema>;

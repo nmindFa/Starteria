@@ -1,4 +1,6 @@
-import React, { createContext, ReactNode, useContext, useMemo, useState } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useMemo, useState } from 'react';
+import * as portfolioService from '../services/portfolioService';
+import { usePortfolioData } from '../hooks/usePortfolioData';
 
 export type StrategicFrontStatus = 'draft' | 'active' | 'paused' | 'closed';
 export type StrategicFrontPriority = 'Alta' | 'Media' | 'Baja';
@@ -14,7 +16,8 @@ export type ChallengeStatus =
   | 'cerrado';
 export type ChallengeType = 'correccion' | 'crecimiento' | 'exploracion';
 export type StakeholderStatus = 'definido' | 'notificado' | 'confirmado';
-export type InvitationStatus = 'pendiente' | 'notificado' | 'confirmado' | 'declinado';
+// Must match the Prisma StakeholderStatus enum: definido | notificado | confirmado
+export type InvitationStatus = 'definido' | 'notificado' | 'confirmado';
 export type SquadRole = 'lider' | 'colaborador';
 export type InitiativePortfolioStatus =
   | 'en_step_0'
@@ -230,26 +233,28 @@ interface PortfolioLeadContextType {
   initiativeOverlaps: InitiativeOverlap[];
   portfolioDecisions: PortfolioDecisionItem[];
   executiveOutputs: ExecutiveOutput[];
-  createStrategicFront: (input: CreateStrategicFrontInput) => StrategicFront;
-  updateStrategicFront: (frontId: string, input: CreateStrategicFrontInput) => void;
-  updateStrategicFrontStatus: (frontId: string, status: StrategicFrontStatus) => void;
-  createChallenge: (input: CreateChallengeInput) => Challenge;
-  updateChallengeActivationMode: (challengeId: string, mode: ChallengeActivationMode) => void;
+  loading: boolean;
+  error: string | null;
+  createStrategicFront: (input: CreateStrategicFrontInput) => Promise<StrategicFront>;
+  updateStrategicFront: (frontId: string, input: CreateStrategicFrontInput) => Promise<void>;
+  updateStrategicFrontStatus: (frontId: string, status: StrategicFrontStatus) => Promise<void>;
+  createChallenge: (input: CreateChallengeInput) => Promise<Challenge>;
+  updateChallengeActivationMode: (challengeId: string, mode: ChallengeActivationMode) => Promise<void>;
   updateChallengeStakeholderStatus: (
     challengeId: string,
     stakeholder: 'challengeOwnerStatus' | 'sponsorStatus',
     status: StakeholderStatus,
-  ) => void;
-  activateOpenCall: (challengeId: string) => void;
-  addSelectedPerson: (challengeId: string, value: string) => void;
-  updateSelectedPersonStatus: (challengeId: string, invitationId: string, status: InvitationStatus) => void;
-  addSquadMember: (challengeId: string, value: string, role: SquadRole) => void;
-  updateSquadMemberRole: (challengeId: string, memberId: string, role: SquadRole) => void;
-  confirmAssignedSquad: (challengeId: string) => void;
-  publishChallenge: (challengeId: string) => void;
+  ) => Promise<void>;
+  activateOpenCall: (challengeId: string) => Promise<void>;
+  addSelectedPerson: (challengeId: string, value: string) => Promise<void>;
+  updateSelectedPersonStatus: (challengeId: string, invitationId: string, status: InvitationStatus) => Promise<void>;
+  addSquadMember: (challengeId: string, value: string, role: SquadRole) => Promise<void>;
+  updateSquadMemberRole: (challengeId: string, memberId: string, role: SquadRole) => Promise<void>;
+  confirmAssignedSquad: (challengeId: string) => Promise<void>;
+  publishChallenge: (challengeId: string) => Promise<void>;
   loadChallengeCoverageDemo: (challengeId: string) => void;
-  createExecutiveOutput: (initiativeId: string, recommendation: PortfolioDecisionOutcome) => ExecutiveOutput | null;
-  updateExecutiveOutputStatus: (outputId: string, status: ExecutiveOutputStatus) => void;
+  createExecutiveOutput: (initiativeId: string, recommendation: PortfolioDecisionOutcome) => Promise<ExecutiveOutput | null>;
+  updateExecutiveOutputStatus: (outputId: string, status: ExecutiveOutputStatus) => Promise<void>;
 }
 
 const DEFAULT_STRATEGIC_FRONTS: StrategicFront[] = [
@@ -751,12 +756,336 @@ function syncChallengeSummaries(challenges: Challenge[], initiatives: Initiative
 }
 
 export function PortfolioLeadProvider({ children }: { children: ReactNode }) {
-  const [strategicFronts, setStrategicFronts] = useState<StrategicFront[]>(DEFAULT_STRATEGIC_FRONTS);
-  const [challenges, setChallenges] = useState<Challenge[]>(DEFAULT_CHALLENGES);
-  const [initiatives, setInitiatives] = useState<Initiative[]>(DEFAULT_INITIATIVES);
-  const [initiativeOverlaps, setInitiativeOverlaps] = useState<InitiativeOverlap[]>(DEFAULT_INITIATIVE_OVERLAPS);
-  const [portfolioDecisions, setPortfolioDecisions] = useState<PortfolioDecisionItem[]>(DEFAULT_PORTFOLIO_DECISIONS);
-  const [executiveOutputs, setExecutiveOutputs] = useState<ExecutiveOutput[]>(DEFAULT_EXECUTIVE_OUTPUTS);
+  // Remote data — loads from the backend on mount.
+  // While loading is true, the DEFAULT_* arrays serve as fallback so the UI
+  // can render without an empty-state flash.
+  const {
+    strategicFronts: remoteStrategicFronts,
+    setStrategicFronts,
+    challenges: remoteChallenges,
+    setChallenges,
+    initiatives: remoteInitiatives,
+    setInitiatives,
+    initiativeOverlaps: remoteInitiativeOverlaps,
+    setInitiativeOverlaps,
+    executiveOutputs: remoteExecutiveOutputs,
+    setExecutiveOutputs,
+    loading,
+    error,
+  } = usePortfolioData();
+
+  // During the first load the remote arrays are empty; show defaults instead.
+  const strategicFronts = loading && remoteStrategicFronts.length === 0
+    ? DEFAULT_STRATEGIC_FRONTS
+    : remoteStrategicFronts;
+  const challenges = loading && remoteChallenges.length === 0
+    ? DEFAULT_CHALLENGES
+    : remoteChallenges;
+  const initiatives = loading && remoteInitiatives.length === 0
+    ? DEFAULT_INITIATIVES
+    : remoteInitiatives;
+  const initiativeOverlaps = loading && remoteInitiativeOverlaps.length === 0
+    ? DEFAULT_INITIATIVE_OVERLAPS
+    : remoteInitiativeOverlaps;
+  const executiveOutputs = loading && remoteExecutiveOutputs.length === 0
+    ? DEFAULT_EXECUTIVE_OUTPUTS
+    : remoteExecutiveOutputs;
+
+  // portfolioDecisions is derived/computed locally — it is not persisted as a
+  // standalone resource. It is rebuilt whenever initiatives change.
+  const [portfolioDecisions, setPortfolioDecisions] = useState<PortfolioDecisionItem[]>(
+    DEFAULT_PORTFOLIO_DECISIONS,
+  );
+
+  // ── Async mutators ─────────────────────────────────────────────
+
+  const createStrategicFront = useCallback(async (input: CreateStrategicFrontInput): Promise<StrategicFront> => {
+    const front = await portfolioService.createStrategicFront(input);
+    setStrategicFronts(prev => [front, ...prev]);
+    return front;
+  }, [setStrategicFronts]);
+
+  const updateStrategicFront = useCallback(async (frontId: string, input: CreateStrategicFrontInput): Promise<void> => {
+    await portfolioService.updateStrategicFront(frontId, input);
+    setStrategicFronts(prev => prev.map(front => (front.id === frontId ? { ...front, ...input } : front)));
+  }, [setStrategicFronts]);
+
+  const updateStrategicFrontStatus = useCallback(async (frontId: string, status: StrategicFrontStatus): Promise<void> => {
+    await portfolioService.updateStrategicFront(frontId, { status } as Partial<CreateStrategicFrontInput>);
+    setStrategicFronts(prev => prev.map(front => (front.id === frontId ? { ...front, status } : front)));
+  }, [setStrategicFronts]);
+
+  const createChallenge = useCallback(async (input: CreateChallengeInput): Promise<Challenge> => {
+    const challenge = await portfolioService.createChallenge(input.strategicFrontId, input);
+    setChallenges(prev => [challenge, ...prev]);
+    setStrategicFronts(prev =>
+      prev.map(front =>
+        front.id === input.strategicFrontId ? { ...front, challengeCount: front.challengeCount + 1 } : front,
+      ),
+    );
+    return challenge;
+  }, [setChallenges, setStrategicFronts]);
+
+  const updateChallengeActivationMode = useCallback(async (challengeId: string, mode: ChallengeActivationMode): Promise<void> => {
+    const updated = await portfolioService.updateChallenge(challengeId, { activationMode: mode });
+    setChallenges(prev =>
+      patchChallenge(prev, challengeId, challenge => ({
+        ...challenge,
+        activationMode: mode,
+        status: updated.status,
+      })),
+    );
+  }, [setChallenges]);
+
+  const updateChallengeStakeholderStatus = useCallback(async (
+    challengeId: string,
+    stakeholder: 'challengeOwnerStatus' | 'sponsorStatus',
+    status: StakeholderStatus,
+  ): Promise<void> => {
+    const updated = await portfolioService.updateChallenge(challengeId, { [stakeholder]: status });
+    setChallenges(prev =>
+      patchChallenge(prev, challengeId, challenge => ({
+        ...challenge,
+        [stakeholder]: status,
+        status: updated.status,
+      })),
+    );
+  }, [setChallenges]);
+
+  const activateOpenCall = useCallback(async (challengeId: string): Promise<void> => {
+    const updated = await portfolioService.activateOpenCall(challengeId);
+    setChallenges(prev =>
+      patchChallenge(prev, challengeId, challenge => ({
+        ...challenge,
+        openCallStatus: updated.openCallStatus,
+        status: updated.status,
+        publicationNotes: updated.publicationNotes,
+      })),
+    );
+  }, [setChallenges]);
+
+  const addSelectedPerson = useCallback(async (challengeId: string, value: string): Promise<void> => {
+    const normalized = value.trim();
+    if (!normalized) return;
+    const updated = await portfolioService.addInvitation(challengeId, normalized);
+    setChallenges(prev =>
+      patchChallenge(prev, challengeId, challenge => ({
+        ...challenge,
+        selectedPeople: updated.selectedPeople,
+        status: updated.status,
+        publicationNotes: updated.publicationNotes,
+      })),
+    );
+  }, [setChallenges]);
+
+  const updateSelectedPersonStatus = useCallback(async (
+    challengeId: string,
+    invitationId: string,
+    status: InvitationStatus,
+  ): Promise<void> => {
+    const updated = await portfolioService.updateInvitation(challengeId, invitationId, status);
+    setChallenges(prev =>
+      patchChallenge(prev, challengeId, challenge => ({
+        ...challenge,
+        selectedPeople: updated.selectedPeople,
+        status: updated.status,
+      })),
+    );
+  }, [setChallenges]);
+
+  const addSquadMember = useCallback(async (challengeId: string, value: string, role: SquadRole): Promise<void> => {
+    const normalized = value.trim();
+    if (!normalized) return;
+    const updated = await portfolioService.addSquadMember(challengeId, normalized, role);
+    setChallenges(prev =>
+      patchChallenge(prev, challengeId, challenge => ({
+        ...challenge,
+        assignedSquad: updated.assignedSquad,
+        status: updated.status,
+        publicationNotes: updated.publicationNotes,
+      })),
+    );
+  }, [setChallenges]);
+
+  const updateSquadMemberRole = useCallback(async (challengeId: string, memberId: string, role: SquadRole): Promise<void> => {
+    const updated = await portfolioService.updateSquadMember(challengeId, memberId, role);
+    setChallenges(prev =>
+      patchChallenge(prev, challengeId, challenge => ({
+        ...challenge,
+        assignedSquad: updated.assignedSquad,
+      })),
+    );
+  }, [setChallenges]);
+
+  const confirmAssignedSquad = useCallback(async (challengeId: string): Promise<void> => {
+    const currentChallenge = challenges.find(c => c.id === challengeId);
+    const newStatus = currentChallenge && currentChallenge.assignedSquad.length > 0 ? 'activo_interno' : 'listo_para_activar';
+    const newNotes = currentChallenge && currentChallenge.assignedSquad.length > 0
+      ? 'El reto ya quedo activado internamente con squad asignado.'
+      : currentChallenge?.publicationNotes ?? '';
+    await portfolioService.updateChallenge(challengeId, { status: newStatus, publicationNotes: newNotes });
+    setChallenges(prev =>
+      patchChallenge(prev, challengeId, challenge => ({
+        ...challenge,
+        status: challenge.assignedSquad.length > 0 ? 'activo_interno' : 'listo_para_activar',
+        publicationNotes: challenge.assignedSquad.length > 0
+          ? 'El reto ya quedo activado internamente con squad asignado.'
+          : challenge.publicationNotes,
+      })),
+    );
+  }, [challenges, setChallenges]);
+
+  const publishChallenge = useCallback(async (challengeId: string): Promise<void> => {
+    const updated = await portfolioService.publishChallenge(challengeId);
+    setChallenges(prev =>
+      syncChallengeSummaries(
+        patchChallenge(prev, challengeId, challenge => ({
+          ...challenge,
+          visibleToParticipants: updated.visibleToParticipants,
+          publicationNotes: updated.publicationNotes,
+          lastPublishedAt: updated.lastPublishedAt,
+          status: updated.status,
+        })),
+        initiatives,
+      ),
+    );
+  }, [setChallenges, initiatives]);
+
+  const loadChallengeCoverageDemo = useCallback((challengeId: string): void => {
+    const challenge = challenges.find(item => item.id === challengeId);
+    if (!challenge) return;
+    const front = strategicFronts.find(item => item.id === challenge.strategicFrontId);
+    if (!front) return;
+    const existing = initiatives.some(item => item.challengeId === challengeId);
+    if (existing) return;
+
+    const timestamp = Date.now();
+    const seeded: Initiative[] = [
+      {
+        id: `initiative-${timestamp}-a`,
+        name: 'Piloto inicial del reto',
+        strategicFrontId: front.id,
+        challengeId,
+        teamOwner: 'Equipo del reto',
+        currentStep: 'Step 1',
+        status: 'en_step_1',
+        mentor: 'Mentor asignado',
+        sponsorTouchpoint: 'Revision ejecutiva pendiente',
+        mainAlert: 'Todavia falta evidencia para ver si el reto esta bien enfocado.',
+        nextActionRecommended: 'Profundizar validacion con usuarios clave.',
+        attackedArea: challenge.whatWeWantToMove,
+        hypothesisCovered: 'La primera hipotesis del reto ya esta formulada.',
+        mainMetric: challenge.successCriteria,
+        contributionType: 'validar',
+        estimatedContribution: 'medio',
+        lastActivity: 'Hoy',
+        signalSummary: 'Ya hay una primera lectura, pero todavia es parcial.',
+        mainBlocker: 'Falta evidencia con usuarios prioritarios.',
+        teamLabel: 'Equipo inicial',
+        requiresSponsor: false,
+        readyForDecision: false,
+        blockedDays: 0,
+        requiresExternalCapability: false,
+        partialSignal: true,
+        resolvedCorePart: false,
+        teamMembers: ['Equipo inicial'],
+        executiveSummary: 'Primer esfuerzo para entender si el reto esta bien enfocado.',
+        experimentSummary: 'La iniciativa abre una primera validacion del reto con usuarios clave y evidencia basica.',
+        deliverables: [
+          { id: `deliverable-${timestamp}-a`, title: 'Resumen de hipotesis inicial', type: 'Resumen', note: 'Documento base para leer el avance temprano.' },
+        ],
+        aiCommentSummary: 'La IA sugiere ampliar evidencia antes de tomar decisiones.',
+        mentorCommentSummary: 'El mentor recomienda seguir validando con usuarios clave.',
+        decisionRecommendationReason: 'Por ahora sigue en seguimiento porque aun esta en una fase temprana.',
+        stepsTimeline: [
+          { step: 'Step 0', state: 'completado', note: 'Se ordeno el punto de partida del reto.' },
+          { step: 'Step 1', state: 'en_progreso', note: 'Sigue abierta la validacion inicial.' },
+          { step: 'Step 2', state: 'pendiente', note: 'Todavia no conviene bajar a solucion.' },
+          { step: 'Step 3', state: 'pendiente', note: 'Sin experimento todavia.' },
+          { step: 'Step 4', state: 'pendiente', note: 'Sin cierre ejecutivo todavia.' },
+        ],
+      },
+    ];
+
+    const updatedInitiatives = [...seeded, ...initiatives];
+    setInitiatives(updatedInitiatives);
+    setPortfolioDecisions(prev => [...seeded.map(buildDecisionRecommendation), ...prev]);
+    setChallenges(prev => syncChallengeSummaries(prev, updatedInitiatives));
+    setStrategicFronts(prev =>
+      prev.map(current =>
+        current.id === front.id ? { ...current, initiativeCount: current.initiativeCount + seeded.length } : current,
+      ),
+    );
+    setInitiativeOverlaps(prev => [...prev]);
+  }, [challenges, initiatives, strategicFronts, setChallenges, setInitiatives, setInitiativeOverlaps, setStrategicFronts]);
+
+  const createExecutiveOutput = useCallback(async (
+    initiativeId: string,
+    recommendation: PortfolioDecisionOutcome,
+  ): Promise<ExecutiveOutput | null> => {
+    const existing = executiveOutputs.find(item => item.initiativeId === initiativeId);
+    if (existing) return existing;
+
+    const initiative = initiatives.find(item => item.id === initiativeId);
+    if (!initiative) return null;
+    const challenge = challenges.find(item => item.id === initiative.challengeId);
+    if (!challenge) return null;
+
+    // Build the payload mirroring the local computation so the backend has
+    // all fields even if it does not derive them itself.
+    const payload: Partial<ExecutiveOutput> & { projectId: string; recommendation: PortfolioDecisionOutcome } = {
+      projectId: initiative.id,
+      recommendation,
+      status: 'borrador_ejecutivo',
+      whyNow: challenge.whyNow,
+      kpiToMove: initiative.mainMetric || challenge.successCriteria,
+      approachSummary: initiative.executiveSummary,
+      scopeSummary: initiative.experimentSummary,
+      evidenceSummary: initiative.signalSummary,
+      keyDeliverableSummary: initiative.deliverables[0]?.title ?? 'Sin entregable clave visible',
+      cautionSummary: initiative.mainBlocker || 'No hay cautela principal visible',
+      recommendationWhy: initiative.decisionRecommendationReason,
+      secondaryOptions: 'Las alternativas siguen disponibles como opcion secundaria si cambia la prioridad ejecutiva.',
+      managementNeeds: initiative.requiresExternalCapability
+        ? ['Prioridad tecnica', 'Responsable de destrabe', 'Decision de transferencia']
+        : initiative.requiresSponsor
+          ? ['Sponsor activo', 'Prioridad de implementacion', 'Aprobacion de siguiente fase']
+          : ['Aprobacion', 'Priorizacion', 'Recursos minimos para siguiente paso'],
+      nextStepSummary: initiative.nextActionRecommended,
+      nextStepOwner: initiative.teamOwner,
+      nextStepHorizon: initiative.readyForDecision ? '4 a 6 semanas' : '2 a 4 semanas',
+      nextStepExpectedResult: initiative.readyForDecision
+        ? 'Convertir la validacion actual en una siguiente fase con alcance claro.'
+        : 'Destrabar la iniciativa o confirmar si conviene reformularla.',
+      timeline: [
+        { label: 'Decision interna tomada', note: portfolioDecisions.find(item => item.initiativeId === initiativeId)?.summary ?? 'Ya existe una recomendacion interna visible.' },
+        { label: 'Borrador ejecutivo creado', note: 'Starteria traduce la evidencia a lenguaje gerencial.' },
+        { label: 'Siguiente hito', note: 'Dejar la propuesta lista para sponsor o gerencia.' },
+      ],
+    };
+
+    const created = await portfolioService.createExecutiveOutput(challenge.id, payload);
+    setExecutiveOutputs(prev => [created, ...prev]);
+    return created;
+  }, [challenges, executiveOutputs, initiatives, portfolioDecisions, setExecutiveOutputs]);
+
+  const updateExecutiveOutputStatus = useCallback(async (outputId: string, status: ExecutiveOutputStatus): Promise<void> => {
+    await portfolioService.updateExecutiveOutput(outputId, { status });
+    setExecutiveOutputs(prev =>
+      prev.map(item =>
+        item.id === outputId
+          ? {
+              ...item,
+              status,
+              timeline: [
+                ...item.timeline.slice(0, 2),
+                { label: `Estado actual: ${status.replaceAll('_', ' ')}`, note: 'La salida ejecutiva ya registro un nuevo hito post-decision.' },
+              ],
+            }
+          : item,
+      ),
+    );
+  }, [setExecutiveOutputs]);
 
   const value = useMemo<PortfolioLeadContextType>(() => ({
     strategicFronts,
@@ -765,296 +1094,50 @@ export function PortfolioLeadProvider({ children }: { children: ReactNode }) {
     initiativeOverlaps,
     portfolioDecisions,
     executiveOutputs,
-    createStrategicFront: input => {
-      const front: StrategicFront = {
-        id: `front-${Date.now()}`,
-        ...input,
-        createdAt: new Date().toISOString().split('T')[0],
-        challengeCount: 0,
-        initiativeCount: 0,
-      };
-
-      setStrategicFronts(prev => [front, ...prev]);
-      return front;
-    },
-    updateStrategicFront: (frontId, input) => {
-      setStrategicFronts(prev => prev.map(front => (front.id === frontId ? { ...front, ...input } : front)));
-    },
-    updateStrategicFrontStatus: (frontId, status) => {
-      setStrategicFronts(prev => prev.map(front => (front.id === frontId ? { ...front, status } : front)));
-    },
-    createChallenge: input => {
-      const challenge: Challenge = {
-        id: `challenge-${Date.now()}`,
-        ...input,
-        createdAt: new Date().toISOString().split('T')[0],
-        challengeOwnerStatus: 'definido',
-        sponsorStatus: 'definido',
-        openCallStatus: 'inactiva',
-        selectedPeople: [],
-        assignedSquad: [],
-        initiativeCount: 0,
-        coverageStatus: 'sin_cobertura',
-        visibleToParticipants: false,
-        publicationNotes: 'Todavia no esta visible para participantes.',
-      };
-
-      setChallenges(prev => [challenge, ...prev]);
-      setStrategicFronts(prev =>
-        prev.map(front =>
-          front.id === input.strategicFrontId ? { ...front, challengeCount: front.challengeCount + 1 } : front,
-        ),
-      );
-      return challenge;
-    },
-    updateChallengeActivationMode: (challengeId, mode) => {
-      setChallenges(prev =>
-        patchChallenge(prev, challengeId, challenge => ({
-          ...challenge,
-          activationMode: mode,
-          status: challenge.status === 'draft' ? 'listo_para_activar' : challenge.status,
-        })),
-      );
-    },
-    updateChallengeStakeholderStatus: (challengeId, stakeholder, status) => {
-      setChallenges(prev =>
-        patchChallenge(prev, challengeId, challenge => ({
-          ...challenge,
-          [stakeholder]: status,
-          status: ['draft', 'listo_para_activar'].includes(challenge.status) ? 'listo_para_activar' : challenge.status,
-        })),
-      );
-    },
-    activateOpenCall: challengeId => {
-      setChallenges(prev =>
-        patchChallenge(prev, challengeId, challenge => ({
-          ...challenge,
-          openCallStatus: 'activa',
-          status: 'activo_interno',
-          publicationNotes: 'La convocatoria ya puede prepararse para publicacion.',
-        })),
-      );
-    },
-    addSelectedPerson: (challengeId, value) => {
-      const normalized = value.trim();
-      if (!normalized) return;
-
-      setChallenges(prev =>
-        patchChallenge(prev, challengeId, challenge => ({
-          ...challenge,
-          selectedPeople: [
-            ...challenge.selectedPeople,
-            {
-              id: `invite-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              value: normalized,
-              status: 'pendiente',
-            },
-          ],
-          status: 'activo_interno',
-          publicationNotes: 'Ya hay personas objetivo, pero aun falta publicar la invitacion.',
-        })),
-      );
-    },
-    updateSelectedPersonStatus: (challengeId, invitationId, status) => {
-      setChallenges(prev =>
-        patchChallenge(prev, challengeId, challenge => ({
-          ...challenge,
-          selectedPeople: challenge.selectedPeople.map(person =>
-            person.id === invitationId ? { ...person, status } : person,
-          ),
-          status: challenge.visibleToParticipants ? challenge.status : 'activo_interno',
-        })),
-      );
-    },
-    addSquadMember: (challengeId, value, role) => {
-      const normalized = value.trim();
-      if (!normalized) return;
-
-      setChallenges(prev =>
-        patchChallenge(prev, challengeId, challenge => ({
-          ...challenge,
-          assignedSquad: [
-            ...challenge.assignedSquad,
-            {
-              id: `squad-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              value: normalized,
-              role,
-            },
-          ],
-          status: 'activo_interno',
-          publicationNotes: 'El squad ya esta definido internamente.',
-        })),
-      );
-    },
-    updateSquadMemberRole: (challengeId, memberId, role) => {
-      setChallenges(prev =>
-        patchChallenge(prev, challengeId, challenge => ({
-          ...challenge,
-          assignedSquad: challenge.assignedSquad.map(member =>
-            member.id === memberId ? { ...member, role } : member,
-          ),
-        })),
-      );
-    },
-    confirmAssignedSquad: challengeId => {
-      setChallenges(prev =>
-        patchChallenge(prev, challengeId, challenge => ({
-          ...challenge,
-          status: challenge.assignedSquad.length > 0 ? 'activo_interno' : 'listo_para_activar',
-          publicationNotes: challenge.assignedSquad.length > 0
-            ? 'El reto ya quedo activado internamente con squad asignado.'
-            : challenge.publicationNotes,
-        })),
-      );
-    },
-    publishChallenge: challengeId => {
-      setChallenges(prev =>
-        syncChallengeSummaries(
-          patchChallenge(prev, challengeId, challenge => ({
-            ...challenge,
-            visibleToParticipants: true,
-            publicationNotes:
-              challenge.activationMode === 'convocatoria_abierta'
-                ? 'Visible para participantes como reto abierto.'
-                : challenge.activationMode === 'personas_seleccionadas'
-                  ? 'Visible solo para participantes invitados.'
-                  : 'Visible para el squad asignado como reto ya publicado.',
-            lastPublishedAt: new Date().toISOString().split('T')[0],
-            status: 'publicado',
-          })),
-          initiatives,
-        ),
-      );
-    },
-    loadChallengeCoverageDemo: challengeId => {
-      const challenge = challenges.find(item => item.id === challengeId);
-      if (!challenge) return;
-      const front = strategicFronts.find(item => item.id === challenge.strategicFrontId);
-      if (!front) return;
-      const existing = initiatives.some(item => item.challengeId === challengeId);
-      if (existing) return;
-
-      const timestamp = Date.now();
-      const seeded: Initiative[] = [
-        {
-          id: `initiative-${timestamp}-a`,
-          name: 'Piloto inicial del reto',
-          strategicFrontId: front.id,
-          challengeId,
-          teamOwner: 'Equipo del reto',
-          currentStep: 'Step 1',
-          status: 'en_step_1',
-          mentor: 'Mentor asignado',
-          sponsorTouchpoint: 'Revision ejecutiva pendiente',
-          mainAlert: 'Todavia falta evidencia para ver si el reto esta bien enfocado.',
-          nextActionRecommended: 'Profundizar validacion con usuarios clave.',
-          attackedArea: challenge.whatWeWantToMove,
-          hypothesisCovered: 'La primera hipotesis del reto ya esta formulada.',
-          mainMetric: challenge.successCriteria,
-          contributionType: 'validar',
-          estimatedContribution: 'medio',
-          lastActivity: 'Hoy',
-          signalSummary: 'Ya hay una primera lectura, pero todavia es parcial.',
-          mainBlocker: 'Falta evidencia con usuarios prioritarios.',
-          teamLabel: 'Equipo inicial',
-          requiresSponsor: false,
-          readyForDecision: false,
-          blockedDays: 0,
-          requiresExternalCapability: false,
-          partialSignal: true,
-          resolvedCorePart: false,
-          teamMembers: ['Equipo inicial'],
-          executiveSummary: 'Primer esfuerzo para entender si el reto esta bien enfocado.',
-          experimentSummary: 'La iniciativa abre una primera validacion del reto con usuarios clave y evidencia basica.',
-          deliverables: [
-            { id: `deliverable-${timestamp}-a`, title: 'Resumen de hipotesis inicial', type: 'Resumen', note: 'Documento base para leer el avance temprano.' },
-          ],
-          aiCommentSummary: 'La IA sugiere ampliar evidencia antes de tomar decisiones.',
-          mentorCommentSummary: 'El mentor recomienda seguir validando con usuarios clave.',
-          decisionRecommendationReason: 'Por ahora sigue en seguimiento porque aun esta en una fase temprana.',
-          stepsTimeline: [
-            { step: 'Step 0', state: 'completado', note: 'Se ordeno el punto de partida del reto.' },
-            { step: 'Step 1', state: 'en_progreso', note: 'Sigue abierta la validacion inicial.' },
-            { step: 'Step 2', state: 'pendiente', note: 'Todavia no conviene bajar a solucion.' },
-            { step: 'Step 3', state: 'pendiente', note: 'Sin experimento todavia.' },
-            { step: 'Step 4', state: 'pendiente', note: 'Sin cierre ejecutivo todavia.' },
-          ],
-        },
-      ];
-
-      const updatedInitiatives = [...seeded, ...initiatives];
-      setInitiatives(updatedInitiatives);
-      setPortfolioDecisions(prev => [...seeded.map(buildDecisionRecommendation), ...prev]);
-      setChallenges(prev => syncChallengeSummaries(prev, updatedInitiatives));
-      setStrategicFronts(prev =>
-        prev.map(current =>
-          current.id === front.id ? { ...current, initiativeCount: current.initiativeCount + seeded.length } : current,
-        ),
-      );
-      setInitiativeOverlaps(prev => [...prev]);
-    },
-    createExecutiveOutput: (initiativeId, recommendation) => {
-      const existing = executiveOutputs.find(item => item.initiativeId === initiativeId);
-      if (existing) return existing;
-
-      const initiative = initiatives.find(item => item.id === initiativeId);
-      if (!initiative) return null;
-      const challenge = challenges.find(item => item.id === initiative.challengeId);
-      if (!challenge) return null;
-
-      const created: ExecutiveOutput = {
-        id: `exec-${initiativeId}`,
-        challengeId: challenge.id,
-        initiativeId: initiative.id,
-        recommendation,
-        status: 'borrador_ejecutivo',
-        whyNow: challenge.whyNow,
-        kpiToMove: initiative.mainMetric || challenge.successCriteria,
-        approachSummary: initiative.executiveSummary,
-        scopeSummary: initiative.experimentSummary,
-        evidenceSummary: initiative.signalSummary,
-        keyDeliverableSummary: initiative.deliverables[0]?.title ?? 'Sin entregable clave visible',
-        cautionSummary: initiative.mainBlocker || 'No hay cautela principal visible',
-        recommendationWhy: initiative.decisionRecommendationReason,
-        secondaryOptions: 'Las alternativas siguen disponibles como opcion secundaria si cambia la prioridad ejecutiva.',
-        managementNeeds: initiative.requiresExternalCapability
-          ? ['Prioridad tecnica', 'Responsable de destrabe', 'Decision de transferencia']
-          : initiative.requiresSponsor
-            ? ['Sponsor activo', 'Prioridad de implementacion', 'Aprobacion de siguiente fase']
-            : ['Aprobacion', 'Priorizacion', 'Recursos minimos para siguiente paso'],
-        nextStepSummary: initiative.nextActionRecommended,
-        nextStepOwner: initiative.teamOwner,
-        nextStepHorizon: initiative.readyForDecision ? '4 a 6 semanas' : '2 a 4 semanas',
-        nextStepExpectedResult: initiative.readyForDecision
-          ? 'Convertir la validacion actual en una siguiente fase con alcance claro.'
-          : 'Destrabar la iniciativa o confirmar si conviene reformularla.',
-        timeline: [
-          { label: 'Decision interna tomada', note: portfolioDecisions.find(item => item.initiativeId === initiativeId)?.summary ?? 'Ya existe una recomendacion interna visible.' },
-          { label: 'Borrador ejecutivo creado', note: 'Starteria traduce la evidencia a lenguaje gerencial.' },
-          { label: 'Siguiente hito', note: 'Dejar la propuesta lista para sponsor o gerencia.' },
-        ],
-      };
-
-      setExecutiveOutputs(prev => [created, ...prev]);
-      return created;
-    },
-    updateExecutiveOutputStatus: (outputId, status) => {
-      setExecutiveOutputs(prev =>
-        prev.map(item =>
-          item.id === outputId
-            ? {
-                ...item,
-                status,
-                timeline: [
-                  ...item.timeline.slice(0, 2),
-                  { label: `Estado actual: ${status.replaceAll('_', ' ')}`, note: 'La salida ejecutiva ya registro un nuevo hito post-decision.' },
-                ],
-              }
-            : item,
-        ),
-      );
-    },
-  }), [challenges, executiveOutputs, initiativeOverlaps, initiatives, portfolioDecisions, strategicFronts]);
+    loading,
+    error,
+    createStrategicFront,
+    updateStrategicFront,
+    updateStrategicFrontStatus,
+    createChallenge,
+    updateChallengeActivationMode,
+    updateChallengeStakeholderStatus,
+    activateOpenCall,
+    addSelectedPerson,
+    updateSelectedPersonStatus,
+    addSquadMember,
+    updateSquadMemberRole,
+    confirmAssignedSquad,
+    publishChallenge,
+    loadChallengeCoverageDemo,
+    createExecutiveOutput,
+    updateExecutiveOutputStatus,
+  }), [
+    strategicFronts,
+    challenges,
+    initiatives,
+    initiativeOverlaps,
+    portfolioDecisions,
+    executiveOutputs,
+    loading,
+    error,
+    createStrategicFront,
+    updateStrategicFront,
+    updateStrategicFrontStatus,
+    createChallenge,
+    updateChallengeActivationMode,
+    updateChallengeStakeholderStatus,
+    activateOpenCall,
+    addSelectedPerson,
+    updateSelectedPersonStatus,
+    addSquadMember,
+    updateSquadMemberRole,
+    confirmAssignedSquad,
+    publishChallenge,
+    loadChallengeCoverageDemo,
+    createExecutiveOutput,
+    updateExecutiveOutputStatus,
+  ]);
 
   return <PortfolioLeadContext.Provider value={value}>{children}</PortfolioLeadContext.Provider>;
 }

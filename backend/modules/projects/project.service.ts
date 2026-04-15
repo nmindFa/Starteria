@@ -3,7 +3,7 @@ import { AppError } from '../../shared/errors/AppError';
 import { Role, Project, Step0Data, Step0Status } from '../../shared/types';
 import { StatusMapper } from '../../shared/utils/status-mapper';
 import { validateTransition } from './state-machine';
-import { CreateProjectInput, UpdateProjectInput } from './project.schemas';
+import { CreateProjectInput, UpdateProjectInput, UpdateSponsorDataInput } from './project.schemas';
 
 const DEFAULT_STEPS = [
   {
@@ -184,6 +184,28 @@ export class ProjectService {
       data: {
         step0Data: data as any,
         step0Status: status ?? undefined,
+        lastModified: new Date().toISOString(),
+      },
+      include: { steps: { include: { modules: true } }, teamMembers: true, evidence: true },
+    });
+
+    return updated as unknown as Project;
+  }
+
+  async updateSponsorData(
+    projectId: string,
+    userId: string,
+    role: Role,
+    data: UpdateSponsorDataInput,
+  ): Promise<Project> {
+    // Verify the caller has access to this project (throws forbidden/notFound if not)
+    await this.getProject(projectId, userId, role);
+
+    const updated = await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        sponsorTouchpoints: data.sponsorTouchpoints as any,
+        sponsorComments: data.sponsorComments as any,
         lastModified: new Date().toISOString(),
       },
       include: { steps: { include: { modules: true } }, teamMembers: true, evidence: true },

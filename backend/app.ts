@@ -19,6 +19,7 @@ import { cohortRouter } from './modules/cohort/cohort.router';
 import { userRouter, teamRouter } from './modules/users/user.router';
 import { helpRouter } from './modules/mentor/mentor.router';
 import { sponsorRouter } from './modules/sponsor/sponsor.router';
+import { portfolioRouter } from './modules/portfolio/portfolio.router';
 
 export function createApp() {
   const app = express();
@@ -48,6 +49,7 @@ export function createApp() {
   app.use('/api/v1/projects', teamRouter);
   app.use('/api/v1/projects', helpRouter);
   app.use('/api/v1/sponsor', sponsorRouter);
+  app.use('/api/v1/portfolio', portfolioRouter);
 
   // 404 handler
   app.use((_req, _res, next) => {

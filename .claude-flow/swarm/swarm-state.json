@@ -53,6 +53,78 @@
       },
       "createdAt": "2026-04-05T03:36:50.657Z",
       "updatedAt": "2026-04-05T03:36:50.657Z"
+    },
+    "swarm-1775542132991-ov7k29": {
+      "swarmId": "swarm-1775542132991-ov7k29",
+      "topology": "hierarchical",
+      "maxAgents": 8,
+      "status": "running",
+      "agents": [],
+      "tasks": [],
+      "config": {
+        "topology": "hierarchical",
+        "maxAgents": 8,
+        "strategy": "specialized",
+        "communicationProtocol": "message-bus",
+        "autoScaling": true,
+        "consensusMechanism": "majority"
+      },
+      "createdAt": "2026-04-07T06:08:52.991Z",
+      "updatedAt": "2026-04-07T06:08:52.991Z"
+    },
+    "swarm-1775857180368-wtcfzq": {
+      "swarmId": "swarm-1775857180368-wtcfzq",
+      "topology": "hierarchical",
+      "maxAgents": 10,
+      "status": "running",
+      "agents": [],
+      "tasks": [],
+      "config": {
+        "topology": "hierarchical",
+        "maxAgents": 10,
+        "strategy": "specialized",
+        "communicationProtocol": "message-bus",
+        "autoScaling": true,
+        "consensusMechanism": "majority"
+      },
+      "createdAt": "2026-04-10T21:39:40.368Z",
+      "updatedAt": "2026-04-10T21:39:40.368Z"
+    },
+    "swarm-1775930058759-cx8mmt": {
+      "swarmId": "swarm-1775930058759-cx8mmt",
+      "topology": "hierarchical",
+      "maxAgents": 10,
+      "status": "running",
+      "agents": [],
+      "tasks": [],
+      "config": {
+        "topology": "hierarchical",
+        "maxAgents": 10,
+        "strategy": "specialized",
+        "communicationProtocol": "message-bus",
+        "autoScaling": true,
+        "consensusMechanism": "majority"
+      },
+      "createdAt": "2026-04-11T17:54:18.759Z",
+      "updatedAt": "2026-04-11T17:54:18.759Z"
+    },
+    "swarm-1775938032784-o3u5b3": {
+      "swarmId": "swarm-1775938032784-o3u5b3",
+      "topology": "hierarchical",
+      "maxAgents": 10,
+      "status": "running",
+      "agents": [],
+      "tasks": [],
+      "config": {
+        "topology": "hierarchical",
+        "maxAgents": 10,
+        "strategy": "specialized",
+        "communicationProtocol": "message-bus",
+        "autoScaling": true,
+        "consensusMechanism": "majority"
+      },
+      "createdAt": "2026-04-11T20:07:12.784Z",
+      "updatedAt": "2026-04-11T20:07:12.784Z"
     }
   },
   "version": "3.0.0"

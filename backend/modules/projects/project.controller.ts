@@ -88,4 +88,14 @@ export class ProjectController {
       next(err);
     }
   };
+
+  updateSponsorData = async (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      const project = await this.service.updateSponsorData(req.params.id, user.id, user.role, req.body);
+      res.json({ success: true, data: project });
+    } catch (err) {
+      next(err);
+    }
+  };
 }
