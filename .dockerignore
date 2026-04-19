@@ -1,0 +1,7 @@
+front/node_modules
+front/dist
+front/.env
+.git
+*.log
+.claude-flow
+front/.claude-flow

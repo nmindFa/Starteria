@@ -118,6 +118,11 @@ portfolioRouter.get(
   controller.listInitiatives,
 );
 
+portfolioRouter.get(
+  '/initiatives/:projectId/meta',
+  controller.getInitiativeMeta,
+);
+
 portfolioRouter.put(
   '/initiatives/:projectId/meta',
   requireRole('admin', 'mentor'),

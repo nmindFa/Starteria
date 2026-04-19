@@ -198,6 +198,19 @@ export class PortfolioController {
     }
   };
 
+  getInitiativeMeta = async (
+    req: AuthenticatedRequest,
+    res: Response<ApiResponse>,
+    next: NextFunction,
+  ) => {
+    try {
+      const data = await this.service.getInitiativeMeta(req.params.projectId);
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  };
+
   upsertInitiativeMeta = async (
     req: AuthenticatedRequest,
     res: Response<ApiResponse>,

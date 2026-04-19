@@ -92,7 +92,9 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
         accessToken = null;
-        window.location.href = '/auth';
+        if (typeof window !== 'undefined' && window.location.pathname !== '/auth') {
+          window.location.href = '/auth';
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

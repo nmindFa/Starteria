@@ -154,6 +154,11 @@ export function usePortfolioData(): UsePortfolioDataReturn {
   useEffect(() => {
     let cancelled = false;
 
+    if (typeof window !== 'undefined' && window.location.pathname === '/auth') {
+      setLoading(false);
+      return;
+    }
+
     async function load() {
       try {
         setLoading(true);

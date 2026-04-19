@@ -209,6 +209,20 @@ export class PortfolioService {
     });
   }
 
+  async getInitiativeMeta(projectId: string) {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw AppError.notFound('Proyecto');
+
+    return this.prisma.initiativePortfolioMeta.findFirst({
+      where: { projectId },
+      include: {
+        challenge: {
+          select: { id: true, title: true, strategicFrontId: true, status: true },
+        },
+      },
+    });
+  }
+
   async upsertInitiativeMeta(
     projectId: string,
     input: UpsertInitiativeMetaInput,
