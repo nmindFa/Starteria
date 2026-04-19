@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { authService, AuthUser } from '../services/auth.service';
+import { initAuth, getAccessToken } from '../services/api';
 
 export type Role = 'owner' | 'mentor' | 'admin' | 'sponsor' | 'portfolio_lead';
 
@@ -174,10 +176,12 @@ export interface User {
 interface AppContextType {
   user: User | null;
   isAuthenticated: boolean;
+  authLoading: boolean;
   projects: Project[];
   currentProject: Project | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
   setCurrentProject: (project: Project | null) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
   createProject: (name: string, description?: string, teamMembers?: TeamMember[]) => Project;
@@ -631,22 +635,95 @@ const MOCK_PROJECTS: Project[] = [
 
 const AppContext = createContext<AppContextType | null>(null);
 
+const BACKEND_TO_FRONTEND_ROLE: Record<string, Role> = {
+  participante: 'owner',
+  colaborador: 'owner',
+  viewer: 'owner',
+  mentor: 'mentor',
+  admin: 'admin',
+  sponsor: 'sponsor',
+};
+
+function mapBackendUser(raw: AuthUser): User {
+  const mockMatch = getKnownUserByEmail(raw.email);
+  return {
+    id: raw.id,
+    name: raw.name,
+    email: raw.email,
+    role: BACKEND_TO_FRONTEND_ROLE[raw.role] ?? 'owner',
+    initials: raw.initials || inferInitials(raw.name),
+    skills: mockMatch?.skills ?? [],
+    cohort: raw.cohort ?? mockMatch?.cohort,
+  };
+}
+
+function parseAuthError(err: unknown, fallback: string): string {
+  const maybe = err as { response?: { data?: { message?: string; error?: { message?: string } } } };
+  return (
+    maybe?.response?.data?.error?.message ??
+    maybe?.response?.data?.message ??
+    fallback
+  );
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await initAuth();
+        if (cancelled) return;
+        if (getAccessToken()) {
+          const me = await authService.getMe();
+          if (cancelled) return;
+          setUser(mapBackendUser(me));
+          setIsAuthenticated(true);
+        }
+      } catch {
+        // no session — stay logged out
+      } finally {
+        if (!cancelled) setAuthLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    const entry = MOCK_USERS[email.toLowerCase()];
-    if (!entry) return { success: false, error: 'No existe una cuenta con ese correo.' };
-    if (entry.password !== password) return { success: false, error: 'Contraseña incorrecta. Vuelve a intentar.' };
-    setUser(entry.user);
-    setIsAuthenticated(true);
-    return { success: true };
+    try {
+      const result = await authService.login(email, password);
+      setUser(mapBackendUser(result.user));
+      setIsAuthenticated(true);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: parseAuthError(err, 'No pudimos iniciar sesión. Intenta de nuevo.') };
+    }
   };
 
-  const logout = () => {
+  const register = async (name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const result = await authService.register(name, email, password);
+      setUser(mapBackendUser(result.user));
+      setIsAuthenticated(true);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: parseAuthError(err, 'No pudimos crear la cuenta. Intenta de nuevo.') };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } catch {
+      // ignore — clear local state regardless
+    }
     setUser(null);
     setIsAuthenticated(false);
     setCurrentProject(null);
@@ -821,7 +898,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AppContext.Provider value={{ user, isAuthenticated, projects, currentProject, login, logout, setCurrentProject, updateProject, createProject, setUserRole, updateStep0, getProjectMember, canAccessProject, markSponsorInvitationSent, acceptSponsorInvitation, updateSponsorTouchpoint, addSponsorComment }}>
+    <AppContext.Provider value={{ user, isAuthenticated, authLoading, projects, currentProject, login, register, logout, setCurrentProject, updateProject, createProject, setUserRole, updateStep0, getProjectMember, canAccessProject, markSponsorInvitationSent, acceptSponsorInvitation, updateSponsorTouchpoint, addSponsorComment }}>
       {children}
     </AppContext.Provider>
   );

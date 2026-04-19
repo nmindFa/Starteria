@@ -12,7 +12,7 @@ export function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
-  const { login, isAuthenticated, user } = useApp();
+  const { login, register, isAuthenticated, user } = useApp();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,13 +31,10 @@ export function AuthPage() {
     setError(null);
     if (!validateEmail(email)) return;
 
-    if (mode === 'register') {
-      setError('El registro estará disponible pronto. Por ahora usa una cuenta de demo.');
-      return;
-    }
-
     setLoading(true);
-    const result = await login(email, password);
+    const result = mode === 'register'
+      ? await register(name, email, password)
+      : await login(email, password);
     setLoading(false);
     if (result.success) {
       navigate(email.toLowerCase() === 'portfolio@starteria.io' ? '/portfolio/inicio' : '/dashboard');
