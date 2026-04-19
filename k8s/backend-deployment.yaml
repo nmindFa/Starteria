@@ -7,6 +7,8 @@ metadata:
     app: starteria-backend
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: starteria-backend
@@ -17,7 +19,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: orlandogtp/starteria-backend:latest
+        image: orlandogtp/starteria-backend:v2.0.1
         imagePullPolicy: Always
         ports:
         - containerPort: 3001
