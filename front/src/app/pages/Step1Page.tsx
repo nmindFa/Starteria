@@ -11,7 +11,6 @@ import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
 import { ProgressBar } from '../components/ProgressBar';
 import { BannerPorDefinir } from '../components/BannerPorDefinir';
-import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
 import { EvidenceUploader } from '../components/EvidenceUploader';
 import { AutosaveIndicator } from '../components/AutosaveIndicator';
 import { useAutosave } from '../hooks/useAutosave';
@@ -131,47 +130,6 @@ interface Step1AiAnalysisState {
   isEditing: boolean;
 }
 
-const MOCK_FEEDBACK_IA = {
-  status: 'Iterar' as const,
-  summary: 'El análisis AS-IS está bien documentado y las métricas tienen baseline definido. Sin embargo, faltan los actores clave y hay inconsistencias en las restricciones.',
-  goodPoints: ['Caso real bien contextualizado con walkthrough completo', 'Métrica operativa con baseline claro (3 semanas)', 'Quiebre identificado en el paso 3 del proceso'],
-  missing: ['Falta definir el decisor Go/No-Go en Módulo C', 'No se identificó evidencia de entrevistas en Módulo D', 'El filtro de alcance dice "transversal" pero no tiene corte definido'],
-  actions: [
-    'Define quién es el decisor Go/No-Go en las restricciones (nombre + cargo)',
-    'Completa el corte de alcance si seleccionaste "transversal"',
-    'Agrega al menos 1 evidencia por entrevista en Módulo D',
-    'Verifica que la consecuencia descrita sea consistente con las métricas de impacto',
-  ],
-  questions: [
-    '¿Qué pasaría si el decisor no aprueba continuar con este desafío?',
-    '¿Cuál es la frecuencia real de medición de tus métricas?',
-    '¿El quiebre identificado es el verdadero o hay uno upstream que lo causa?',
-  ],
-  contradictions: ['Módulo B dice impacto "crítico" pero Módulo C señala riesgo "bajo". Revisa la consistencia.'],
-  timestamp: '2025-02-19T09:00:00Z',
-};
-
-const ACTIVE_STEP1_FEEDBACK = {
-  ...MOCK_FEEDBACK_IA,
-  summary: 'El analisis inicial esta bien documentado y el plan de investigacion tiene una base clara. Aun falta consolidar mejor las capturas y cerrar la sintesis final del Step 1.',
-  missing: [
-    'Falta consolidar al menos una captura con hallazgo claro en el Modulo C',
-    'No se identifico una evidencia que respalde el aprendizaje principal',
-    'La sintesis final aun no explica con claridad si el problema se mantiene o se ajusta',
-  ],
-  actions: [
-    'Consolida al menos una captura completa con notas y hallazgo',
-    'Agrega una evidencia que demuestre el aprendizaje principal',
-    'Aclara en la sintesis final si el problema se mantiene, se ajusta o se reformula',
-    'Verifica que la consecuencia descrita sea consistente con las metricas de impacto',
-  ],
-  questions: [
-    'Que patron aparece de forma repetida entre las capturas?',
-    'Cual es la frecuencia real de medicion de tus metricas?',
-    'El quiebre identificado es el verdadero o hay uno upstream que lo causa?',
-  ],
-  contradictions: ['Modulo B habla de un impacto alto, pero la sintesis final aun no refleja ese nivel de urgencia. Revisa la consistencia.'],
-};
 
 const STEP1_CONSEQUENCE_OPTIONS = [
   { id: 'operativa', label: 'Operativa' },
@@ -582,11 +540,18 @@ export function Step1Page() {
     return 'amarillo';
   })();
 
-  const semaforoConfig = {
+  const SEMAFORO_CONFIG_MAP: Record<string, { color: string; bg: string; dot: string; label: string; desc: string }> = {
     verde:    { color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', label: '🟢 Verde — Listo para avanzar',    desc: 'Los 3 campos MUST están completos y los riesgos están bajo control. Puedes continuar al Módulo D.' },
     amarillo: { color: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200',    dot: 'bg-amber-500',  label: '🟡 Amarillo — Revisar antes de continuar', desc: 'Hay una dependencia de probabilidad alta o falta el dueño. Define quién es responsable antes de avanzar.' },
     rojo:     { color: 'text-red-700',     bg: 'bg-red-50 border-red-200',        dot: 'bg-red-500',    label: '🔴 Rojo — Bloqueado',              desc: 'Tienes una dependencia registrada pero no definiste cómo pilotear sin ella. Sin alternativa, el diseño queda en el aire.' },
-  }[semaforo];
+  };
+  const semaforoConfig = SEMAFORO_CONFIG_MAP[semaforo] ?? {
+    color: 'text-slate-700',
+    bg: 'bg-slate-50 border-slate-200',
+    dot: 'bg-slate-400',
+    label: 'Estado del semáforo',
+    desc: 'No se pudo calcular el estado del semáforo con los datos actuales.',
+  };
 
   // ── Módulo B helpers — defined before `modules` to avoid temporal dead zone ──
 
@@ -679,9 +644,9 @@ export function Step1Page() {
                   status: 'SesiÃ³n experto pendiente',
                   progress: 100,
                   feedbackIA: {
-                    ...ACTIVE_STEP1_FEEDBACK,
                     status: 'Aprobado',
                     summary: 'La IA confirma que el Step 1 ya tiene base suficiente. Ahora falta la validacion final de mentor para habilitar el siguiente step.',
+                    goodPoints: [],
                     missing: [],
                     actions: ['Define la via de validacion con mentor y consigue su aprobacion final del Step 1.'],
                     questions: [],
@@ -3959,19 +3924,13 @@ export function Step1Page() {
 
               {/* IA Feedback */}
               {hasFeedback && (
-                <FeedbackIAPanel feedback={ACTIVE_STEP1_FEEDBACK} onIterate={() => setActiveModule('A')} />
-              )}
-
-              {/* Mentor session */}
-              {hasFeedback && ACTIVE_STEP1_FEEDBACK.status === 'Aprobado' && (
-                <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
-                  <p className="text-sm text-amber-800 mb-1" style={{ fontWeight: 600 }}>Sesión con experto obligatoria</p>
-                  <p className="text-xs text-amber-600 mb-3">La IA aprobó el Step 1. Ahora debes agendar la sesión con tu mentor para obtener la aprobación final y desbloquear el Step 2.</p>
-                  <button onClick={() => setShowSessionModal(true)} className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-4 py-2 text-sm transition-colors" style={{ fontWeight: 500 }}>
-                    <Calendar size={14} /> Agendar sesión con mentor
-                  </button>
+                <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                  <Sparkles className="mx-auto text-slate-400 mb-2" size={24} />
+                  <p className="text-sm text-slate-600 mb-1" style={{ fontWeight: 600 }}>Aún no hay feedback IA</p>
+                  <p className="text-xs text-slate-500">Pulsa “Solicitar revisión IA” para obtener análisis del Step 1.</p>
                 </div>
               )}
+
             </div>
           )}
         </div>
@@ -4120,7 +4079,11 @@ export function Step1Page() {
                 <p className="text-sm text-slate-500">Analizando tu Módulo A…</p>
               </div>
             ) : (
-              <FeedbackIAPanel feedback={ACTIVE_STEP1_FEEDBACK} onIterate={() => { setShowIAPanel(false); setActiveModule('A'); }} />
+              <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                <Sparkles className="mx-auto text-slate-400 mb-2" size={24} />
+                <p className="text-sm text-slate-600 mb-1" style={{ fontWeight: 600 }}>Aún no hay análisis IA</p>
+                <p className="text-xs text-slate-500">Solicita la revisión IA para obtener feedback del Módulo A.</p>
+              </div>
             )}
           </div>
         </div>

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, ChevronRight, Sparkles, MessageSquare, Users, Calendar, Clock } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { CheckCircle2, AlertTriangle, XCircle, ChevronRight, Sparkles, MessageSquare, Users, Calendar, Clock, Loader2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
 import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
+import * as mentorService from '../services/mentorService';
 
 interface ReviewItem {
   id: string;
@@ -15,12 +16,36 @@ interface ReviewItem {
   iaStatus?: 'Aprobado' | 'Iterar' | 'Bloqueado';
   sessionStatus: 'Pendiente agendar' | 'Agendada' | 'Realizada';
   sessionDate?: string;
+  aiFeedback?: {
+    status: 'Aprobado' | 'Iterar' | 'Bloqueado';
+    summary: string;
+    goodPoints: string[];
+    missing: string[];
+    actions: string[];
+    questions: string[];
+    contradictions?: string[];
+    timestamp?: string;
+  };
 }
 
-const PENDING_REVIEWS: ReviewItem[] = [
-  { id: 'r1', projectName: 'Portal de Reportes Automáticos', team: 'Pedro Alvarado + Claudia Ruiz', stepNumber: 2, stepName: 'Diseñar solución', submittedAt: 'Hace 2 horas', priority: 'Alta', iaStatus: 'Aprobado', sessionStatus: 'Pendiente agendar' },
-  { id: 'r2', projectName: 'Onboarding Digital', team: 'Ana Rodríguez + Miguel Torres', stepNumber: 1, stepName: 'Claridad en el desafío', submittedAt: 'Ayer', priority: 'Media', iaStatus: 'Iterar', sessionStatus: 'Agendada', sessionDate: '21 feb 2025, 10:00 AM' },
-];
+function adaptReview(raw: mentorService.MentorReview): ReviewItem {
+  const r = raw as Record<string, unknown>;
+  const priority = (r.priority as ReviewItem['priority']) ?? 'Media';
+  const sessionStatus = (r.sessionStatus as ReviewItem['sessionStatus']) ?? 'Pendiente agendar';
+  return {
+    id: String(raw.id),
+    projectName: (r.projectName as string) ?? '',
+    team: (r.team as string) ?? '',
+    stepNumber: typeof r.stepNumber === 'number' ? r.stepNumber : 1,
+    stepName: (r.stepName as string) ?? '',
+    submittedAt: (r.submittedAt as string) ?? '',
+    priority,
+    iaStatus: r.iaStatus as ReviewItem['iaStatus'],
+    sessionStatus,
+    sessionDate: r.sessionDate as string | undefined,
+    aiFeedback: r.aiFeedback as ReviewItem['aiFeedback'],
+  };
+}
 
 const RUBRICA = [
   { id: 'evidencia', label: 'Evidencia', desc: '¿Está documentado con evidencia real y verificable?', maxScore: 5 },
@@ -30,16 +55,6 @@ const RUBRICA = [
   { id: 'riesgos', label: 'Riesgos', desc: '¿Los riesgos y restricciones están identificados y abordados?', maxScore: 5 },
 ];
 
-const MOCK_IA_FEEDBACK_FOR_MENTOR = {
-  status: 'Aprobado' as const,
-  summary: 'La solución propuesta está bien alineada con el desafío del Step 1. HMW claro, Matriz DVF sólida y Test Card completa.',
-  goodPoints: ['HMW bien alineado al reto de automatización', '12 ideas generadas con buena diversidad de enfoques', 'Matriz DVF con scoring justificado y comparación clara'],
-  missing: [],
-  actions: [],
-  questions: ['¿Cómo validarán la hipótesis de valor antes del experimento piloto?'],
-  timestamp: '2025-02-19T08:00:00Z',
-};
-
 export function MentorPanelPage() {
   const { user } = useApp();
   const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null);
@@ -48,16 +63,47 @@ export function MentorPanelPage() {
   const [decision, setDecision] = useState<'Aprobado' | 'Iterar' | 'Bloqueado' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const raw = await mentorService.listReviews();
+        setReviews(raw.map(adaptReview));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Error cargando revisiones');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
   const maxScore = RUBRICA.length * 5;
 
   const handleSubmit = async () => {
-    if (!decision) return;
+    if (!decision || !selectedReview) return;
+    setSubmitError(null);
     setSubmitting(true);
-    await new Promise(r => setTimeout(r, 1000));
-    setSubmitting(false);
-    setSubmitted(true);
+    try {
+      const backendDecision = decision === 'Aprobado' ? 'approved' : 'rework';
+      await mentorService.submitReview(selectedReview.id, {
+        decision: backendDecision,
+        feedback: comments,
+        scores,
+        mentorDecision: decision,
+      });
+      setSubmitted(true);
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'Error al guardar la revisión');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (selectedReview && !submitted) {
@@ -84,7 +130,14 @@ export function MentorPanelPage() {
           {/* IA Feedback for context */}
           <div>
             <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>REVISIÓN IA (contexto)</p>
-            <FeedbackIAPanel feedback={MOCK_IA_FEEDBACK_FOR_MENTOR} />
+            {selectedReview.aiFeedback ? (
+              <FeedbackIAPanel feedback={selectedReview.aiFeedback} />
+            ) : (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 flex items-center gap-2">
+                <Sparkles size={13} className="text-slate-400" />
+                Aún no hay análisis IA disponible para este Step.
+              </div>
+            )}
           </div>
 
           {/* Rubric */}
@@ -159,6 +212,10 @@ export function MentorPanelPage() {
             )}
           </div>
 
+          {submitError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{submitError}</div>
+          )}
+
           <button
             onClick={handleSubmit}
             disabled={!decision || submitting}
@@ -196,15 +253,30 @@ export function MentorPanelPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl text-slate-900 mb-1" style={{ fontWeight: 700 }}>Panel de Mentor</h1>
-        <p className="text-sm text-slate-500">Hola {user?.name}. Tienes {PENDING_REVIEWS.length} revisión{PENDING_REVIEWS.length !== 1 ? 'es' : ''} pendiente{PENDING_REVIEWS.length !== 1 ? 's' : ''}.</p>
+        <p className="text-sm text-slate-500">Hola {user?.name}. Tienes {reviews.length} revisión{reviews.length !== 1 ? 'es' : ''} pendiente{reviews.length !== 1 ? 's' : ''}.</p>
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 mb-4">{error}</div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-slate-500 gap-2">
+          <Loader2 size={16} className="animate-spin" />
+          <span className="text-sm">Cargando revisiones…</span>
+        </div>
+      ) : reviews.length === 0 && !error ? (
+        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
+          No tienes revisiones pendientes.
+        </div>
+      ) : (
+      <>
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         {[
-          { label: 'Pendientes', value: PENDING_REVIEWS.filter(r => r.sessionStatus === 'Pendiente agendar').length, color: 'text-amber-600' },
-          { label: 'Agendadas', value: PENDING_REVIEWS.filter(r => r.sessionStatus === 'Agendada').length, color: 'text-blue-600' },
-          { label: 'Este mes', value: 8, color: 'text-emerald-600' },
+          { label: 'Pendientes', value: reviews.filter(r => r.sessionStatus === 'Pendiente agendar').length, color: 'text-amber-600' },
+          { label: 'Agendadas', value: reviews.filter(r => r.sessionStatus === 'Agendada').length, color: 'text-blue-600' },
+          { label: 'Total', value: reviews.length, color: 'text-emerald-600' },
         ].map(s => (
           <div key={s.label} className="bg-white border border-slate-200 rounded-xl p-4 text-center">
             <p className={`text-2xl ${s.color}`} style={{ fontWeight: 700 }}>{s.value}</p>
@@ -217,7 +289,7 @@ export function MentorPanelPage() {
       <div className="mb-6">
         <h2 className="text-base text-slate-900 mb-3" style={{ fontWeight: 600 }}>Sesiones pendientes de agendar</h2>
         <div className="space-y-3">
-          {PENDING_REVIEWS.filter(r => r.sessionStatus === 'Pendiente agendar').map(review => (
+          {reviews.filter(r => r.sessionStatus === 'Pendiente agendar').map(review => (
             <div key={review.id} className="bg-amber-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -243,7 +315,7 @@ export function MentorPanelPage() {
       <div>
         <h2 className="text-base text-slate-900 mb-3" style={{ fontWeight: 600 }}>Revisiones listas para sesión</h2>
         <div className="space-y-3">
-          {PENDING_REVIEWS.map(review => (
+          {reviews.map(review => (
             <div key={review.id} className="bg-white border border-slate-200 rounded-xl p-4 hover:border-indigo-200 hover:shadow-sm transition-all">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-sm text-indigo-700 shrink-0" style={{ fontWeight: 700 }}>S{review.stepNumber}</div>
@@ -275,6 +347,8 @@ export function MentorPanelPage() {
           ))}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

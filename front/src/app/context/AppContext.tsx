@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { authService, AuthUser } from '../services/auth.service';
 import { initAuth, getAccessToken } from '../services/api';
+import * as projectService from '../services/projectService';
 
 export type Role = 'owner' | 'mentor' | 'admin' | 'sponsor' | 'portfolio_lead';
 
@@ -178,13 +179,14 @@ interface AppContextType {
   isAuthenticated: boolean;
   authLoading: boolean;
   projects: Project[];
+  projectsLoading: boolean;
   currentProject: Project | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   setCurrentProject: (project: Project | null) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
-  createProject: (name: string, description?: string, teamMembers?: TeamMember[]) => Project;
+  createProject: (name: string, description?: string, teamMembers?: TeamMember[]) => Promise<{ success: true; project: Project } | { success: false; error: string }>;
   setUserRole: (role: Role) => void;
   updateStep0: (projectId: string, data: Partial<Step0Data>, status: Step0Status) => void;
   getProjectMember: (projectId: string, email?: string) => TeamMember | null;
@@ -198,68 +200,6 @@ interface AppContextType {
   ) => void;
   addSponsorComment: (projectId: string, touchpointId: SponsorTouchpointId, message: string) => void;
 }
-
-const MOCK_USERS: Record<string, { user: User; password: string }> = {
-  'participante@starteria.io': {
-    password: 'demo123',
-    user: {
-      id: 'u1',
-      name: 'Ana Rodríguez',
-      email: 'participante@starteria.io',
-      role: 'owner',
-      initials: 'AR',
-      skills: ['Design Thinking', 'Facilitación', 'Investigación UX'],
-      cohort: 'Cohorte 2025-A',
-    },
-  },
-  'mentor@starteria.io': {
-    password: 'demo123',
-    user: {
-      id: 'u2',
-      name: 'Carlos Méndez',
-      email: 'mentor@starteria.io',
-      role: 'mentor',
-      initials: 'CM',
-      skills: ['Estrategia', 'Innovación', 'Gestión de producto'],
-    },
-  },
-  'admin@starteria.io': {
-    password: 'demo123',
-    user: {
-      id: 'u3',
-      name: 'Laura Pérez',
-      email: 'admin@starteria.io',
-      role: 'admin',
-      initials: 'LP',
-      skills: ['Gestión de programas', 'Coaching', 'Facilitación'],
-    },
-  },
-  'sponsor@starteria.io': {
-    password: 'demo123',
-    user: {
-      id: 'u4',
-      name: 'Roberto Jiménez',
-      email: 'sponsor@starteria.io',
-      role: 'sponsor',
-      initials: 'RJ',
-      skills: ['Liderazgo', 'Transformación digital'],
-    },
-  },
-  'portfolio@starteria.io': {
-    password: 'demo123',
-    user: {
-      id: 'u5',
-      name: 'Valeria Castro',
-      email: 'portfolio@starteria.io',
-      role: 'portfolio_lead',
-      initials: 'VC',
-      skills: ['Portafolio', 'Estrategia', 'Gobernanza'],
-    },
-  },
-};
-
-const getKnownUserByEmail = (email: string) =>
-  Object.values(MOCK_USERS).find(entry => entry.user.email.toLowerCase() === email.toLowerCase())?.user;
 
 const inferNameFromEmail = (email: string) =>
   email
@@ -279,20 +219,22 @@ const inferInitials = (name: string) =>
 
 export function createTeamMember(
   email: string,
-  role: TeamMemberRole,
-  statusOverride?: TeamMemberStatus
+  role: TeamMember['role'] = 'Editor',
+  status: TeamMember['status'] = 'Pendiente',
+  initials?: string
 ): TeamMember {
   const normalizedEmail = email.trim().toLowerCase();
-  const knownUser = getKnownUserByEmail(normalizedEmail);
-  const fallbackName = inferNameFromEmail(normalizedEmail);
+  const localPart = normalizedEmail.split('@')[0] ?? normalizedEmail;
+  const fallbackName = inferNameFromEmail(normalizedEmail) || localPart;
+  const derivedInitials = initials ?? localPart.slice(0, 2).toUpperCase();
 
   return {
     id: `m${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: knownUser?.name ?? fallbackName,
+    name: fallbackName,
     email: normalizedEmail,
     role,
-    status: statusOverride ?? (knownUser ? 'Activo' : 'Pendiente'),
-    initials: knownUser?.initials ?? inferInitials(fallbackName || normalizedEmail),
+    status,
+    initials: derivedInitials,
   };
 }
 
@@ -320,320 +262,63 @@ export const DEFAULT_SPONSOR_TOUCHPOINTS: SponsorTouchpoint[] = [
   },
 ];
 
-const MOCK_PROJECTS: Project[] = [
-  {
-    id: 'p1',
-    name: 'Onboarding Digital',
-    description: 'Reducir el tiempo de incorporación de nuevos empleados de 3 semanas a 5 días.',
-    status: 'En progreso',
-    currentStep: 1,
-    cohort: 'Cohorte 2025-A',
-    riskLevel: 'Medio',
-    mentorCredits: 3,
-    step0Status: 'Completado',
-    sponsorTouchpoints: [
-      {
-        id: 'step0',
-        title: 'Alineamiento inicial',
-        stageLabel: 'Step 0',
-        status: 'Cerrado',
-        date: '2025-02-03',
-        actionLabel: 'Validar contexto inicial',
-      },
-      {
-        id: 'step2',
-        title: 'Revisión estratégica',
-        stageLabel: 'Cierre Step 2',
-        status: 'Pendiente de convocatoria',
-        actionLabel: 'Revisar definición del problema',
-      },
-      {
-        id: 'step4',
-        title: 'Presentación final',
-        stageLabel: 'Step 4',
-        status: 'Pendiente de convocatoria',
-        actionLabel: 'Preparar decisión final',
-      },
-    ],
-    sponsorComments: [
-      {
-        id: 'sc-1',
-        touchpointId: 'step0',
-        authorName: 'Roberto Jiménez',
-        authorRole: 'Sponsor',
-        message: 'El problema se entiende. Quiero ver una versión más acotada antes de pasar a solución.',
-        createdAt: '2025-02-03',
-      },
-    ],
-    step0Data: {
-      nombreParticipante: 'Ana Rodríguez',
-      rolArea: 'Gerente de Recursos Humanos · Talento',
-      origen: 'problema',
-      quePasaQueQuieres: 'El proceso de incorporación de empleados nuevos tarda entre 15 y 21 días. Mientras tanto, la persona no puede trabajar porque no tiene accesos ni herramientas.',
-      impacta: ['Operaciones', 'TI', 'Gerencias'],
-      parteProceso: 'durante',
-      impacto3meses: 'productividad',
-      respaldo: 'datos',
-      quienEscuchar: 'La Directora de Operaciones, porque aprueba cambios que afectan a más de un área.',
-      siMinimo: ['Reunión 30 min con el decisor correcto', 'Acceso a datos'],
-    },
-    steps: [
-      {
-        number: 1,
-        name: 'Claridad en el desafío',
-        status: 'En progreso',
-        progress: 65,
-        modules: [
-          { id: 'A', name: 'Proceso actual', status: 'Completado' },
-          { id: 'B', name: 'Medición e impacto', status: 'Completado' },
-          { id: 'C', name: 'Captura de informacion y sintesis', status: 'En progreso' },
-        ],
-        feedbackIA: null,
-        mentorSession: null,
-      },
-      {
-        number: 2,
-        name: 'Diseñar solución',
-        status: 'Bloqueado',
-        progress: 0,
-        modules: [
-          { id: 'A', name: '¿Cómo podríamos…?', status: 'Bloqueado' },
-          { id: 'B', name: 'Explorar ideas', status: 'Bloqueado' },
-          { id: 'C', name: 'Elegir la mejor opción', status: 'Bloqueado' },
-          { id: 'D', name: 'Tarjetas de solución y prueba', status: 'Bloqueado' },
-        ],
-      },
-      {
-        number: 3,
-        name: 'Probar en pequeño',
-        status: 'Bloqueado',
-        progress: 0,
-        modules: [
-          { id: 'R', name: 'Experimentos', status: 'Bloqueado' },
-          { id: 'L', name: 'Tarjeta de aprendizaje', status: 'Bloqueado' },
-        ],
-        runs: [],
-      },
-      {
-        number: 4,
-        name: 'Contar la historia',
-        status: 'Bloqueado',
-        progress: 0,
-        modules: [
-          { id: 'S', name: 'Construcción del relato', status: 'Bloqueado' },
-          { id: 'O', name: 'Resumen ejecutivo', status: 'Bloqueado' },
-          { id: 'P', name: 'Presentación final', status: 'Bloqueado' },
-        ],
-      },
-    ],
-    team: [
-      { id: 'm1', name: 'Ana Rodríguez', email: 'participante@starteria.io', role: 'Owner', status: 'Activo', initials: 'AR' },
-      { id: 'm2', name: 'Miguel Torres', email: 'miguel@empresa.com', role: 'Editor', status: 'Activo', initials: 'MT' },
-      { id: 'm3', name: 'Sofía Vargas', email: 'sofia@empresa.com', role: 'Editor', status: 'Pendiente', initials: 'SV' },
-      { id: 'm3s', name: 'Roberto Jiménez', email: 'sponsor@starteria.io', role: 'Sponsor', status: 'Activo', initials: 'RJ' },
-      { id: 'm3sp', name: 'Sponsor Finanzas', email: 'sponsor-finanzas@empresa.com', role: 'Sponsor', status: 'Pendiente', initials: 'SF' },
-    ],
-    evidence: [
-      { id: 'e1', name: 'Mapa_proceso_actual.pdf', type: 'PDF', size: '2.4 MB', stepRef: 1, moduleRef: 'A', owner: 'Ana Rodríguez', date: '2025-02-15', status: 'Verificada' },
-      { id: 'e2', name: 'Entrevista_RRHH_video.mp4', type: 'Video', size: '45 MB', stepRef: 1, moduleRef: 'A', owner: 'Miguel Torres', date: '2025-02-17', status: 'Subida' },
-      { id: 'e3', name: 'Dashboard_metricas.png', type: 'Imagen', size: '890 KB', stepRef: 1, moduleRef: 'B', owner: 'Ana Rodríguez', date: '2025-02-18', status: 'Verificada' },
-    ],
-    createdAt: '2025-02-01',
-    lastModified: '2025-02-19T10:30:00Z',
-  },
-  {
-    id: 'p2',
-    name: 'Portal de Reportes Automáticos',
-    description: 'Automatizar la generación de reportes operativos que hoy toma 8 horas semanales.',
-    status: 'Sesión experto pendiente',
-    currentStep: 2,
-    cohort: 'Cohorte 2025-A',
-    riskLevel: 'Bajo',
-    mentorCredits: 2,
-    step0Status: 'Completado',
-    sponsorTouchpoints: [
-      {
-        id: 'step0',
-        title: 'Alineamiento inicial',
-        stageLabel: 'Step 0',
-        status: 'Cerrado',
-        date: '2025-01-18',
-        actionLabel: 'Validar contexto inicial',
-      },
-      {
-        id: 'step2',
-        title: 'Revisión estratégica',
-        stageLabel: 'Cierre Step 2',
-        status: 'Sesión agendada',
-        date: '2025-02-20',
-        actionLabel: 'Dar señal estratégica',
-      },
-      {
-        id: 'step4',
-        title: 'Presentación final',
-        stageLabel: 'Step 4',
-        status: 'Pendiente de convocatoria',
-        actionLabel: 'Preparar decisión final',
-      },
-    ],
-    sponsorComments: [],
-    step0Data: {
-      nombreParticipante: 'Pedro Alvarado',
-      rolArea: 'Jefe de Análisis · Finanzas',
-      origen: 'problema',
-      quePasaQueQuieres: 'Generamos reportes operativos manualmente cada semana. Eso toma 8 horas de un analista y retrasa la toma de decisiones del directorio.',
-      impacta: ['Gerencias', 'Finanzas'],
-      parteProceso: 'durante',
-      impacto3meses: 'productividad',
-      respaldo: 'datos',
-      quienEscuchar: 'El Director Financiero, quien lidera la iniciativa de eficiencia operativa.',
-      siMinimo: ['Reunión 30 min con el decisor correcto', 'Acceso a datos'],
-    },
-    steps: [
-      {
-        number: 1,
-        name: 'Claridad en el desafío',
-        status: 'Aprobado',
-        progress: 100,
-        modules: [
-          { id: 'A', name: 'Proceso actual', status: 'Aprobado' },
-          { id: 'B', name: 'Medición e impacto', status: 'Aprobado' },
-          { id: 'C', name: 'Captura de informacion y sintesis', status: 'Aprobado' },
-        ],
-        feedbackIA: {
-          status: 'Aprobado',
-          summary: 'El análisis del proceso actual está bien documentado. Las métricas son sólidas y tienen contexto real.',
-          goodPoints: ['Caso real bien contextualizado con recorrido completo', 'Métrica operativa con línea base definida (8 horas semanales)', 'Hallazgos del campo consolidados con claridad'],
-          missing: [],
-          actions: [],
-          questions: [],
-          timestamp: '2025-02-10T09:00:00Z',
-        },
-        mentorSession: { id: 's1', mentor: 'Carlos Méndez', date: '2025-02-12', status: 'Realizada', result: 'Aprobado', comments: 'Excelente claridad del problema. Avanzar.' },
-      },
-      {
-        number: 2,
-        name: 'Diseñar solución',
-        status: 'Sesión experto pendiente',
-        progress: 85,
-        modules: [
-          { id: 'A', name: '¿Cómo podríamos…?', status: 'Aprobado' },
-          { id: 'B', name: 'Explorar ideas', status: 'Aprobado' },
-          { id: 'C', name: 'Elegir la mejor opción', status: 'Aprobado' },
-          { id: 'D', name: 'Tarjetas de solución y prueba', status: 'Aprobado' },
-        ],
-        feedbackIA: {
-          status: 'Aprobado',
-          summary: 'La solución propuesta es coherente con el desafío identificado.',
-          goodPoints: ['Pregunta "¿Cómo podríamos…?" bien alineada al reto', '12 ideas generadas y bien agrupadas', 'Matriz de decisión completa'],
-          missing: [],
-          actions: [],
-          questions: ['¿Cómo validarán la hipótesis con usuarios reales antes del experimento?'],
-          timestamp: '2025-02-18T14:00:00Z',
-        },
-        mentorSession: { id: 's2', mentor: 'Carlos Méndez', status: 'Pendiente agendar' },
-      },
-      {
-        number: 3,
-        name: 'Probar en pequeño',
-        status: 'Bloqueado',
-        progress: 0,
-        modules: [
-          { id: 'R', name: 'Experimentos', status: 'Bloqueado' },
-          { id: 'L', name: 'Tarjeta de aprendizaje', status: 'Bloqueado' },
-        ],
-        runs: [],
-      },
-      {
-        number: 4,
-        name: 'Contar la historia',
-        status: 'Bloqueado',
-        progress: 0,
-        modules: [
-          { id: 'S', name: 'Construcción del relato', status: 'Bloqueado' },
-          { id: 'O', name: 'Resumen ejecutivo', status: 'Bloqueado' },
-          { id: 'P', name: 'Presentación final', status: 'Bloqueado' },
-        ],
-      },
-    ],
-    team: [
-      { id: 'm4', name: 'Pedro Alvarado', email: 'pedro@empresa.com', role: 'Owner', status: 'Activo', initials: 'PA' },
-      { id: 'm5', name: 'Claudia Ruiz', email: 'claudia@empresa.com', role: 'Editor', status: 'Activo', initials: 'CR' },
-      { id: 'm5s', name: 'Roberto Jiménez', email: 'sponsor@starteria.io', role: 'Sponsor', status: 'Activo', initials: 'RJ' },
-    ],
-    evidence: [],
-    createdAt: '2025-01-15',
-    lastModified: '2025-02-18T16:00:00Z',
-  },
-  {
-    id: 'p3',
-    name: 'Reducir Tiempo de Cierre Mensual',
-    description: 'El cierre contable tarda 10 días hábiles. El objetivo es reducirlo a 3 días.',
-    status: 'Draft',
-    currentStep: 1,
-    cohort: 'Cohorte 2025-A',
-    riskLevel: 'Alto',
-    mentorCredits: 3,
-    step0Status: 'No iniciado',
-    sponsorTouchpoints: DEFAULT_SPONSOR_TOUCHPOINTS,
-    sponsorComments: [],
-    steps: [
-      {
-        number: 1,
-        name: 'Claridad en el desafío',
-        status: 'No iniciado',
-        progress: 0,
-        modules: [
-          { id: 'A', name: 'Proceso actual', status: 'Draft' },
-          { id: 'B', name: 'Medición e impacto', status: 'Bloqueado' },
-          { id: 'C', name: 'Captura de informacion y sintesis', status: 'Bloqueado' },
-        ],
-      },
-      {
-        number: 2,
-        name: 'Diseñar solución',
-        status: 'Bloqueado',
-        progress: 0,
-        modules: [
-          { id: 'A', name: '¿Cómo podríamos…?', status: 'Bloqueado' },
-          { id: 'B', name: 'Explorar ideas', status: 'Bloqueado' },
-          { id: 'C', name: 'Elegir la mejor opción', status: 'Bloqueado' },
-          { id: 'D', name: 'Tarjetas de solución y prueba', status: 'Bloqueado' },
-        ],
-      },
-      {
-        number: 3,
-        name: 'Probar en pequeño',
-        status: 'Bloqueado',
-        progress: 0,
-        modules: [
-          { id: 'R', name: 'Experimentos', status: 'Bloqueado' },
-          { id: 'L', name: 'Tarjeta de aprendizaje', status: 'Bloqueado' },
-        ],
-        runs: [],
-      },
-      {
-        number: 4,
-        name: 'Contar la historia',
-        status: 'Bloqueado',
-        progress: 0,
-        modules: [
-          { id: 'S', name: 'Construcción del relato', status: 'Bloqueado' },
-          { id: 'O', name: 'Resumen ejecutivo', status: 'Bloqueado' },
-          { id: 'P', name: 'Presentación final', status: 'Bloqueado' },
-        ],
-      },
-    ],
-    team: [
-      { id: 'm6', name: 'Ana Rodríguez', email: 'participante@starteria.io', role: 'Owner', status: 'Activo', initials: 'AR' },
-    ],
-    evidence: [],
-    createdAt: '2025-02-19',
-    lastModified: '2025-02-19T08:00:00Z',
-  },
-];
-
 const AppContext = createContext<AppContextType | null>(null);
+
+function enrichProject(raw: any, currentUser: User | null): Project {
+  const steps = Array.isArray(raw.steps)
+    ? raw.steps.map((s: any, idx: number) => ({
+        ...s,
+        number: s.number ?? s.stepNumber ?? idx,
+        name: s.name ?? s.title ?? `Paso ${idx}`,
+        status: s.status ?? 'No iniciado',
+        progress: typeof s.progress === 'number' ? s.progress : 0,
+        modules: Array.isArray(s.modules)
+          ? s.modules.map((m: any) => ({ ...m, name: m.name ?? m.title ?? '' }))
+          : [],
+      }))
+    : [];
+
+  const capitalize = (r: string) =>
+    r ? r.charAt(0).toUpperCase() + r.slice(1).toLowerCase() : 'Editor';
+
+  let team: TeamMember[] = Array.isArray(raw.team)
+    ? raw.team.map((m: any) => ({
+        id: m.id ?? `m${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: m.name ?? m.email?.split('@')[0] ?? '',
+        email: m.email ?? '',
+        role: capitalize(m.role ?? 'editor') as TeamMemberRole,
+        status: (m.status ?? 'Activo') as TeamMemberStatus,
+        initials:
+          m.initials ?? (m.name ?? m.email ?? '').toString().slice(0, 2).toUpperCase(),
+      }))
+    : [];
+
+  if (team.length === 0 && raw.ownerId && currentUser && raw.ownerId === currentUser.id) {
+    team = [
+      {
+        id: currentUser.id,
+        name: currentUser.name,
+        email: currentUser.email,
+        role: 'Owner',
+        status: 'Activo',
+        initials: currentUser.initials,
+      },
+    ];
+  }
+
+  return {
+    ...raw,
+    steps,
+    team,
+    evidence: Array.isArray(raw.evidence) ? raw.evidence : [],
+    sponsorTouchpoints: raw.sponsorTouchpoints ?? DEFAULT_SPONSOR_TOUCHPOINTS,
+    sponsorComments: Array.isArray(raw.sponsorComments) ? raw.sponsorComments : [],
+    lastModified: raw.lastModified ?? raw.updatedAt ?? new Date().toISOString(),
+    riskLevel: raw.riskLevel ?? 'Bajo',
+    mentorCredits: typeof raw.mentorCredits === 'number' ? raw.mentorCredits : 3,
+    step0Status: raw.step0Status ?? 'No iniciado',
+  } as unknown as Project;
+}
 
 const BACKEND_TO_FRONTEND_ROLE: Record<string, Role> = {
   participante: 'owner',
@@ -645,15 +330,15 @@ const BACKEND_TO_FRONTEND_ROLE: Record<string, Role> = {
 };
 
 function mapBackendUser(raw: AuthUser): User {
-  const mockMatch = getKnownUserByEmail(raw.email);
+  const rawAny = raw as AuthUser & { cohortCode?: string | null };
   return {
     id: raw.id,
     name: raw.name,
     email: raw.email,
     role: BACKEND_TO_FRONTEND_ROLE[raw.role] ?? 'owner',
     initials: raw.initials || inferInitials(raw.name),
-    skills: mockMatch?.skills ?? [],
-    cohort: raw.cohort ?? mockMatch?.cohort,
+    skills: [],
+    cohort: rawAny.cohortCode ?? raw.cohort ?? '',
   };
 }
 
@@ -670,8 +355,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
-  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+
+  const loadProjects = async (currentUser: User | null) => {
+    try {
+      setProjectsLoading(true);
+      const list = await projectService.list();
+      setProjects(list.map(p => enrichProject(p, currentUser)));
+    } catch {
+      setProjects([]);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -682,8 +380,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (getAccessToken()) {
           const me = await authService.getMe();
           if (cancelled) return;
-          setUser(mapBackendUser(me));
+          const mappedUser = mapBackendUser(me);
+          setUser(mappedUser);
           setIsAuthenticated(true);
+          if (cancelled) return;
+          await loadProjects(mappedUser);
         }
       } catch {
         // no session — stay logged out
@@ -699,8 +400,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const result = await authService.login(email, password);
-      setUser(mapBackendUser(result.user));
+      const mappedUser = mapBackendUser(result.user);
+      setUser(mappedUser);
       setIsAuthenticated(true);
+      await loadProjects(mappedUser);
       return { success: true };
     } catch (err) {
       return { success: false, error: parseAuthError(err, 'No pudimos iniciar sesión. Intenta de nuevo.') };
@@ -710,8 +413,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const register = async (name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const result = await authService.register(name, email, password);
-      setUser(mapBackendUser(result.user));
+      const mappedUser = mapBackendUser(result.user);
+      setUser(mappedUser);
       setIsAuthenticated(true);
+      await loadProjects(mappedUser);
       return { success: true };
     } catch (err) {
       return { success: false, error: parseAuthError(err, 'No pudimos crear la cuenta. Intenta de nuevo.') };
@@ -830,75 +535,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const createProject = (name: string, description?: string, teamMembers: TeamMember[] = []): Project => {
-    const newProject: Project = {
-      id: `p${Date.now()}`,
-      name,
-      description,
-      status: 'Draft',
-      currentStep: 1,
-      step0Status: 'No iniciado',
-      mentorCredits: 3,
-      cohort: user?.cohort,
-      riskLevel: 'Bajo',
-      sponsorTouchpoints: DEFAULT_SPONSOR_TOUCHPOINTS,
-      sponsorComments: [],
-      steps: [
-        {
-          number: 1, name: 'Claridad en el desafío', status: 'No iniciado', progress: 0, modules: [
-            { id: 'A', name: 'Proceso actual', status: 'Draft' },
-            { id: 'B', name: 'Medición e impacto', status: 'Bloqueado' },
-            { id: 'C', name: 'Captura de informacion y sintesis', status: 'Bloqueado' },
-          ]
-        },
-        {
-          number: 2, name: 'Diseñar solución', status: 'Bloqueado', progress: 0, modules: [
-            { id: 'A', name: '¿Cómo podríamos…?', status: 'Bloqueado' },
-            { id: 'B', name: 'Explorar ideas', status: 'Bloqueado' },
-            { id: 'C', name: 'Elegir la mejor opción', status: 'Bloqueado' },
-            { id: 'D', name: 'Tarjetas de solución y prueba', status: 'Bloqueado' },
-          ]
-        },
-        {
-          number: 3, name: 'Probar en pequeño', status: 'Bloqueado', progress: 0, modules: [
-            { id: 'R', name: 'Experimentos', status: 'Bloqueado' },
-            { id: 'L', name: 'Tarjeta de aprendizaje', status: 'Bloqueado' },
-          ], runs: []
-        },
-        {
-          number: 4, name: 'Contar la historia', status: 'Bloqueado', progress: 0, modules: [
-            { id: 'S', name: 'Construcción del relato', status: 'Bloqueado' },
-            { id: 'O', name: 'Resumen ejecutivo', status: 'Bloqueado' },
-            { id: 'P', name: 'Presentación final', status: 'Bloqueado' },
-          ]
-        },
-      ],
-      team: user
-        ? [
-            { id: user.id, name: user.name, email: user.email, role: 'Owner', status: 'Activo', initials: user.initials },
-            ...teamMembers,
-          ]
-        : teamMembers,
-      evidence: [],
-      createdAt: new Date().toISOString().split('T')[0],
-      lastModified: new Date().toISOString(),
-    };
-    setProjects(prev => [newProject, ...prev]);
-    return newProject;
+  const createProject = async (
+    name: string,
+    description?: string,
+    teamMembers: TeamMember[] = []
+  ): Promise<{ success: true; project: Project } | { success: false; error: string }> => {
+    try {
+      const response = await projectService.create({ name, description });
+      const ownerMember: TeamMember | null = user
+        ? { id: user.id, name: user.name, email: user.email, role: 'Owner', status: 'Activo', initials: user.initials }
+        : null;
+      const merged = {
+        ...response,
+        sponsorTouchpoints: DEFAULT_SPONSOR_TOUCHPOINTS,
+        sponsorComments: [],
+        team: ownerMember ? [ownerMember, ...teamMembers] : teamMembers,
+        evidence: (response.evidence as Evidence[] | undefined) ?? [],
+        lastModified: (response.lastModified as string | undefined) ?? new Date().toISOString(),
+      } as unknown as Project;
+      setProjects(prev => [merged, ...prev]);
+      return { success: true, project: merged };
+    } catch (err) {
+      return { success: false, error: parseAuthError(err, 'No pudimos guardar tu proyecto. Intenta de nuevo.') };
+    }
   };
 
   const setUserRole = (role: Role) => {
-    if (!user) return;
-    const matchedDemoUser = Object.values(MOCK_USERS).find(entry => entry.user.role === role)?.user;
-    if (matchedDemoUser) {
-      setUser(matchedDemoUser);
-      return;
-    }
-    setUser({ ...user, role });
+    setUser(prev => prev ? { ...prev, role } : prev);
   };
 
   return (
-    <AppContext.Provider value={{ user, isAuthenticated, authLoading, projects, currentProject, login, register, logout, setCurrentProject, updateProject, createProject, setUserRole, updateStep0, getProjectMember, canAccessProject, markSponsorInvitationSent, acceptSponsorInvitation, updateSponsorTouchpoint, addSponsorComment }}>
+    <AppContext.Provider value={{ user, isAuthenticated, authLoading, projects, projectsLoading, currentProject, login, register, logout, setCurrentProject, updateProject, createProject, setUserRole, updateStep0, getProjectMember, canAccessProject, markSponsorInvitationSent, acceptSponsorInvitation, updateSponsorTouchpoint, addSponsorComment }}>
       {children}
     </AppContext.Provider>
   );

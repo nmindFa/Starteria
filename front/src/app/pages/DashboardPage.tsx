@@ -71,11 +71,11 @@ function getSponsorMilestone(project: Project) {
 }
 
 export function DashboardPage() {
-  const { projects, setCurrentProject, user, getProjectMember, acceptSponsorInvitation } = useApp();
+  const { projects, projectsLoading, setCurrentProject, user, getProjectMember, acceptSponsorInvitation } = useApp();
   const { challenges, strategicFronts } = usePortfolioLead();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const [loading] = useState(false);
+  const loading = projectsLoading;
 
   const isOwner = user?.role === 'owner';
   const isSponsor = user?.role === 'sponsor';

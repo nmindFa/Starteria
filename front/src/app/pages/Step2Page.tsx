@@ -8,7 +8,6 @@ import {
 import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
 import { BannerPorDefinir } from '../components/BannerPorDefinir';
-import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
 import { EvidenceUploader } from '../components/EvidenceUploader';
 import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
 import { StepWorkspaceShell } from '../components/layout/StepWorkspaceShell';
@@ -82,16 +81,6 @@ const PROTOTYPE_FIRST_VERSION_OPTIONS = [
   'Una demo visual o mockup',
   'Algo funcional sencillo',
 ] as const;
-
-const MOCK_FEEDBACK_S2 = {
-  status: 'Aprobado' as const,
-  summary: 'Excelente trabajo de divergencia y convergencia. El HMW está bien alineado con el reto identificado en Step 1 y la Matriz DVF es sólida.',
-  goodPoints: ['HMW claro y accionable', '12 ideas generadas con buena diversidad', 'Matriz DVF con scoring justificado', 'Solution Card y Test Card completas'],
-  missing: [],
-  actions: [],
-  questions: ['¿Cómo validarán la hipótesis de valor antes del experimento piloto?'],
-  timestamp: '2025-02-19T11:00:00Z',
-};
 
 const cleanSentence = (value?: string, fallback = 'Sin definir') => {
   const text = value?.trim();
@@ -2875,7 +2864,13 @@ export function Step2Page() {
                       />
                     </div>
 
-                    {hasFeedback && <FeedbackIAPanel feedback={MOCK_FEEDBACK_S2} />}
+                    {hasFeedback && (
+                      <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                        <Sparkles className="mx-auto text-slate-400 mb-2" size={24} />
+                        <p className="text-sm text-slate-600 mb-1" style={{ fontWeight: 600 }}>Aún no hay análisis IA</p>
+                        <p className="text-xs text-slate-500">Solicita la revisión IA para obtener feedback del experimento.</p>
+                      </div>
+                    )}
 
                     {hasFeedback && (
                       sessionBooked ? (
@@ -3286,9 +3281,15 @@ export function Step2Page() {
                 </button>
               </div>
 
-              {hasFeedback && <FeedbackIAPanel feedback={MOCK_FEEDBACK_S2} />}
+              {hasFeedback && (
+                <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                  <Sparkles className="mx-auto text-slate-400 mb-2" size={24} />
+                  <p className="text-sm text-slate-600 mb-1" style={{ fontWeight: 600 }}>Aún no hay análisis IA</p>
+                  <p className="text-xs text-slate-500">Solicita la revisión IA para obtener feedback del Step 2.</p>
+                </div>
+              )}
 
-              {hasFeedback && MOCK_FEEDBACK_S2.status === 'Aprobado' && (
+              {hasFeedback && (
                 sessionBooked ? (
                   /* ── Estado post-agendar ── */
                   <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4">

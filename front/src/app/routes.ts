@@ -2,6 +2,7 @@ import { createBrowserRouter, redirect } from 'react-router';
 import { RootLayout } from './layout/RootLayout';
 import { AppLayout } from './layout/AppLayout';
 import { PortfolioLeadLayout } from './layout/PortfolioLeadLayout';
+import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 import { AuthPage } from './pages/AuthPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { CreateProjectPage } from './pages/CreateProjectPage';
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
     // RootLayout provides AppProvider for every route in the tree,
     // keeping context inside the React Router rendering context.
     Component: RootLayout,
+    ErrorBoundary: RouteErrorBoundary,
     children: [
       {
         path: '/auth',

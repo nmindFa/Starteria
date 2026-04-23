@@ -20,6 +20,7 @@ export function CreateProjectPage() {
   const [sponsorError, setSponsorError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const validateEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
@@ -48,9 +49,9 @@ export function CreateProjectPage() {
 
   const handleCreate = async () => {
     if (!name.trim()) return;
+    setCreateError(null);
     setSaving(true);
-    await new Promise(r => setTimeout(r, 600));
-    const project = createProject(
+    const result = await createProject(
       name.trim(),
       description.trim() || undefined,
       [
@@ -58,8 +59,13 @@ export function CreateProjectPage() {
         ...sponsorInvites.map(invite => createTeamMember(invite.email, 'Sponsor', 'Pendiente')),
       ]
     );
-    setCurrentProject(project);
-    navigate(`/projects/${project.id}`);
+    if (!result.success) {
+      setCreateError(result.error);
+      setSaving(false);
+      return;
+    }
+    setCurrentProject(result.project);
+    navigate(`/projects/${result.project.id}`);
   };
 
   return (
@@ -100,7 +106,7 @@ export function CreateProjectPage() {
               <input
                 type="text"
                 value={name}
-                onChange={e => setName(e.target.value)}
+                onChange={e => { setName(e.target.value); setCreateError(null); }}
                 placeholder="Ej. Reducir tiempo de onboarding de empleados"
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
                 autoFocus
@@ -263,6 +269,13 @@ export function CreateProjectPage() {
               <div className="flex items-center gap-2 p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
                 <Users size={16} className="text-slate-400" />
                 <p className="text-sm text-slate-400">Puedes invitar personas después desde la configuración del proyecto.</p>
+              </div>
+            )}
+
+            {createError && (
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                <AlertCircle size={14} className="text-red-500 mt-0.5 shrink-0" />
+                <p className="text-sm text-red-700">{createError}</p>
               </div>
             )}
 

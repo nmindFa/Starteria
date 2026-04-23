@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   ArrowLeft, Sparkles, CheckCircle2, Info, Calendar, CreditCard,
@@ -69,42 +69,6 @@ const SI_MINIMO_OPTIONS = [
   'Otro',
 ];
 
-// ─── Mock IA feedback (para MentorVirtualPanel) ───────────────────────────────
-
-const MOCK_IA_FEEDBACK = {
-  claro: [
-    'Describiste el origen de tu iniciativa con claridad.',
-    'Identificaste a quién impacta directamente.',
-    'El respaldo que tienes da un punto de partida concreto.',
-  ],
-  faltaPrecisar: [
-    'El campo "qué está pasando" puede ser más específico: ¿cuántas personas? ¿con qué frecuencia?',
-    'El impacto a 3 meses se puede fortalecer con un número o dato.',
-    'No queda claro si el "sí mínimo" ya fue conversado con alguien.',
-    '"Quién debería escuchar esto" puede ser más específico (nombre o cargo exacto).',
-  ],
-  preguntas: [
-    '¿Cuántas personas se ven afectadas por semana?',
-    '¿Alguien ya intentó resolver esto antes? ¿Qué pasó?',
-    '¿El decisor que mencionas tiene autoridad real para aprobar?',
-    '¿Tienes acceso a datos para cuantificar el impacto hoy?',
-  ],
-  siguienteAccion:
-    'Agrega un número o dato concreto a tu descripción para darle más fuerza a tu iniciativa.',
-};
-
-// ─── Mock IA analysis ─────────────────────────────────────────────────────────
-
-const MOCK_IA_ANALYSIS = {
-  enunciado: 'El proceso de incorporación de nuevos empleados se rompe en la etapa de alta en sistemas de TI, causando hasta 10 días de espera sin productividad, porque no existe un tiempo objetivo ni priorización formal para este tipo de solicitudes.',
-  impactoPrincipal: 'Productividad y clima laboral — riesgo de rotación temprana si no se aborda en los próximos 3 meses.',
-  aquienImpacta: 'Empleados nuevos (incorporación) · TI · Operaciones',
-  etapaProceso: 'Durante (proceso de incorporación)',
-  respaldoDisponible: 'Datos internos — registros de RRHH con tiempos de incorporación 2024.',
-  siMinimo: 'Reunión de 30 min con el decisor correcto + acceso a datos de TI para cuantificar el problema.',
-  proximoPaso: 'Documentar el proceso actual en el Módulo A del Paso 1, enfocando en el paso de alta en sistemas de TI.',
-};
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function Step0Page() {
@@ -126,6 +90,16 @@ export function Step0Page() {
     quienEscuchar: project?.step0Data?.quienEscuchar ?? '',
     siMinimo: project?.step0Data?.siMinimo ?? [],
   });
+
+  const analysisPreview = useMemo(() => ({
+    enunciado: form.quePasaQueQuieres || '',
+    impactoPrincipal: IMPACTO_3M_OPTIONS.find(o => o.value === form.impacto3meses)?.label || '',
+    aquienImpacta: form.impacta?.join(' · ') || '',
+    etapaProceso: PARTE_PROCESO_OPTIONS.find(o => o.value === form.parteProceso)?.label || '',
+    respaldoDisponible: RESPALDO_OPTIONS.find(o => o.value === form.respaldo)?.label || '',
+    siMinimo: form.siMinimo?.join(', ') || '',
+    proximoPaso: form.quienEscuchar || '',
+  }), [form]);
 
   const [showIAPanel, setShowIAPanel] = useState(false);
   const [iaLoading, setIaLoading] = useState(false);
@@ -208,15 +182,15 @@ export function Step0Page() {
       `Proyecto: ${project?.name}`,
       `Participante: ${form.nombreParticipante} · ${form.rolArea}`,
       '---',
-      `Enunciado del reto: ${MOCK_IA_ANALYSIS.enunciado}`,
-      `Impacto principal: ${MOCK_IA_ANALYSIS.impactoPrincipal}`,
-      `A quién impacta: ${MOCK_IA_ANALYSIS.aquienImpacta}`,
-      `Etapa: ${MOCK_IA_ANALYSIS.etapaProceso}`,
-      `Respaldo: ${MOCK_IA_ANALYSIS.respaldoDisponible}`,
-      `Sí mínimo: ${MOCK_IA_ANALYSIS.siMinimo}`,
-      `Próximo paso: ${MOCK_IA_ANALYSIS.proximoPaso}`,
+      `Enunciado del reto: ${analysisPreview.enunciado}`,
+      `Impacto principal: ${analysisPreview.impactoPrincipal}`,
+      `A quién impacta: ${analysisPreview.aquienImpacta}`,
+      `Etapa: ${analysisPreview.etapaProceso}`,
+      `Respaldo: ${analysisPreview.respaldoDisponible}`,
+      `Sí mínimo: ${analysisPreview.siMinimo}`,
+      `Próximo paso: ${analysisPreview.proximoPaso}`,
     ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const blob = new Blob([lines.filter(line => !line.endsWith(': ')).join('\n')], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -227,14 +201,14 @@ export function Step0Page() {
 
   const handleCopyAnalisis = () => {
     const text = [
-      `Reto: ${MOCK_IA_ANALYSIS.enunciado}`,
-      `Impacto: ${MOCK_IA_ANALYSIS.impactoPrincipal}`,
-      `A quién: ${MOCK_IA_ANALYSIS.aquienImpacta}`,
-      `Etapa: ${MOCK_IA_ANALYSIS.etapaProceso}`,
-      `Respaldo: ${MOCK_IA_ANALYSIS.respaldoDisponible}`,
-      `Sí mínimo: ${MOCK_IA_ANALYSIS.siMinimo}`,
-      `Próximo paso: ${MOCK_IA_ANALYSIS.proximoPaso}`,
-    ].join('\n');
+      `Reto: ${analysisPreview.enunciado}`,
+      `Impacto: ${analysisPreview.impactoPrincipal}`,
+      `A quién: ${analysisPreview.aquienImpacta}`,
+      `Etapa: ${analysisPreview.etapaProceso}`,
+      `Respaldo: ${analysisPreview.respaldoDisponible}`,
+      `Sí mínimo: ${analysisPreview.siMinimo}`,
+      `Próximo paso: ${analysisPreview.proximoPaso}`,
+    ].filter(line => !line.endsWith(': ')).join('\n');
     navigator.clipboard.writeText(text);
     setCopyMsg(true);
     setTimeout(() => setCopyMsg(false), 2000);
@@ -812,12 +786,12 @@ export function Step0Page() {
                           {/* Bullets del análisis */}
                           <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
                             {[
-                              { label: 'Enunciado claro del reto', value: MOCK_IA_ANALYSIS.enunciado },
-                              { label: 'Impacto principal (3 meses)', value: MOCK_IA_ANALYSIS.impactoPrincipal },
-                              { label: 'A quién impacta · Etapa', value: `${MOCK_IA_ANALYSIS.aquienImpacta} · ${MOCK_IA_ANALYSIS.etapaProceso}` },
-                              { label: 'Respaldo disponible', value: MOCK_IA_ANALYSIS.respaldoDisponible },
-                              { label: '"Sí mínimo" recomendado', value: MOCK_IA_ANALYSIS.siMinimo },
-                              { label: 'Próximo paso recomendado', value: MOCK_IA_ANALYSIS.proximoPaso },
+                              { label: 'Enunciado claro del reto', value: analysisPreview.enunciado },
+                              { label: 'Impacto principal (3 meses)', value: analysisPreview.impactoPrincipal },
+                              { label: 'A quién impacta · Etapa', value: `${analysisPreview.aquienImpacta} · ${analysisPreview.etapaProceso}` },
+                              { label: 'Respaldo disponible', value: analysisPreview.respaldoDisponible },
+                              { label: '"Sí mínimo" recomendado', value: analysisPreview.siMinimo },
+                              { label: 'Próximo paso recomendado', value: analysisPreview.proximoPaso },
                             ].map((item, i) => (
                               <div key={i} className="px-4 py-3">
                                 <p className="text-xs text-slate-400 mb-0.5" style={{ fontWeight: 600, letterSpacing: '0.02em' }}>
@@ -1005,7 +979,6 @@ export function Step0Page() {
         open={showIAPanel}
         onClose={() => setShowIAPanel(false)}
         context="Paso 0 · Punto de partida"
-        feedback={MOCK_IA_FEEDBACK}
         loading={iaLoading}
       />
 

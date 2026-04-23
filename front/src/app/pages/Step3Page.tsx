@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -11,6 +11,7 @@ import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
 import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
 import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
+import { useStepData } from '../hooks/useStepData';
 
 type ModuleId = 'A' | 'B' | 'C';
 type GoNoGoDecision = 'Go' | 'Iterar' | 'No-Go' | 'Pivote' | null;
@@ -84,27 +85,6 @@ interface TestCycle {
 }
 interface DeckSlide { titulo: string; bullets: string[] }
 
-// ── Mock / seed data ──────────────────────────────────────────────────────────
-const MOCK_FEEDBACK_S3 = {
-  status: 'Aprobado' as const,
-  summary: 'Los resultados superan el umbral establecido y los aprendizajes están bien documentados. El equipo tiene evidencia suficiente para tomar una decisión informada.',
-  goodPoints: ['Evidencia cuantitativa registrada', 'Umbral claramente comparado', 'Aprendizajes concretos y accionables', 'Decisión justificada con datos'],
-  missing: [],
-  actions: [],
-  questions: ['¿El perfil de los participantes es representativo del total de casos?'],
-  timestamp: '2025-03-01T11:00:00Z',
-};
-const MOCK_EVIDENCIAS: EvidenciaItem[] = [
-  { id: 'e1', tipo: 'Archivo', descripcion: 'Capturas de pantalla del formulario completo', fecha: '2025-02-24' },
-  { id: 'e2', tipo: 'Link', descripcion: 'Hoja de seguimiento en Google Sheets', fecha: '2025-02-25' },
-  { id: 'e3', tipo: 'Nota', descripcion: 'Observaciones del facilitador durante el piloto', fecha: '2025-02-26' },
-];
-const MOCK_TESTCARD = {
-  hipotesis: 'Si usamos un formulario unificado de solicitud de accesos, reduciremos el tiempo de alta en TI de 7 días a menos de 24 horas en el 80% de los casos.',
-  experimento: 'Piloto con 5 empleados nuevos usando el formulario de Google Forms conectado al equipo de TI.',
-  metrica: 'Tiempo formulario → accesos activos · Umbral go: ≤24h en ≥80% de casos',
-  evidencia: 'Timestamp del formulario + screenshot de accesos activos + encuesta empleado día 3',
-};
 const PREP_ITEMS = [
   'Tener el formulario de Google Forms configurado y compartido con TI',
   'Definir los 5 participantes del piloto (empleados que ingresan la próxima semana)',
@@ -162,48 +142,24 @@ const FORMATO_GUIDES: Record<string, ExperimentFormatGuide> = {
     nota: 'Úsalo cuando ya no solo quieres reacción, sino ver ejecución real.',
   },
 };
-const MOCK_COMPONENTES: Componente[] = [
-  { id: 'c1', nombre: 'Formulario de solicitud de accesos', proposito: 'Centralizar el pedido de accesos en una sola interfaz', canal: 'Google Forms', owner: 'Ana R.', link: 'https://forms.google.com/...', dod: 'Campos validados + notificación automática a TI', estado: 'Listo' },
-  { id: 'c2', nombre: 'Sheet de seguimiento TI', proposito: 'Registrar tiempos y resultados de cada caso', canal: 'Google Sheets', owner: 'TI', link: 'https://sheets.google.com/...', dod: 'Todas las columnas completas al cierre del piloto', estado: 'Listo' },
-];
-const MOCK_INSTRUMENTACION: InstrumentacionRow[] = [];
-const MOCK_BITACORA: EventoBitacora[] = [
-  { id: 'b1', fecha: '2025-02-24', hora: '09:15', accion: 'Se envió formulario al empleado #1 (Carlos M.)', responsable: 'Ana R.', nota: 'Primera prueba en vivo, todo OK' },
-  { id: 'b2', fecha: '2025-02-24', hora: '14:30', accion: 'TI confirmó accesos activos para empleado #1', responsable: 'TI', nota: 'Tiempo total: 5h 15min' },
-  { id: 'b3', fecha: '2025-02-25', hora: '10:00', accion: 'Empleado #2 (Sara G.) completó formulario', responsable: 'Ana R.', nota: 'Perfil estándar · sin incidencias' },
-];
-const MOCK_MALLA: MallaItem[] = [
-  { id: 'm1', tipo: 'idea', descripcion: '(Placeholder) Agregar selector de tipo de acceso para que TI priorice automáticamente.', evidencia: '', severidad: 'alto' },
-  { id: 'm2', tipo: 'critica', descripcion: '(Placeholder) El formulario no muestra confirmación visual al empleado después de enviarlo.', evidencia: '', severidad: 'medio' },
-  { id: 'm3', tipo: 'pregunta', descripcion: '(Placeholder) ¿Cómo manejamos los casos de accesos especiales fuera del catálogo estándar?', evidencia: '', severidad: '' },
-];
 const IA_SUGERENCIAS_NEXT = [
   { titulo: 'Iterar rápido', objetivo: 'Resolver el cuello de botella de accesos especiales sin rediseñar el formulario.', cambio: 'Agregar un campo "tipo de acceso especial" + flujo de escalado a TI Senior.', evidencia: 'Medir tiempo de resolución de casos especiales en 3 nuevos empleados.', duracion: '1 semana' },
   { titulo: 'Complementar con 2da validación', objetivo: 'Confirmar que el NPS >70 se mantiene con una muestra mayor.', cambio: 'Ampliar piloto a 10 empleados con diversidad de perfiles y áreas.', evidencia: 'Encuesta NPS + entrevista breve (5 min) con 3 participantes.', duracion: '2 semanas' },
   { titulo: 'Pivote parcial de canal', objetivo: 'Probar si WhatsApp reduce el tiempo de respuesta vs el formulario.', cambio: 'Reemplazar formulario por bot de WhatsApp (Respond.io) para el 50% de los casos.', evidencia: 'Comparar tiempos formulario vs WhatsApp en el siguiente ciclo.', duracion: '2 semanas' },
 ];
-const MOCK_DECK_SLIDES: DeckSlide[] = [
-  { titulo: 'El problema', bullets: ['(Placeholder) Nuevos empleados tardaban 7–21 días en tener accesos activos.', '(Placeholder) Costo: ~X horas de RRHH + TI por caso.', '(Placeholder) Impacto: primeras semanas sin productividad plena.'] },
-  { titulo: 'Nuestra hipótesis', bullets: ['(Placeholder) Si simplificamos la solicitud de accesos, reducimos el tiempo a ≤24h en el 80% de casos.', '(Placeholder) Suposición clave: TI puede comprometerse a responder en ese plazo.'] },
-  { titulo: 'El experimento', bullets: ['(Placeholder) Formulario Google Forms unificado + notificación automática a TI.', '(Placeholder) Piloto con 5 empleados que ingresaron la semana del 24 de febrero.', '(Placeholder) Métricas: tiempo de resolución + NPS día 3.'] },
-  { titulo: 'Resultados', bullets: ['(Placeholder) 4/5 casos resueltos en ≤24h (80% — umbral alcanzado).', '(Placeholder) NPS promedio: 82 (meta: >70).', '(Placeholder) 1 caso especial: resuelto en 36h tras escalado.'] },
-  { titulo: 'Decisión y aprendizajes', bullets: ['(Placeholder) Decisión: Go — escalamos el formulario al 100% de los ingresos.', '(Placeholder) Los accesos especiales necesitan un proceso paralelo.', '(Placeholder) TI está dispuesto a adoptar el proceso si hay automatización.'] },
-  { titulo: 'Próximo paso', bullets: ['(Placeholder) Integrar con RRHH desde el día 1 de contratación.', '(Placeholder) Explorar API de SAP para accesos pre-aprobados por perfil.', '(Placeholder) Definir SLA formal de ≤24h con TI para todos los ingresos.'] },
-];
-
 // ── Helper components ─────────────────────────────────────────────────────────
-const createInitialTestCycle = (): TestCycle => ({
+const createInitialTestCycle = (hipotesis: string = ''): TestCycle => ({
   id: 'testeo-1',
   nombre: 'Testeo 1',
   estado: 'En analisis',
-  queValidamos: MOCK_TESTCARD.hipotesis,
+  queValidamos: hipotesis,
   metricaPrincipal: 'Tiempo formulario -> accesos activos',
   criterioDecision: '<=24h en >=80% de los casos procesados',
   contextoPrueba: '5 empleados nuevos, perfiles estandar y 1 caso con accesos especiales, durante la semana del 24 de febrero.',
   versionProbada: 'Version base del experimento: formulario unificado en Google Forms con coordinacion manual con TI.',
-  evidencias: MOCK_EVIDENCIAS,
-  bitacora: MOCK_BITACORA,
-  hallazgos: MOCK_MALLA,
+  evidencias: [],
+  bitacora: [],
+  hallazgos: [],
   resultadoEsperado: 'Resolver al menos 4 de 5 casos en menos de 24 horas.',
   resultadoObservado: '4/5 casos resueltos en menos de 24 horas (80%).',
   aprendizaje: 'El formulario funciona bien para perfiles estandar, pero los accesos especiales siguen necesitando un camino aparte.',
@@ -423,6 +379,14 @@ export function Step3Page() {
   const location = useLocation();
   const project = projects.find(p => p.id === projectId);
 
+  const { data: step2Raw } = useStepData<any>(projectId ?? '', 2);
+  const testcard = useMemo(() => ({
+    hipotesis: (step2Raw as any)?.hipotesis ?? '',
+    experimento: (step2Raw as any)?.experimento ?? '',
+    metrica: (step2Raw as any)?.metrica ?? '',
+    evidencia: (step2Raw as any)?.evidencia ?? '',
+  }), [step2Raw]);
+
   const step2Status = project?.steps.find(s => s.number === 2)?.status;
   const step3Status = project?.steps.find(s => s.number === 3)?.status;
   const isUnlocked =
@@ -441,10 +405,10 @@ export function Step3Page() {
   const [moduloACompleto, setModuloACompleto] = useState(false);
 
   // S3A_Formato
-  const [formatoExp, setFormatoExp] = useState(inferFormatFromExperiment(MOCK_TESTCARD.experimento));
+  const [formatoExp, setFormatoExp] = useState(inferFormatFromExperiment(testcard.experimento));
 
   // S3A_Componentes
-  const [componentes, setComponentes] = useState<Componente[]>(MOCK_COMPONENTES);
+  const [componentes, setComponentes] = useState<Componente[]>([]);
   const [showComponenteModal, setShowComponenteModal] = useState(false);
   const [nuevoComp, setNuevoComp] = useState<Omit<Componente, 'id'>>({
     nombre: '', proposito: '', canal: '', owner: '', link: '', dod: '', estado: 'Pendiente',
@@ -466,7 +430,7 @@ export function Step3Page() {
   // ══════════════════════════════════════════════════════════════════════════
   // MODULE B STATE
   // ══════════════════════════════════════════════════════════════════════════
-  const [testCycles, setTestCycles] = useState<TestCycle[]>([createInitialTestCycle()]);
+  const [testCycles, setTestCycles] = useState<TestCycle[]>([createInitialTestCycle(testcard.hipotesis)]);
   const [activeCycleId, setActiveCycleId] = useState('testeo-1');
   const [cycleAbiertoId, setCycleAbiertoId] = useState<string | null>('testeo-1');
   const [showAdjuntarOverlay, setShowAdjuntarOverlay] = useState(false);
@@ -528,13 +492,13 @@ export function Step3Page() {
       return [
         createInstrumentationRow({
           dato: 'Tiempo entre el envío de la solicitud y la activación de accesos',
-          lineaBase: extractBaselineFromHypothesis(MOCK_TESTCARD.hipotesis),
-          metricaExito: extractSuccessMetric(MOCK_TESTCARD.metrica),
+          lineaBase: extractBaselineFromHypothesis(testcard.hipotesis),
+          metricaExito: extractSuccessMetric(testcard.metrica),
           fuente: 'Registro de solicitudes TI',
           comoCapturar: 'Comparando el momento de envío contra el momento de activación',
           dondeCapturar: 'Google Sheet del piloto',
           responsable: 'TI',
-          evidenciaEsperada: MOCK_TESTCARD.evidencia,
+          evidenciaEsperada: testcard.evidencia,
           frecuencia: 'En cada caso',
         }),
       ];
@@ -557,7 +521,7 @@ export function Step3Page() {
       id: `testeo-${nextNumber}`,
       nombre: `Testeo ${nextNumber}`,
       estado: 'Nuevo',
-      queValidamos: previousCycle?.siguientePaso || previousCycle?.queValidamos || MOCK_TESTCARD.hipotesis,
+      queValidamos: previousCycle?.siguientePaso || previousCycle?.queValidamos || testcard.hipotesis,
       metricaPrincipal: previousCycle?.metricaPrincipal || 'Define la metrica principal de este ciclo',
       criterioDecision: previousCycle?.criterioDecision || 'Define el umbral para decidir si mantienes, iteras o pivoteas',
       contextoPrueba: previousCycle?.siguienteCuando || '',
@@ -854,10 +818,10 @@ export function Step3Page() {
     const decisionsSeen = completedCycles.map(cycle => cycle.decision).filter(Boolean).join(' → ');
 
     setComparisonPlan([
-      { label: 'Hipótesis', value: cleanVisibleText(baseCycle?.queValidamos || MOCK_TESTCARD.hipotesis) || 'Aún no hay una hipótesis clara registrada en los testeos.' },
+      { label: 'Hipótesis', value: cleanVisibleText(baseCycle?.queValidamos || testcard.hipotesis) || 'Aún no hay una hipótesis clara registrada en los testeos.' },
       { label: 'Señal esperada', value: cleanVisibleText(baseCycle?.criterioDecision || umbral) || 'Aún no definiste la señal esperada para leer el resultado.' },
       { label: 'Muestra esperada', value: cleanVisibleText(baseCycle?.contextoPrueba || 'Revisa la muestra planeada desde el testeo inicial.') },
-      { label: 'Mecanismo de prueba', value: cleanVisibleText(baseCycle?.versionProbada || MOCK_TESTCARD.experimento) || 'Aún no queda claro qué mecanismo pusiste a prueba.' },
+      { label: 'Mecanismo de prueba', value: cleanVisibleText(baseCycle?.versionProbada || testcard.experimento) || 'Aún no queda claro qué mecanismo pusiste a prueba.' },
     ]);
 
     setComparisonReality([
@@ -982,10 +946,10 @@ export function Step3Page() {
                   </div>
                   <div className="space-y-1.5">
                     {[
-                      { label: 'Hipótesis', value: MOCK_TESTCARD.hipotesis },
-                      { label: 'Experimento', value: MOCK_TESTCARD.experimento },
-                      { label: 'Métrica + umbral go/no-go', value: MOCK_TESTCARD.metrica },
-                      { label: 'Evidencia a capturar', value: MOCK_TESTCARD.evidencia },
+                      { label: 'Hipótesis', value: testcard.hipotesis },
+                      { label: 'Experimento', value: testcard.experimento },
+                      { label: 'Métrica + umbral go/no-go', value: testcard.metrica },
+                      { label: 'Evidencia a capturar', value: testcard.evidencia },
                     ].map(({ label, value }) => (
                       <div key={label}>
                         <p className="text-xs text-violet-500" style={{ fontWeight: 600 }}>{label}</p>
@@ -1005,10 +969,10 @@ export function Step3Page() {
                   </div>
                   <div className="space-y-1.5">
                     {[
-                      { label: 'Hipótesis', value: MOCK_TESTCARD.hipotesis },
-                      { label: 'Experimento', value: MOCK_TESTCARD.experimento },
-                      { label: 'Métrica + umbral go/no-go', value: MOCK_TESTCARD.metrica },
-                      { label: 'Evidencia a capturar', value: MOCK_TESTCARD.evidencia },
+                      { label: 'Hipótesis', value: testcard.hipotesis },
+                      { label: 'Experimento', value: testcard.experimento },
+                      { label: 'Métrica + umbral go/no-go', value: testcard.metrica },
+                      { label: 'Evidencia a capturar', value: testcard.evidencia },
                     ].map(({ label, value }) => (
                       <div key={label}>
                         <p className="text-xs text-violet-500" style={{ fontWeight: 600 }}>{label}</p>
@@ -1331,13 +1295,18 @@ export function Step3Page() {
                   <div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
                   <p className="text-sm text-slate-500">Generando estructura de láminas con IA…</p>
                 </div>
+              ) : deckSlides.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <p className="text-sm text-slate-500 mb-3">Aún no generaste la historia. Pulsa "Generar deck" para empezar.</p>
+                  <button onClick={() => setDeckLoading(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm">Generar deck</button>
+                </div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-start gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-700 mb-3">
                     <span>ℹ️</span>
-                    <span>Estructura de <span style={{ fontWeight: 600 }}>{MOCK_DECK_SLIDES.length} láminas</span> generada en base a tu experimento. Revísala y ajústala antes de presentar.</span>
+                    <span>Estructura de <span style={{ fontWeight: 600 }}>{deckSlides.length} láminas</span> generada en base a tu experimento. Revísala y ajústala antes de presentar.</span>
                   </div>
-                  {MOCK_DECK_SLIDES.map((slide, i) => (
+                  {deckSlides.map((slide, i) => (
                     <div key={i} className="border border-slate-200 rounded-xl p-3">
                       <p className="text-xs text-slate-500 mb-1" style={{ fontWeight: 600 }}>Lámina {i + 1}</p>
                       <p className="text-sm text-slate-800 mb-2" style={{ fontWeight: 600 }}>{slide.titulo}</p>
@@ -1353,10 +1322,10 @@ export function Step3Page() {
                 </div>
               )}
             </div>
-            {!deckLoading && (
+            {!deckLoading && deckSlides.length > 0 && (
               <div className="flex gap-3 px-6 pb-5">
                 <button onClick={() => setShowDeckOverlay(false)} className="flex-1 border border-slate-200 text-slate-600 rounded-xl py-2.5 text-sm hover:bg-slate-50 transition-colors" style={{ fontWeight: 500 }}>Cancelar</button>
-                <button onClick={() => { setDeckAplicado(true); setDeckSlides(MOCK_DECK_SLIDES); setShowDeckOverlay(false); toast.success('Estructura aplicada a la card de Step 4'); }}
+                <button onClick={() => { setDeckAplicado(true); setShowDeckOverlay(false); toast.success('Estructura aplicada a la card de Step 4'); }}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm transition-colors" style={{ fontWeight: 500 }}>
                   Aplicar estructura
                 </button>
