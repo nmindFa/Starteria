@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: orlandogtp/starteria-backend:v2.0.1
+        image: orlandogtp/starteria-backend:v2.0.2
         imagePullPolicy: Always
         ports:
         - containerPort: 3001

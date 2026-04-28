@@ -1,4 +1,5 @@
 import api, { setAccessToken, getAccessToken } from './api';
+export type { AuthError, AuthErrorDetail, ApiErrorBody } from './api';
 
 export interface AuthUser {
   id: string;

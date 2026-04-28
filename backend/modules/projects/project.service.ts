@@ -119,13 +119,17 @@ export class ProjectService {
     });
 
     if (!project) {
-      throw AppError.notFound('Proyecto');
+      throw AppError.notFound('Proyecto', 'PROJECT_NOT_FOUND', {
+        hint: 'Verifica el ID o vuelve al listado.',
+      });
     }
 
     if (role !== 'admin' && role !== 'mentor') {
       const isMember = (project as any).teamMembers.some((m: any) => m.userId === userId);
       if (!isMember) {
-        throw AppError.forbidden('No tienes acceso a este proyecto');
+        throw AppError.forbidden('No tienes acceso a este proyecto.', 'PROJECT_ACCESS_DENIED', {
+          hint: 'Solicita acceso al owner del proyecto.',
+        });
       }
     }
 
@@ -223,7 +227,11 @@ export class ProjectService {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
-    if (!project) throw AppError.notFound('Proyecto');
+    if (!project) {
+      throw AppError.notFound('Proyecto', 'PROJECT_NOT_FOUND', {
+        hint: 'Verifica el ID o vuelve al listado.',
+      });
+    }
 
     await this.prisma.project.update({
       where: { id: projectId },

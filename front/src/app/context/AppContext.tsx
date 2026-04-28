@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { authService, AuthUser } from '../services/auth.service';
-import { initAuth, getAccessToken } from '../services/api';
+import { initAuth, getAccessToken, parseApiError, AuthError } from '../services/api';
 import * as projectService from '../services/projectService';
+
+export type { AuthError } from '../services/api';
 
 export type Role = 'owner' | 'mentor' | 'admin' | 'sponsor' | 'portfolio_lead';
 
@@ -181,8 +183,8 @@ interface AppContextType {
   projects: Project[];
   projectsLoading: boolean;
   currentProject: Project | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: AuthError }>;
+  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: AuthError }>;
   logout: () => Promise<void>;
   setCurrentProject: (project: Project | null) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
@@ -342,15 +344,6 @@ function mapBackendUser(raw: AuthUser): User {
   };
 }
 
-function parseAuthError(err: unknown, fallback: string): string {
-  const maybe = err as { response?: { data?: { message?: string; error?: { message?: string } } } };
-  return (
-    maybe?.response?.data?.error?.message ??
-    maybe?.response?.data?.message ??
-    fallback
-  );
-}
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -397,7 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: AuthError }> => {
     try {
       const result = await authService.login(email, password);
       const mappedUser = mapBackendUser(result.user);
@@ -406,11 +399,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await loadProjects(mappedUser);
       return { success: true };
     } catch (err) {
-      return { success: false, error: parseAuthError(err, 'No pudimos iniciar sesión. Intenta de nuevo.') };
+      return { success: false, error: parseApiError(err) };
     }
   };
 
-  const register = async (name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const register = async (name: string, email: string, password: string): Promise<{ success: boolean; error?: AuthError }> => {
     try {
       const result = await authService.register(name, email, password);
       const mappedUser = mapBackendUser(result.user);
@@ -419,7 +412,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await loadProjects(mappedUser);
       return { success: true };
     } catch (err) {
-      return { success: false, error: parseAuthError(err, 'No pudimos crear la cuenta. Intenta de nuevo.') };
+      return { success: false, error: parseApiError(err) };
     }
   };
 
@@ -556,7 +549,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProjects(prev => [merged, ...prev]);
       return { success: true, project: merged };
     } catch (err) {
-      return { success: false, error: parseAuthError(err, 'No pudimos guardar tu proyecto. Intenta de nuevo.') };
+      const parsed = parseApiError(err);
+      return {
+        success: false,
+        error: parsed.message || 'No pudimos guardar tu proyecto. Intenta de nuevo.',
+      };
     }
   };
 

@@ -12,7 +12,7 @@ export class UserService {
     });
 
     if (!user) {
-      throw AppError.notFound('Usuario');
+      throw AppError.notFound('Usuario', 'USER_NOT_FOUND', { hint: 'Verifica el correo o el ID.' });
     }
 
     return user as unknown as User;
@@ -42,7 +42,7 @@ export class UserService {
     });
 
     if (existing) {
-      throw AppError.conflict('Este usuario ya es miembro del equipo');
+      throw AppError.conflict('Este usuario ya es miembro del equipo.', 'TEAM_MEMBER_ALREADY_EXISTS', { hint: 'Quizás quieras cambiar su rol en lugar de agregarlo.' });
     }
 
     // Find or create user
@@ -85,7 +85,7 @@ export class UserService {
     });
 
     if (!member) {
-      throw AppError.notFound('Miembro del equipo');
+      throw AppError.notFound('Miembro del equipo', 'TEAM_MEMBER_NOT_FOUND', { hint: 'Verifica que el usuario sea parte del equipo.' });
     }
 
     const updated = await this.prisma.teamMember.update({
@@ -102,11 +102,11 @@ export class UserService {
     });
 
     if (!member) {
-      throw AppError.notFound('Miembro del equipo');
+      throw AppError.notFound('Miembro del equipo', 'TEAM_MEMBER_NOT_FOUND', { hint: 'Verifica que el usuario sea parte del equipo.' });
     }
 
     if (member.role === TeamRole.OWNER) {
-      throw AppError.badRequest('No se puede eliminar al owner del proyecto');
+      throw AppError.badRequest('No se puede eliminar al owner del proyecto.', 'CANNOT_REMOVE_OWNER', { hint: 'Transfiere primero el ownership a otro miembro.' });
     }
 
     await this.prisma.teamMember.delete({ where: { id: memberId } });

@@ -15,7 +15,9 @@ export class StepService {
     });
 
     if (!steps.length) {
-      throw AppError.notFound('Pasos del proyecto');
+      throw AppError.notFound('Pasos del proyecto', 'STEPS_NOT_FOUND', {
+        hint: 'Confirma que el proyecto exista.',
+      });
     }
 
     return steps as unknown as Step[];
@@ -28,7 +30,9 @@ export class StepService {
     });
 
     if (!step) {
-      throw AppError.notFound(`Paso ${stepNumber}`);
+      throw AppError.notFound(`Paso ${stepNumber}`, 'STEP_NOT_FOUND', {
+        hint: 'Verifica el número de paso.',
+      });
     }
 
     return step as unknown as Step;
@@ -55,7 +59,9 @@ export class StepService {
     });
 
     if (!step) {
-      throw AppError.notFound(`Paso ${stepNumber}`);
+      throw AppError.notFound(`Paso ${stepNumber}`, 'STEP_NOT_FOUND', {
+        hint: 'Verifica el número de paso.',
+      });
     }
 
     return (step.stepData as Record<string, unknown>) ?? null;
@@ -67,7 +73,9 @@ export class StepService {
     });
 
     if (!step) {
-      throw AppError.notFound(`Paso ${stepNumber}`);
+      throw AppError.notFound(`Paso ${stepNumber}`, 'STEP_NOT_FOUND', {
+        hint: 'Verifica el número de paso.',
+      });
     }
 
     await this.prisma.step.update({
@@ -88,12 +96,16 @@ export class StepService {
     });
 
     if (!step) {
-      throw AppError.notFound(`Paso ${stepNumber}`);
+      throw AppError.notFound(`Paso ${stepNumber}`, 'STEP_NOT_FOUND', {
+        hint: 'Verifica el número de paso.',
+      });
     }
 
     const mod = step.modules.find((m) => m.moduleId === moduleId);
     if (!mod) {
-      throw AppError.notFound(`Modulo ${moduleId}`);
+      throw AppError.notFound(`Módulo ${moduleId}`, 'MODULE_NOT_FOUND', {
+        hint: 'Verifica el identificador del módulo.',
+      });
     }
 
     validateTransition('module', mod.status, newStatus);
@@ -110,10 +122,18 @@ export class StepService {
     const step = await this.getStep(projectId, stepNumber);
 
     const stepDb = await this.prisma.step.findFirst({ where: { projectId, number: stepNumber } });
-    if (!stepDb) throw AppError.notFound(`Paso ${stepNumber}`);
+    if (!stepDb) {
+      throw AppError.notFound(`Paso ${stepNumber}`, 'STEP_NOT_FOUND', {
+        hint: 'Verifica el número de paso.',
+      });
+    }
 
     if (stepDb.status !== 'SUBMITTED' && stepDb.status !== 'IN_PROGRESS') {
-      throw AppError.badRequest('El paso debe estar en progreso o enviado para revision IA');
+      throw AppError.badRequest(
+        'El paso debe estar en progreso o enviado para revisión IA.',
+        'STEP_NOT_READY_FOR_REVIEW',
+        { hint: 'Avánzalo de "No iniciado" antes de pedir revisión.' },
+      );
     }
 
     await this.prisma.step.update({
@@ -122,7 +142,7 @@ export class StepService {
     });
 
     // TODO: Trigger AI review pipeline asynchronously
-    return { message: 'Revision IA solicitada. Recibirás el feedback pronto.' };
+    return { message: 'Revisión IA solicitada. Recibirás el feedback pronto.' };
   }
 
   async requestMentorSession(
@@ -134,7 +154,11 @@ export class StepService {
       where: { projectId, number: stepNumber },
     });
 
-    if (!step) throw AppError.notFound(`Paso ${stepNumber}`);
+    if (!step) {
+      throw AppError.notFound(`Paso ${stepNumber}`, 'STEP_NOT_FOUND', {
+        hint: 'Verifica el número de paso.',
+      });
+    }
 
     // Find an available mentor (assigned to the project or any mentor)
     const mentorAssignment = await this.prisma.mentorSession.findFirst({
@@ -146,7 +170,13 @@ export class StepService {
     let mentorId = mentorAssignment?.mentorId;
     if (!mentorId) {
       const mentor = await this.prisma.user.findFirst({ where: { role: 'mentor' } });
-      if (!mentor) throw AppError.badRequest('No hay mentores disponibles');
+      if (!mentor) {
+        throw AppError.badRequest(
+          'No hay mentores disponibles en este momento.',
+          'NO_MENTORS_AVAILABLE',
+          { hint: 'Intenta más tarde o contacta al equipo de Startería.' },
+        );
+      }
       mentorId = mentor.id;
     }
 

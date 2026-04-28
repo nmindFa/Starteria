@@ -23,7 +23,7 @@ export class EvidenceService {
   ): Promise<Evidence> {
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
     if (!project) {
-      throw AppError.notFound('Proyecto');
+      throw AppError.notFound('Proyecto', 'PROJECT_NOT_FOUND', { hint: 'Verifica el ID o vuelve al listado.' });
     }
 
     const dbType = StatusMapper.evidenceType.toDb[data.type as keyof typeof StatusMapper.evidenceType.toDb];
@@ -55,7 +55,7 @@ export class EvidenceService {
     });
 
     if (!evidence) {
-      throw AppError.notFound('Evidencia');
+      throw AppError.notFound('Evidencia', 'EVIDENCE_NOT_FOUND', { hint: 'Es posible que haya sido eliminada.' });
     }
 
     const dbStatus = StatusMapper.evidenceStatus.toDb[newStatus as keyof typeof StatusMapper.evidenceStatus.toDb] as PrismaEvidenceStatus;
@@ -74,7 +74,7 @@ export class EvidenceService {
     });
 
     if (!evidence) {
-      throw AppError.notFound('Evidencia');
+      throw AppError.notFound('Evidencia', 'EVIDENCE_NOT_FOUND', { hint: 'Es posible que haya sido eliminada.' });
     }
 
     await this.prisma.evidence.delete({ where: { id: evidenceId } });

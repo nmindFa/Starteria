@@ -40,7 +40,7 @@ export class PortfolioService {
 
   async updateStrategicFront(id: string, input: UpdateStrategicFrontInput) {
     const existing = await this.prisma.strategicFront.findUnique({ where: { id } });
-    if (!existing) throw AppError.notFound('Frente estrategico');
+    if (!existing) throw AppError.notFound('Frente estratégico', 'FRONT_NOT_FOUND', { hint: 'Confirma el ID del frente.' });
 
     return this.prisma.strategicFront.update({
       where: { id },
@@ -53,7 +53,7 @@ export class PortfolioService {
 
   async deleteStrategicFront(id: string) {
     const existing = await this.prisma.strategicFront.findUnique({ where: { id } });
-    if (!existing) throw AppError.notFound('Frente estrategico');
+    if (!existing) throw AppError.notFound('Frente estratégico', 'FRONT_NOT_FOUND', { hint: 'Confirma el ID del frente.' });
 
     await this.prisma.strategicFront.delete({ where: { id } });
   }
@@ -64,7 +64,7 @@ export class PortfolioService {
     const front = await this.prisma.strategicFront.findUnique({
       where: { id: strategicFrontId },
     });
-    if (!front) throw AppError.notFound('Frente estrategico');
+    if (!front) throw AppError.notFound('Frente estratégico', 'FRONT_NOT_FOUND', { hint: 'Confirma el ID del frente.' });
 
     return this.prisma.challenge.findMany({
       where: { strategicFrontId },
@@ -81,7 +81,7 @@ export class PortfolioService {
     const front = await this.prisma.strategicFront.findUnique({
       where: { id: strategicFrontId },
     });
-    if (!front) throw AppError.notFound('Frente estrategico');
+    if (!front) throw AppError.notFound('Frente estratégico', 'FRONT_NOT_FOUND', { hint: 'Confirma el ID del frente.' });
 
     return this.prisma.challenge.create({
       data: {
@@ -98,7 +98,7 @@ export class PortfolioService {
 
   async updateChallenge(id: string, input: UpdateChallengeInput) {
     const existing = await this.prisma.challenge.findUnique({ where: { id } });
-    if (!existing) throw AppError.notFound('Desafio');
+    if (!existing) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.challenge.update({
       where: { id },
@@ -113,7 +113,7 @@ export class PortfolioService {
 
   async activateOpenCall(id: string) {
     const existing = await this.prisma.challenge.findUnique({ where: { id } });
-    if (!existing) throw AppError.notFound('Desafio');
+    if (!existing) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.challenge.update({
       where: { id },
@@ -126,7 +126,7 @@ export class PortfolioService {
 
   async publishChallenge(id: string) {
     const existing = await this.prisma.challenge.findUnique({ where: { id } });
-    if (!existing) throw AppError.notFound('Desafio');
+    if (!existing) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.challenge.update({
       where: { id },
@@ -138,7 +138,7 @@ export class PortfolioService {
 
   async addInvitation(challengeId: string, input: AddInvitationInput) {
     const challenge = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
-    if (!challenge) throw AppError.notFound('Desafio');
+    if (!challenge) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.challengeInvitation.create({
       data: {
@@ -150,7 +150,7 @@ export class PortfolioService {
 
   async updateInvitation(invId: string, input: UpdateInvitationInput) {
     const existing = await this.prisma.challengeInvitation.findUnique({ where: { id: invId } });
-    if (!existing) throw AppError.notFound('Invitacion');
+    if (!existing) throw AppError.notFound('Invitación', 'INVITATION_NOT_FOUND', { hint: 'Es posible que haya sido cancelada.' });
 
     return this.prisma.challengeInvitation.update({
       where: { id: invId },
@@ -162,7 +162,7 @@ export class PortfolioService {
 
   async addSquadMember(challengeId: string, input: AddSquadMemberInput) {
     const challenge = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
-    if (!challenge) throw AppError.notFound('Desafio');
+    if (!challenge) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.challengeSquadMember.create({
       data: {
@@ -177,7 +177,7 @@ export class PortfolioService {
     const existing = await this.prisma.challengeSquadMember.findUnique({
       where: { id: memberId },
     });
-    if (!existing) throw AppError.notFound('Miembro del squad');
+    if (!existing) throw AppError.notFound('Miembro del squad', 'SQUAD_MEMBER_NOT_FOUND', { hint: 'Verifica que el usuario forme parte del squad.' });
 
     return this.prisma.challengeSquadMember.update({
       where: { id: memberId },
@@ -189,7 +189,7 @@ export class PortfolioService {
 
   async listInitiativesForChallenge(challengeId: string) {
     const challenge = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
-    if (!challenge) throw AppError.notFound('Desafio');
+    if (!challenge) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.initiativePortfolioMeta.findMany({
       where: { challengeId },
@@ -211,7 +211,7 @@ export class PortfolioService {
 
   async getInitiativeMeta(projectId: string) {
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) throw AppError.notFound('Proyecto');
+    if (!project) throw AppError.notFound('Proyecto', 'PROJECT_NOT_FOUND', { hint: 'Verifica el ID o vuelve al listado.' });
 
     return this.prisma.initiativePortfolioMeta.findFirst({
       where: { projectId },
@@ -230,10 +230,10 @@ export class PortfolioService {
     const { challengeId, ...rest } = input;
 
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) throw AppError.notFound('Proyecto');
+    if (!project) throw AppError.notFound('Proyecto', 'PROJECT_NOT_FOUND', { hint: 'Verifica el ID o vuelve al listado.' });
 
     const challenge = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
-    if (!challenge) throw AppError.notFound('Desafio');
+    if (!challenge) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.initiativePortfolioMeta.upsert({
       where: { projectId_challengeId: { projectId, challengeId } },
@@ -259,7 +259,7 @@ export class PortfolioService {
 
   async listOverlaps(challengeId: string) {
     const challenge = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
-    if (!challenge) throw AppError.notFound('Desafio');
+    if (!challenge) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.initiativeOverlap.findMany({
       where: { challengeId },
@@ -269,7 +269,7 @@ export class PortfolioService {
 
   async createOverlap(challengeId: string, input: CreateOverlapInput) {
     const challenge = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
-    if (!challenge) throw AppError.notFound('Desafio');
+    if (!challenge) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.initiativeOverlap.create({
       data: {
@@ -283,7 +283,7 @@ export class PortfolioService {
 
   async listExecutiveOutputs(challengeId: string) {
     const challenge = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
-    if (!challenge) throw AppError.notFound('Desafio');
+    if (!challenge) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     return this.prisma.executiveOutput.findMany({
       where: { challengeId },
@@ -293,7 +293,7 @@ export class PortfolioService {
 
   async createExecutiveOutput(challengeId: string, input: CreateExecutiveOutputInput) {
     const challenge = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
-    if (!challenge) throw AppError.notFound('Desafio');
+    if (!challenge) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
     const { projectId, sharedAt, decisionAt, ...rest } = input;
 
@@ -316,7 +316,7 @@ export class PortfolioService {
 
   async updateExecutiveOutput(id: string, input: UpdateExecutiveOutputInput) {
     const existing = await this.prisma.executiveOutput.findUnique({ where: { id } });
-    if (!existing) throw AppError.notFound('Output ejecutivo');
+    if (!existing) throw AppError.notFound('Output ejecutivo', 'OUTPUT_NOT_FOUND', { hint: 'Verifica el ID o crea uno nuevo.' });
 
     const { sharedAt, decisionAt, ...rest } = input;
 

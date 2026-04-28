@@ -44,7 +44,7 @@ export class CohortService {
     });
 
     if (!cohort) {
-      throw AppError.notFound('Cohorte');
+      throw AppError.notFound('Cohorte', 'COHORT_NOT_FOUND', { hint: 'Confirma el código o nombre de la cohorte.' });
     }
 
     const projects = (cohort as any).projects || [];

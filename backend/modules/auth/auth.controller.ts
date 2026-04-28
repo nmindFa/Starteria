@@ -82,7 +82,7 @@ export class AuthController {
       const rawRefreshToken = req.cookies?.[COOKIE_NAME];
 
       if (!rawRefreshToken) {
-        throw AppError.unauthorized('Token de refresco requerido');
+        throw AppError.refreshInvalid();
       }
 
       const tokens = await this.service.refreshTokens(rawRefreshToken);

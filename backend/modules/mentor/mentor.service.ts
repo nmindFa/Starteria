@@ -39,7 +39,7 @@ export class MentorService {
     });
 
     if (!review) {
-      throw AppError.notFound('Revision');
+      throw AppError.notFound('Revisión', 'REVIEW_NOT_FOUND', { hint: 'Verifica el ID de la revisión.' });
     }
 
     return review;
@@ -51,7 +51,7 @@ export class MentorService {
     });
 
     if (!review) {
-      throw AppError.notFound('Revision');
+      throw AppError.notFound('Revisión', 'REVIEW_NOT_FOUND', { hint: 'Verifica el ID de la revisión.' });
     }
 
     const dbResult = StatusMapper.resultStatus.toDb[data.decision as keyof typeof StatusMapper.resultStatus.toDb];
@@ -93,7 +93,7 @@ export class MentorService {
   async sendHelpRequest(projectId: string, userId: string, data: HelpRequestInput) {
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
     if (!project) {
-      throw AppError.notFound('Proyecto');
+      throw AppError.notFound('Proyecto', 'PROJECT_NOT_FOUND', { hint: 'Verifica el ID o vuelve al listado.' });
     }
 
     const helpRequest = await this.prisma.helpRequest.create({

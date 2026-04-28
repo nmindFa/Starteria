@@ -14,6 +14,16 @@ import { RegisterInput } from './auth.schemas';
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
+/**
+ * Precomputed bcrypt hash of the empty string.
+ * Used to perform a constant-time dummy compare in the user-not-found branch
+ * of loginUser, preventing a timing oracle that would let an attacker
+ * enumerate registered emails.
+ * Generated with bcrypt.hashSync('', 12).
+ */
+const DUMMY_PASSWORD_HASH =
+  '$2b$12$bYvQg0n/JmnjjzZw9Vvj7uqQfL5WvB5kEcc0iH6m8YwJ4gI8xT0Xm';
+
 interface AuthTokens {
   accessToken: string;
   refreshToken: string;
@@ -49,16 +59,14 @@ export class AuthService {
   ): Promise<{ user: SafeUser; tokens: AuthTokens }> {
     // Only participante can self-register
     if (data.role !== 'participante') {
-      throw AppError.forbidden(
-        'Solo el rol participante puede registrarse. Otros roles son asignados por un administrador.',
-      );
+      throw AppError.registerRoleForbidden();
     }
 
     const existing = await this.prisma.user.findUnique({
       where: { email: data.email.toLowerCase() },
     });
     if (existing) {
-      throw AppError.conflict('Ya existe una cuenta con ese correo');
+      throw AppError.emailTaken();
     }
 
     const passwordHash = await hashPassword(data.password);
@@ -104,12 +112,23 @@ export class AuthService {
     });
 
     if (!user) {
-      throw AppError.unauthorized('Credenciales invalidas');
+      // Timing-oracle guard: run a dummy bcrypt compare so the response time
+      // for "user not found" matches "wrong password". Result is discarded.
+      await verifyPassword(password, DUMMY_PASSWORD_HASH);
+      throw AppError.invalidCredentials();
     }
 
     // Check lockout
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-      throw new AppError(423, 'Cuenta bloqueada temporalmente. Intenta en 15 minutos.', 'ACCOUNT_LOCKED');
+      // Timing-oracle guard: match the response time of the wrong-password
+      // branch so attackers cannot distinguish "locked" from "wrong password"
+      // by latency. Result is discarded.
+      await verifyPassword(password, user.passwordHash);
+      const retrySeconds = Math.max(
+        1,
+        Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 1000),
+      );
+      throw AppError.accountLocked(retrySeconds);
     }
 
     const passwordValid = await verifyPassword(password, user.passwordHash);
@@ -117,9 +136,11 @@ export class AuthService {
     if (!passwordValid) {
       const failedAttempts = (user.failedLoginAttempts || 0) + 1;
       const updateData: Record<string, unknown> = { failedLoginAttempts: failedAttempts };
+      let lockedUntil: Date | null = null;
 
       if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-        updateData.lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+        lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+        updateData.lockedUntil = lockedUntil;
         logger.warn({ userId: user.id, failedAttempts }, 'Account locked after failed attempts');
       }
 
@@ -128,7 +149,15 @@ export class AuthService {
         data: updateData,
       });
 
-      throw AppError.unauthorized('Credenciales invalidas');
+      if (lockedUntil) {
+        const retrySeconds = Math.max(
+          1,
+          Math.ceil((lockedUntil.getTime() - Date.now()) / 1000),
+        );
+        throw AppError.accountLocked(retrySeconds);
+      }
+
+      throw AppError.invalidCredentials();
     }
 
     // Reset failed attempts on successful login
@@ -169,7 +198,7 @@ export class AuthService {
     });
 
     if (!storedToken) {
-      throw AppError.unauthorized('Token de refresco invalido');
+      throw AppError.refreshInvalid();
     }
 
     // Token already revoked — potential reuse attack. Revoke entire family.
@@ -182,7 +211,7 @@ export class AuthService {
         where: { family: storedToken.family },
         data: { revokedAt: new Date() },
       });
-      throw AppError.unauthorized('Token de refresco reutilizado. Sesion invalidada.');
+      throw AppError.refreshReused();
     }
 
     // Token expired
@@ -191,7 +220,7 @@ export class AuthService {
         where: { id: storedToken.id },
         data: { revokedAt: new Date() },
       });
-      throw AppError.unauthorized('Token de refresco expirado');
+      throw AppError.refreshExpired();
     }
 
     // Revoke current token

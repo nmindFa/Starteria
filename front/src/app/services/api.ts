@@ -1,6 +1,104 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+
+/**
+ * Canonical Auth/Error envelope (v1) shared with the backend.
+ * Body shape on failure: { success: false, error: AuthError }.
+ */
+export type AuthErrorField = 'email' | 'password' | 'name' | string;
+
+export interface AuthErrorDetail {
+  field: string;
+  code: string;
+  message: string;
+}
+
+export interface AuthError {
+  code: string;
+  message: string;
+  field?: AuthErrorField;
+  hint?: string;
+  retryAfterSeconds?: number;
+  details?: AuthErrorDetail[];
+  requestId?: string;
+}
+
+export type ApiErrorBody = AuthError;
+
+interface ApiErrorEnvelope {
+  success?: false;
+  error?: Partial<AuthError> & { message?: string };
+  requestId?: string;
+}
+
+/**
+ * Normaliza cualquier error proveniente de axios (o desconocido) a la
+ * envoltura canónica `AuthError`. No lanza: siempre devuelve un objeto.
+ */
+export function parseApiError(err: unknown): AuthError {
+  // Axios error shape — preferimos detectarlo via isAxiosError cuando esté disponible.
+  const axiosErr =
+    typeof (axios as unknown as { isAxiosError?: (e: unknown) => boolean }).isAxiosError ===
+      'function' && (axios as unknown as { isAxiosError: (e: unknown) => boolean }).isAxiosError(err)
+      ? (err as AxiosError<ApiErrorEnvelope>)
+      : (err as AxiosError<ApiErrorEnvelope> | undefined);
+
+  // 1) Sin response => problema de red / CORS / servidor caído.
+  if (axiosErr && !axiosErr.response) {
+    return {
+      code: 'NETWORK_ERROR',
+      message: 'No pudimos conectar con el servidor.',
+      hint: 'Revisa tu conexión e inténtalo de nuevo.',
+    };
+  }
+
+  if (axiosErr && axiosErr.response) {
+    const { status, data } = axiosErr.response;
+    const envelopeError = data?.error;
+
+    // 2) Envelope canónica del backend.
+    if (envelopeError && typeof envelopeError === 'object' && envelopeError.code && envelopeError.message) {
+      const requestId = envelopeError.requestId ?? data?.requestId;
+      return {
+        code: envelopeError.code,
+        message: envelopeError.message,
+        ...(envelopeError.field ? { field: envelopeError.field } : {}),
+        ...(envelopeError.hint ? { hint: envelopeError.hint } : {}),
+        ...(typeof envelopeError.retryAfterSeconds === 'number'
+          ? { retryAfterSeconds: envelopeError.retryAfterSeconds }
+          : {}),
+        ...(Array.isArray(envelopeError.details) ? { details: envelopeError.details } : {}),
+        ...(requestId ? { requestId } : {}),
+      };
+    }
+
+    // 3) 5xx sin envelope => error genérico de servidor.
+    if (status >= 500) {
+      return {
+        code: 'INTERNAL_ERROR',
+        message: 'Error interno del servidor.',
+      };
+    }
+
+    // 4) Otro error con response pero sin envelope reconocible.
+    const fallbackMessage =
+      (typeof (data as unknown as { message?: string })?.message === 'string'
+        ? (data as unknown as { message?: string }).message!
+        : null) ?? 'Algo salió mal. Vuelve a intentar.';
+    return {
+      code: 'UNKNOWN',
+      message: fallbackMessage,
+    };
+  }
+
+  // 5) No es axios error: cualquier otra cosa.
+  const maybeMessage = (err as { message?: unknown })?.message;
+  return {
+    code: 'UNKNOWN',
+    message: typeof maybeMessage === 'string' ? maybeMessage : 'Algo salió mal. Vuelve a intentar.',
+  };
+}
 
 // In-memory token store (never persisted to sessionStorage)
 let accessToken: string | null = null;
