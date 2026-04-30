@@ -186,3 +186,17 @@ npx @claude-flow/cli@latest doctor --fix
 
 - Documentation: https://github.com/ruvnet/claude-flow
 - Issues: https://github.com/ruvnet/claude-flow/issues
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues en `nmindFa/Dashboardstarteria` vía `gh` CLI (logueado como `okuanb_efectiva`, scope `repo`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Vocabulario canónico de 5 estados — todos existen como GitHub labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. `CONTEXT.md` (raíz, lazy — lo crea `/grill-with-docs` cuando haga falta). Product ADRs en `backend/docs/adr/`; AI-methodology ADRs (BHIL) en `docs/adr/`. UX writing rules en `docs/starteria-ux-writing.md`. See `docs/agents/domain.md`.

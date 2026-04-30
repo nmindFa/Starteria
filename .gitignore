@@ -16,6 +16,7 @@ dist/
 .claude-flow/routing-outcomes.json
 .claude-flow/swarm/swarm-state.json
 .agents/
+skills/
 .swarm/memory.db
 .swarm/memory.db-wal
 .swarm/memory.db-shm
