@@ -52,5 +52,23 @@ services:
     depends_on:
       - backend
 
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: starteria-ai-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ENVIRONMENT=${NODE_ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-starteria-ai-service}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+    depends_on:
+      - backend
+
 volumes:
   pgdata:

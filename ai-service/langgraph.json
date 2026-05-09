@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/langchain-ai/langgraph/main/libs/cli/schemas/schema.json",
+  "dependencies": ["."],
+  "python_version": "3.11",
+  "env": ".env",
+  "graphs": {
+    "orchestrator": "./agents/orchestrator.py:_build_orchestrator",
+    "mentor_virtual": "./agents/mentor_virtual.py:create_mentor_virtual_agent",
+    "research_assistant": "./agents/research_assistant.py:create_research_assistant_agent",
+    "feedback_ia": "./agents/feedback_ia.py:create_feedback_ia_agent",
+    "solution_design": "./agents/solution_design.py:create_solution_design_agent",
+    "experiment_coach": "./agents/experiment_coach.py:create_experiment_coach_agent",
+    "narrative_builder": "./agents/narrative_builder.py:create_narrative_builder_agent"
+  }
+}

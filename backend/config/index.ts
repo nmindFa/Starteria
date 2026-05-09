@@ -32,4 +32,5 @@ export const config = {
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   bodyLimit: process.env.BODY_LIMIT || '1mb',
+  aiServiceUrl: process.env.AI_SERVICE_URL || 'http://localhost:8001',
 } as const;
