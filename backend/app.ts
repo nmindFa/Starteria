@@ -20,6 +20,8 @@ import { userRouter, teamRouter } from './modules/users/user.router';
 import { helpRouter } from './modules/mentor/mentor.router';
 import { sponsorRouter } from './modules/sponsor/sponsor.router';
 import { portfolioRouter } from './modules/portfolio/portfolio.router';
+import { pdfRouter, initiativePdfService } from './modules/initiative-pdfs/pdf.router';
+import { createAiWebhookRouter } from './modules/initiative-pdfs/webhook.router';
 
 export function createApp() {
   const app = express();
@@ -50,6 +52,12 @@ export function createApp() {
   app.use('/api/v1/projects', helpRouter);
   app.use('/api/v1/sponsor', sponsorRouter);
   app.use('/api/v1/portfolio', portfolioRouter);
+  // TASK-006: PDF storage + extraction routes mirror evidence/step registration.
+  app.use('/api/v1/initiatives', pdfRouter);
+  // Internal ai-service → backend push channel (X-Internal-Token only; no JWT).
+  // Lets ai-service notify backend the moment an extraction finishes so the DB is
+  // updated even when no frontend client is actively polling.
+  app.use('/api/v1/internal/ai/webhooks', createAiWebhookRouter(initiativePdfService));
 
   // 404 handler
   app.use((_req, _res, next) => {

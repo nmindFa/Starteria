@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-05-07T00:00:00.000Z" agent="claude-code" version="24.0.0">
+  <diagram id="adr-011-bridge" name="ADR-011 Frontend ai-service Bridge">
+    <mxGraphModel dx="1422" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ============== TITLE ============== -->
+        <mxCell id="title" value="ADR-011 — Frontend &#8596; ai-service Bridge&lt;br&gt;&lt;font style=&quot;font-size: 13px&quot;&gt;Express as Trust Boundary | hybrid endpoints + /ai/invoke escape hatch&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1420" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============== EXTERNAL CLOUD SERVICES (top) ============== -->
+        <mxCell id="anthropic" value="Anthropic Claude API&lt;br&gt;&lt;font style=&quot;font-size: 11px&quot;&gt;sonnet-4 / opus-4&lt;/font&gt;" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="100" width="160" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="langsmith" value="LangSmith&lt;br&gt;&lt;font style=&quot;font-size: 11px&quot;&gt;tracing (prod: off until&lt;br&gt;PII pipeline ready)&lt;/font&gt;" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="100" width="120" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- ============== ZONE: PUBLIC INTERNET (left) ============== -->
+        <mxCell id="zone-public" value="Public network" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#888888;fillColor=#fafafa;verticalAlign=top;fontSize=12;fontStyle=2;fontFamily=Helvetica;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="60" y="220" width="280" height="540" as="geometry" />
+        </mxCell>
+
+        <mxCell id="front" value="Front (React)&lt;br&gt;&lt;font style=&quot;font-size: 11px&quot;&gt;axios + envelope V1&lt;br&gt;EventSource (SSE)&lt;br&gt;poll backoff 1-8s&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;fontStyle=1;fontFamily=Helvetica;verticalAlign=top;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="100" y="290" width="200" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="front-services" value="services/ai/&#10;  aiClient.ts&#10;  capabilities/*&#10;  generated/api.ts" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;fontFamily=Courier New;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="100" y="430" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="front-hooks" value="hooks/&#10;  useAiAgent&#10;  useAiStream&#10;  useAiTask" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;fontFamily=Courier New;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="100" y="530" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="front-panels" value="MentorVirtualPanel · FeedbackIAPanel&#10;ResearchModule · NarrativeBuilder" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=10;fontStyle=2;fontFamily=Helvetica;align=center;" vertex="1" parent="1">
+          <mxGeometry x="100" y="630" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="front-label" value="JWT in Authorization header" style="text;html=1;align=center;fontSize=11;fontStyle=2;fontFamily=Helvetica;fontColor=#444444;" vertex="1" parent="1">
+          <mxGeometry x="100" y="700" width="200" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============== ZONE: TRUST BOUNDARY (Express) ============== -->
+        <mxCell id="zone-trust" value="Trust boundary (Express) — JWT verify, ownership, rate limit, HMAC sign, persist, error map" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=12 4;strokeColor=#82b366;fillColor=#f0f7e8;verticalAlign=top;fontSize=12;fontStyle=1;fontFamily=Helvetica;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="380" y="220" width="420" height="540" as="geometry" />
+        </mxCell>
+
+        <mxCell id="express" value="Express :3000&lt;br&gt;&lt;font style=&quot;font-size: 11px&quot;&gt;/api/v1/ai/*&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;fontStyle=1;fontFamily=Helvetica;verticalAlign=top;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="420" y="290" width="340" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mw-jwt" value="① verify JWT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="420" y="370" width="160" height="34" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mw-own" value="② project ownership" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="600" y="370" width="160" height="34" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mw-rate" value="③ rate limit&#10;(Redis sliding window)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="420" y="416" width="160" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mw-cache" value="④ cache lookup&#10;(idempotent caps)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="600" y="416" width="160" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mw-hmac" value="⑤ HMAC sign&#10;X-AI-Signature + Timestamp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="420" y="472" width="160" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mw-cb" value="⑥ circuit breaker&#10;(opossum per cap.)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="600" y="472" width="160" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mw-pool" value="⑦ undici.Pool&#10;connections=32, keep-alive 60s" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="420" y="528" width="160" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mw-err" value="⑧ error mapping&#10;(ADR-010 V1)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="600" y="528" width="160" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mw-persist" value="⑨ persist outputs (post-proxy hook)&#10;FeedbackIA · AiIdeaSet · AiNarrative · AiLearningCard · AiResearchGuide · AiMentorSession · AiInvocationLog" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="420" y="588" width="340" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="redis" value="Redis&lt;br&gt;&lt;font style=&quot;font-size: 10px&quot;&gt;rate-limit + cache (24h feedback, 1h research)&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;fontFamily=Helvetica;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="670" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- ============== ZONE: INTERNAL DOCKER NETWORK (ai-service) ============== -->
+        <mxCell id="zone-internal" value="Internal Docker network — internal-ai (no host port mapping)" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=12 4;strokeColor=#b85450;fillColor=#fbe5e1;verticalAlign=top;fontSize=12;fontStyle=1;fontFamily=Helvetica;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="840" y="220" width="430" height="540" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ai-service" value="ai-service :8001&lt;br&gt;&lt;font style=&quot;font-size: 11px&quot;&gt;FastAPI + LangGraph · stateless · HMAC verify&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;fontStyle=1;fontFamily=Helvetica;verticalAlign=top;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="870" y="290" width="370" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="orchestrator" value="Orchestrator&lt;br&gt;&lt;font style=&quot;font-size: 10px&quot;&gt;router (intent)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="990" y="370" width="130" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="agent-mentor" value="mentor_virtual&lt;br&gt;&lt;font style=&quot;font-size: 9px&quot;&gt;SSE&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=10;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="870" y="430" width="120" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="agent-feedback" value="feedback_ia&lt;br&gt;&lt;font style=&quot;font-size: 9px&quot;&gt;sync&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=10;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="430" width="120" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="agent-research" value="research_assistant&lt;br&gt;&lt;font style=&quot;font-size: 9px&quot;&gt;async polling&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=10;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="430" width="120" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="agent-solution" value="solution_design&lt;br&gt;&lt;font style=&quot;font-size: 9px&quot;&gt;sync&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=10;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="870" y="478" width="120" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="agent-experiment" value="experiment_coach&lt;br&gt;&lt;font style=&quot;font-size: 9px&quot;&gt;sync / async&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=10;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="478" width="120" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="agent-narrative" value="narrative_builder&lt;br&gt;&lt;font style=&quot;font-size: 9px&quot;&gt;SSE&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=10;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="478" width="120" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ai-services" value="services/&#10;  context_assembler (per-agent tiers)&#10;  cost_tracker (≤$0.05/req → 402)&#10;  model_router (Sonnet/Opus)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontSize=11;fontFamily=Courier New;align=left;spacingLeft=10;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="870" y="540" width="370" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ai-secret" value="ANTHROPIC_API_KEY (only here)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;fontFamily=Helvetica;align=center;" vertex="1" parent="1">
+          <mxGeometry x="870" y="635" width="180" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ai-shared-secret" value="AI_SERVICE_SHARED_SECRET" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;fontStyle=1;fontFamily=Helvetica;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="635" width="180" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ============== SHARED: Postgres / Prisma ============== -->
+        <mxCell id="db" value="PostgreSQL (Prisma)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontFamily=Helvetica;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="690" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="db-note" value="ai-service: read-only (replica) — context assembly&#10;Express: read-write — outputs + AiInvocationLog" style="text;html=1;align=center;fontSize=10;fontStyle=2;fontFamily=Helvetica;fontColor=#444444;" vertex="1" parent="1">
+          <mxGeometry x="850" y="755" width="320" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ============== ARROWS ============== -->
+        <!-- Front -> Express (request) -->
+        <mxCell id="a1" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.15;entryDx=0;entryDy=0;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" parent="1" source="front" target="express">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a1-lbl" value="POST /api/v1/ai/{capability}&#10;{ projectId, stepNumber, payload }&#10;X-Request-Id · traceparent" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fontFamily=Helvetica;fillColor=#ffffff;" vertex="1" connectable="0" parent="a1">
+          <mxGeometry x="-0.05" y="-1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Express -> Front sync 200 / async 202 / SSE -->
+        <mxCell id="a2" value="" style="endArrow=classic;html=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.6;entryDx=0;entryDy=0;strokeColor=#82b366;strokeWidth=2;dashed=1;dashPattern=6 4;" edge="1" parent="1" source="express" target="front">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a2-lbl" value="200 sync · 202 async + pollUrl&#10;text/event-stream (SSE)&#10;envelope V1 + X-Request-Id" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fontFamily=Helvetica;fillColor=#ffffff;" vertex="1" connectable="0" parent="a2">
+          <mxGeometry x="0" y="2" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Express -> ai-service (HMAC) -->
+        <mxCell id="a3" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#b85450;strokeWidth=2;" edge="1" parent="1" source="express" target="ai-service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a3-lbl" value="POST /ai/{capability}&#10;HMAC-SHA256(secret, ts+body)&#10;X-AI-Signature · X-AI-Timestamp" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontStyle=1;fontFamily=Helvetica;fillColor=#ffffff;" vertex="1" connectable="0" parent="a3">
+          <mxGeometry x="0" y="-1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ai-service -> Anthropic -->
+        <mxCell id="a4" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.7;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#666666;strokeWidth=2;dashed=1;dashPattern=6 4;" edge="1" parent="1" source="ai-service" target="anthropic">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a4-lbl" value="messages.stream() / create" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=11;fontFamily=Helvetica;fillColor=#ffffff;" vertex="1" connectable="0" parent="a4">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ai-service -> LangSmith -->
+        <mxCell id="a5" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.05;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#666666;strokeWidth=1;dashed=1;dashPattern=4 4;" edge="1" parent="1" source="ai-service" target="langsmith">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a5-lbl" value="trace (run_id, request_id)&#10;PII redacted" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=2;fontFamily=Helvetica;fillColor=#ffffff;" vertex="1" connectable="0" parent="a5">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Express -> Redis -->
+        <mxCell id="a6" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#9673a6;strokeWidth=1.5;" edge="1" parent="1" source="express" target="redis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a6-lbl" value="rate · cache" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontFamily=Helvetica;fillColor=#ffffff;" vertex="1" connectable="0" parent="a6">
+          <mxGeometry x="-0.4" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Express -> DB (write) -->
+        <mxCell id="a7" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.7;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" parent="1" source="express" target="db">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="700" y="780" />
+              <mxPoint x="850" y="780" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="a7-lbl" value="write outputs + invocation log" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1;fontFamily=Helvetica;fillColor=#ffffff;" vertex="1" connectable="0" parent="a7">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ai-service -> DB (read replica) -->
+        <mxCell id="a8" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.4;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.4;entryDx=0;entryDy=0;strokeColor=#b85450;strokeWidth=1.5;dashed=1;dashPattern=6 4;" edge="1" parent="1" source="ai-services" target="db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a8-lbl" value="read-only (context assembly)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=2;fontFamily=Helvetica;fillColor=#ffffff;" vertex="1" connectable="0" parent="a8">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Orchestrator -> agents (visual hint) -->
+        <mxCell id="o1" style="endArrow=classic;html=1;rounded=0;strokeColor=#d79b00;strokeWidth=1;" edge="1" parent="1" source="orchestrator" target="agent-mentor"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="o2" style="endArrow=classic;html=1;rounded=0;strokeColor=#d79b00;strokeWidth=1;" edge="1" parent="1" source="orchestrator" target="agent-feedback"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="o3" style="endArrow=classic;html=1;rounded=0;strokeColor=#d79b00;strokeWidth=1;" edge="1" parent="1" source="orchestrator" target="agent-research"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="o4" style="endArrow=classic;html=1;rounded=0;strokeColor=#d79b00;strokeWidth=1;" edge="1" parent="1" source="orchestrator" target="agent-solution"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="o5" style="endArrow=classic;html=1;rounded=0;strokeColor=#d79b00;strokeWidth=1;" edge="1" parent="1" source="orchestrator" target="agent-experiment"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="o6" style="endArrow=classic;html=1;rounded=0;strokeColor=#d79b00;strokeWidth=1;" edge="1" parent="1" source="orchestrator" target="agent-narrative"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- ============== LEGEND ============== -->
+        <mxCell id="legend" value="Legend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=12;fontStyle=1;fontFamily=Helvetica;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="60" y="800" width="1380" height="170" as="geometry" />
+        </mxCell>
+
+        <mxCell id="lg-1" value="━━━ Solid blue: Front → Express (HTTPS, JWT)" style="text;html=1;align=left;fontSize=11;fontFamily=Helvetica;fontColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="830" width="320" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="lg-2" value="━━━ Solid red: Express → ai-service (internal + HMAC)" style="text;html=1;align=left;fontSize=11;fontFamily=Helvetica;fontColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="852" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="lg-3" value="┄┄┄ Dashed green: Response (sync 200 / async 202 / SSE)" style="text;html=1;align=left;fontSize=11;fontFamily=Helvetica;fontColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="874" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="lg-4" value="┄┄┄ Dashed grey: External APIs (Anthropic, LangSmith)" style="text;html=1;align=left;fontSize=11;fontFamily=Helvetica;fontColor=#666666;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="896" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="lg-5" value="🟨 Yellow boxes: secrets / signing — never cross zones" style="text;html=1;align=left;fontSize=11;fontFamily=Helvetica;fontColor=#a07020;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="918" width="340" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="lg-modes" value="Transport modes per capability:&#10;• mentor-virtual, narrative-build → SSE streaming (TTFB &lt; 800ms)&#10;• feedback, hmw-generate, ideate, experiment-routes, prototype-suggest, experiment-analyze, invoke → sync (≤5s)&#10;• research-assist, full ai-review → async polling (taskId + pollUrl, backoff 1·2·4·8s, ±20% jitter)" style="text;html=1;align=left;fontSize=11;fontFamily=Helvetica;spacingLeft=8;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="450" y="830" width="600" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="lg-meta" value="Author: BHIL swarm (researcher · system-architect · security-architect · performance-engineer)&#10;Date: 2026-05-07 · Version: 1.0 · ADR: ADR-011 (Proposed)&#10;Related: ADR-002 (orchestration), ADR-008 (AI integration), ADR-010 (error envelope V1)" style="text;html=1;align=left;fontSize=10;fontStyle=2;fontFamily=Helvetica;fontColor=#555555;spacingLeft=8;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="830" width="350" height="110" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

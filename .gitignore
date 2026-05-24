@@ -3,31 +3,52 @@ node_modules/
 
 # Build
 dist/
+.vite/
 
 # Environment
 .env
+.env.local
 
 # Vercel
 .vercel/
 
+# Python
+**/__pycache__/
+**/.pytest_cache/
+**/.hypothesis/
+**/.coverage
+**/.venv/
+*.pyc
+
+# Test artifacts
+front/coverage/
+**/coverage.xml
+.nyc_output/
+
 # Claude / Swarm tooling
 .claude/
-.claude-flow/metrics/
-.claude-flow/routing-outcomes.json
-.claude-flow/swarm/swarm-state.json
+.claude-flow/
 .agents/
-skills/
+/skills/
 .swarm/memory.db
 .swarm/memory.db-wal
 .swarm/memory.db-shm
 .swarm/hnsw.index
+.swarm/state.json
+.swarm/model-router-state.json
 agentdb.rvf
 agentdb.rvf.lock
 ruvector.db
 skills-lock.json
 
 # Project-specific ignores
-backend/docs/
-BHIL-AI-First-Development-Toolkit/*
+backend/docs/*.xlsx
+backend/docs/Perfiles*
+BHIL-AI-First-Development-Toolkit/
 image copy.png
 k8s/image.png
+langsmith-skills/
+
+# TASK-006: local PDF storage (TODO(ADR-007): replaced by S3 in a future TASK)
+backend/storage/
+storage/

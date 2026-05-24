@@ -10,6 +10,10 @@ import { StatusChip } from '../components/StatusChip';
 import { ProgressBar } from '../components/ProgressBar';
 import { MentorSupportModal } from '../components/MentorSupportModal';
 import { MentorVirtualPanel } from '../components/MentorVirtualPanel';
+import { PdfInitiativeUploader } from '../components/PdfInitiativeUploader';
+import { usePdfAutofill } from '../hooks/usePdfAutofill';
+import { isPdfAutofillEnabled } from '../services/featureFlags';
+import { Sparkles, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { Step } from '../context/AppContext';
 
 const STEP_DESCRIPTIONS = [
@@ -84,6 +88,13 @@ export function ProjectHomePage() {
       </div>
     );
   }
+
+  // PDF auto-fill (PRD-002 / TASK-009). Hook is safe to call unconditionally — if the
+  // feature flag is off, the card below doesn't render but the hook state stays inert.
+  const autofillEnabled = isPdfAutofillEnabled();
+  const autofill = usePdfAutofill(project.id);
+  // Explicit "Procesar con IA" button instead of auto-triggering on upload.
+  const [uploadedPdfIds, setUploadedPdfIds] = useState<string[]>([]);
 
   const sponsorTouchpoints = project.sponsorTouchpoints ?? [];
   const sponsorComments = project.sponsorComments ?? [];
@@ -465,6 +476,69 @@ export function ProjectHomePage() {
           </button>
         </div>
       </div>
+
+      {/* ─── PDF auto-fill (PRD-002 / SPEC-002) — gated by feature flag ─── */}
+      {autofillEnabled && (
+        <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-5 mb-6">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+              <Sparkles size={20} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm text-slate-900" style={{ fontWeight: 600 }}>
+                ¿Tienes un documento de tu iniciativa?
+              </h2>
+              <p className="text-xs text-slate-600 mt-0.5 max-w-2xl">
+                Sube un PDF (plan, propuesta, deck, investigación) y un agente IA
+                intentará rellenar los campos de los Pasos 0–4 con tu evidencia.
+                Tú revisas y confirmas cada campo antes de avanzar.
+              </p>
+            </div>
+          </div>
+
+          <PdfInitiativeUploader
+            initiativeId={project.id}
+            onUploadComplete={(pdfId) => {
+              setUploadedPdfIds((prev) => (prev.includes(pdfId) ? prev : [...prev, pdfId]));
+            }}
+          />
+
+          {uploadedPdfIds.length > 0 && autofill.status === 'idle' && (
+            <button
+              type="button"
+              onClick={() => {
+                const lastPdfId = uploadedPdfIds[uploadedPdfIds.length - 1];
+                void autofill.startExtraction(lastPdfId, 'all');
+              }}
+              className="mt-3 inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm transition-colors"
+              style={{ fontWeight: 600 }}
+              data-testid="autofill-process-button"
+            >
+              <Sparkles size={16} />
+              Procesar con IA y rellenar Pasos
+            </button>
+          )}
+
+          {autofill.status === 'running' && (
+            <p className="mt-3 text-xs text-amber-700 flex items-center gap-1.5">
+              <Loader2 size={12} className="animate-spin" />
+              Extrayendo evidencia del PDF… (~30s)
+            </p>
+          )}
+          {autofill.status === 'done' && (
+            <p className="mt-3 text-xs text-emerald-700 flex items-center gap-1.5">
+              <CheckCircle2 size={12} />
+              Listo: {autofill.proposals.length} campo(s) propuesto(s). Entra al Paso 0 para revisarlos.
+            </p>
+          )}
+          {autofill.status === 'failed' && autofill.error && (
+            <p className="mt-3 text-xs text-rose-700 flex items-center gap-1.5">
+              <AlertCircle size={12} />
+              {autofill.error.message}
+            </p>
+          )}
+        </div>
+      )}
 
       <div id="project-journey" className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
         <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">

@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router';
 import { Toaster } from 'sonner';
 import { AppProvider } from '../context/AppContext';
+import { AutofillProvider } from '../context/AutofillContext';
 import { PortfolioLeadProvider } from '../portfolio/PortfolioLeadContext';
 
 /**
@@ -13,10 +14,12 @@ import { PortfolioLeadProvider } from '../portfolio/PortfolioLeadContext';
 export function RootLayout() {
   return (
     <AppProvider>
-      <PortfolioLeadProvider>
-        <Toaster position="top-center" richColors closeButton />
-        <Outlet />
-      </PortfolioLeadProvider>
+      <AutofillProvider>
+        <PortfolioLeadProvider>
+          <Toaster position="top-center" richColors closeButton />
+          <Outlet />
+        </PortfolioLeadProvider>
+      </AutofillProvider>
     </AppProvider>
   );
 }

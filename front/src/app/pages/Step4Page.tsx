@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -29,6 +29,9 @@ import {
 import { useApp } from '../context/AppContext';
 import { StatusChip } from '../components/StatusChip';
 import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
+import { ApprovalGateBanner } from '../components/autofill/ApprovalGateBanner';
+import { isPdfAutofillEnabled } from '../services/featureFlags';
+import * as stepService from '../services/stepService';
 
 type ModuleId = 'overview' | 'A' | 'B' | 'C';
 type Audiencia =
@@ -629,7 +632,56 @@ export function Step4Page() {
   const [pitchVideoLink, setPitchVideoLink] = useState('');
   const [pitchAnalysisReady, setPitchAnalysisReady] = useState(false);
 
-  const saveState = useAutosave({
+  // ── TASK-010: hydrate Step 4 state from backend on mount ─────────────────────
+  // Falls back silently to existing defaults when nothing is persisted, so the
+  // empty-state UX is preserved.
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = await stepService.getStepData(projectId, 4);
+        if (cancelled || !stored || typeof stored !== 'object') return;
+        const formData = (stored as { formData?: Record<string, unknown> }).formData;
+        if (!formData) return;
+        if (typeof formData.audience === 'string') setAudience(formData.audience as Audiencia);
+        if (typeof formData.meetingGoal === 'string') setMeetingGoal(formData.meetingGoal);
+        if (typeof formData.decision === 'string') setDecision(formData.decision);
+        if (typeof formData.closureType === 'string') setClosureType(formData.closureType as typeof closureType);
+        if (formData.meetingOutcome && typeof formData.meetingOutcome === 'object')
+          setMeetingOutcome(formData.meetingOutcome as typeof meetingOutcome);
+        if (formData.presentation && typeof formData.presentation === 'object')
+          setPresentation(formData.presentation as typeof presentation);
+        if (Array.isArray(formData.evidences)) setEvidences(formData.evidences as typeof evidences);
+        if (Array.isArray(formData.demos)) setDemos(formData.demos as typeof demos);
+        if (formData.implementationPlan && typeof formData.implementationPlan === 'object')
+          setImplementationPlan(formData.implementationPlan as typeof implementationPlan);
+        if (formData.iterationPlan && typeof formData.iterationPlan === 'object')
+          setIterationPlan(formData.iterationPlan as typeof iterationPlan);
+        if (formData.pivotPlan && typeof formData.pivotPlan === 'object')
+          setPivotPlan(formData.pivotPlan as typeof pivotPlan);
+        if (formData.learningPlan && typeof formData.learningPlan === 'object')
+          setLearningPlan(formData.learningPlan as typeof learningPlan);
+        if (formData.practiceChecks && typeof formData.practiceChecks === 'object')
+          setPracticeChecks(formData.practiceChecks as typeof practiceChecks);
+        if (typeof formData.mentorStatus === 'string') setMentorStatus(formData.mentorStatus as typeof mentorStatus);
+        if (typeof formData.nextStepType === 'string') setNextStepType(formData.nextStepType as typeof nextStepType);
+        if (typeof formData.inviteSubject === 'string') setInviteSubject(formData.inviteSubject);
+        if (typeof formData.inviteBody === 'string') setInviteBody(formData.inviteBody);
+        if (typeof formData.meetingStatus === 'string') setMeetingStatus(formData.meetingStatus as MeetingStatus);
+        if (typeof formData.stepFinalized === 'boolean') setStepFinalized(formData.stepFinalized);
+        if (typeof formData.executiveDecisionReady === 'boolean')
+          setExecutiveDecisionReady(formData.executiveDecisionReady);
+      } catch {
+        // 404 / auth — keep defaults silently.
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  // ── Autosave (TASK-010) ─────────────────────────────────────────────────────
+  const step4FormData = {
     audience,
     meetingGoal,
     decision,
@@ -650,6 +702,24 @@ export function Step4Page() {
     meetingStatus,
     stepFinalized,
     executiveDecisionReady,
+  };
+
+  const autosaveFn = useCallback(
+    async (data: typeof step4FormData) => {
+      if (!projectId) return;
+      await stepService.saveStepData(projectId, 4, {
+        _meta: { version: 1, lastSavedAt: new Date().toISOString(), lastSavedBy: 'user' },
+        formData: data,
+      });
+    },
+    [projectId],
+  );
+
+  const { state: saveState } = useAutosave({
+    data: step4FormData,
+    saveFn: autosaveFn,
+    delay: 2000,
+    enabled: !!projectId,
   });
 
   if (!project) {
@@ -1179,6 +1249,13 @@ ${meetingOwner} / ${meetingRole}
               cerrar la iniciativa con una presentacion, un plan y una convocatoria real.
             </span>
           </div>
+
+          {/* US-017 Approval gate — only when the autofill feature flag is on. */}
+          {isPdfAutofillEnabled() && projectId && (
+            <div className="mb-5">
+              <ApprovalGateBanner initiativeId={projectId} />
+            </div>
+          )}
 
           {activeModule === 'overview' ? (
             <div className="space-y-5">

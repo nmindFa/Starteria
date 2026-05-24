@@ -68,7 +68,14 @@ export async function getStepData(
   return data.data;
 }
 
-/** Save (replace) the entire step data blob. */
+/**
+ * Save (replace) the entire step data blob.
+ *
+ * Backend support (TASK-010, 2026-05-19): `stepNumber` ∈ {1, 2, 3, 4}.
+ * The backend persists the payload verbatim in `Step.stepData` (polymorphic
+ * Json column). The envelope convention is `{ _meta, formData }` — see
+ * Step1Page.tsx for the canonical pattern. Steps 2/3/4 now mirror it.
+ */
 export async function saveStepData(
   projectId: string,
   stepNumber: number,

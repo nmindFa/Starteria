@@ -1,0 +1,21 @@
+-- TASK-010: Persistence for Steps 2, 3 and 4 (paridad con Step 1)
+--
+-- Status: NO-OP migration. Documents the intentional schema decision.
+--
+-- The existing `Step` model in `front/prisma/schema.prisma` already exposes a
+-- polymorphic `stepData Json?` column that can carry ANY step's form payload
+-- (envelopes match the precedent set by Step 1 in Step1Page.tsx). Adding
+-- typed per-step columns (`step2FormData`, `step3FormData`, `step4FormData`)
+-- was deliberately deferred until the autofill agent (TASK-008) lands and the
+-- field schema stabilizes — at which point a follow-up migration will lift
+-- the relevant keys out of the JSON blob into typed columns for queryability.
+--
+-- See TODO(SPEC-002) markers in:
+--   - backend/modules/steps/step.schemas.ts (stepEnvelope)
+--   - backend/modules/steps/step.service.ts (saveStepData)
+--
+-- This migration exists so the migration log shows when TASK-010 went live
+-- and so Prisma's `migrate dev`/`migrate deploy` workflow has an idempotent
+-- anchor point. It applies no DDL.
+
+SELECT 1;

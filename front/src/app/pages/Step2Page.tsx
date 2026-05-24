@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -11,6 +11,7 @@ import { BannerPorDefinir } from '../components/BannerPorDefinir';
 import { EvidenceUploader } from '../components/EvidenceUploader';
 import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
 import { StepWorkspaceShell } from '../components/layout/StepWorkspaceShell';
+import * as stepService from '../services/stepService';
 
 type ModuleId = 'A' | 'B' | 'C' | 'D';
 
@@ -306,7 +307,44 @@ export function Step2Page() {
   const [prototypeAutonomy, setPrototypeAutonomy] = useState<string>(PROTOTYPE_AUTONOMY_OPTIONS[0]);
   const [prototypeFirstVersion, setPrototypeFirstVersion] = useState<string>(PROTOTYPE_FIRST_VERSION_OPTIONS[0]);
 
-  const saveState = useAutosave([
+  // ── TASK-010: hydrate from backend on mount; mirror Step 1's persistence pattern ─
+  // Pull stepData once; if it has a `formData` envelope written by an earlier
+  // session, rehydrate the local state. Falls back silently to the existing
+  // default fixtures when nothing is persisted (preserves the empty state).
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = await stepService.getStepData(projectId, 2);
+        if (cancelled || !stored || typeof stored !== 'object') return;
+        const formData = (stored as { formData?: Record<string, unknown> }).formData;
+        if (!formData) return;
+        if (typeof formData.hmw === 'string') setHmw(formData.hmw);
+        if (Array.isArray(formData.ideas)) setIdeas(formData.ideas as Idea[]);
+        if (Array.isArray(formData.shortlist)) setShortlist(formData.shortlist as typeof shortlist);
+        if (formData.solutionCard && typeof formData.solutionCard === 'object')
+          setSolutionCard(formData.solutionCard as typeof solutionCard);
+        if (formData.testCard && typeof formData.testCard === 'object')
+          setTestCard(formData.testCard as typeof testCard);
+        if (formData.experimentCard && typeof formData.experimentCard === 'object')
+          setExperimentCard(formData.experimentCard as typeof experimentCard);
+        if (typeof formData.experimentFocus === 'string') setExperimentFocus(formData.experimentFocus);
+        if (typeof formData.prototypeComfort === 'string') setPrototypeComfort(formData.prototypeComfort);
+        if (typeof formData.prototypeAutonomy === 'string') setPrototypeAutonomy(formData.prototypeAutonomy);
+        if (typeof formData.prototypeFirstVersion === 'string') setPrototypeFirstVersion(formData.prototypeFirstVersion);
+      } catch {
+        // 404 or auth error — keep defaults silently; AutosaveIndicator will reflect future writes.
+      }
+    })();
+    return () => { cancelled = true; };
+    // We only want to hydrate on project change, not on every state mutation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  // Single object passed through to useAutosave so the hook gets a stable
+  // `data` reference shape (matches Step 1's pattern in Step1Page.tsx).
+  const step2FormData = {
     hmw,
     ideas,
     shortlist,
@@ -317,7 +355,25 @@ export function Step2Page() {
     prototypeComfort,
     prototypeAutonomy,
     prototypeFirstVersion,
-  ]);
+  };
+
+  const autosaveFn = useCallback(
+    async (data: typeof step2FormData) => {
+      if (!projectId) return;
+      await stepService.saveStepData(projectId, 2, {
+        _meta: { version: 1, lastSavedAt: new Date().toISOString(), lastSavedBy: 'user' },
+        formData: data,
+      });
+    },
+    [projectId],
+  );
+
+  const { state: saveState } = useAutosave({
+    data: step2FormData,
+    saveFn: autosaveFn,
+    delay: 2000,
+    enabled: !!projectId,
+  });
 
   if (!project || !step) return <div className="p-6"><p className="text-slate-500">Proyecto no encontrado.</p></div>;
 
