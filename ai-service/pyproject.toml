@@ -8,12 +8,19 @@ dependencies = [
     "deepagents>=0.1",
     "langchain>=0.3",
     "langchain-openrouter>=0.1",
+    "langchain-openai>=0.2",
     "langgraph>=0.2",
     "langsmith>=0.1",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "httpx>=0.27",
     "python-dotenv>=1.0",
+    # TASK-008 (pdf_extractor): PDF parsing dependencies.
+    "pypdf>=4.0",
+    "pdfplumber>=0.11",
+    # TODO(ADR-004): add `langchain-anthropic` when swapping primary model to Haiku 4.5.
+    # TODO(ADR-012): pgvector + sentence-transformers + psycopg deferred; one-shot full-text
+    # extraction works for ≤50pp PDFs without vector retrieval.
 ]
 
 [project.optional-dependencies]

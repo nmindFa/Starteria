@@ -2,6 +2,8 @@ import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../../shared/types/auth.types';
 import { StepService } from './step.service';
 import { ApiResponse } from '../../shared/types/api.types';
+import { AppError } from '../../shared/errors/AppError';
+import { saveStepDataSchemaByNumber } from './step.schemas';
 
 export class StepController {
   constructor(private service: StepService) {}
@@ -46,9 +48,29 @@ export class StepController {
     }
   };
 
+  /**
+   * PUT /:projectId/steps/:number/data
+   *
+   * Persists Step 1..4 form data as a polymorphic JSON blob on `Step.stepData`.
+   * TASK-010 extended the supported range from {1} to {1, 2, 3, 4}; the Prisma
+   * column already supports any payload shape so no schema migration is
+   * required. Validation runs per step number via `saveStepDataSchemaByNumber`.
+   */
   saveData = async (req: AuthenticatedRequest, res: Response<ApiResponse>, next: NextFunction) => {
     try {
-      await this.service.saveStepData(req.params.projectId, Number(req.params.number), req.body);
+      const stepNumber = Number(req.params.number);
+      if (!Number.isInteger(stepNumber) || stepNumber < 1 || stepNumber > 4) {
+        throw AppError.badRequest('Numero de paso invalido.', 'STEP_NUMBER_INVALID', {
+          hint: 'Solo se aceptan pasos 1, 2, 3 o 4.',
+        });
+      }
+      const schema = saveStepDataSchemaByNumber[stepNumber];
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        // Surface zod errors via the existing error-handler (it maps ZodError → V1 envelope).
+        return next(parsed.error);
+      }
+      await this.service.saveStepData(req.params.projectId, stepNumber, parsed.data);
       res.json({ success: true, data: { message: 'Datos guardados' } });
     } catch (err) {
       next(err);

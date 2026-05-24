@@ -1,23 +1,23 @@
 /**
- * HTTP proxy to the Python ai-service microservice.
- * Reads AI_SERVICE_URL from config (default: http://localhost:8001).
+ * ai.proxy.ts — Thin backwards-compatible wrapper around bridge.service.
+ *
+ * Historical entry point. Kept so existing imports keep compiling.
+ * NEW callers MUST import from './bridge.service' directly so the typed
+ * options (userClaims, costCapUsd, requestId) are explicit at the call site.
+ *
+ * TODO(ADR-011): once all callers migrate to callAiService(), delete this file.
  */
-import { config } from '../../config';
+import { callAiService, type CallAiServiceOptions } from './bridge.service';
 
 export async function proxyToAiService(
   path: string,
-  body: unknown
+  body: unknown,
+  options: CallAiServiceOptions = {},
 ): Promise<unknown> {
-  const url = `${config.aiServiceUrl}${path}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'upstream_error' }));
-    throw err;
-  }
-  return response.json();
+  return callAiService('POST', path, body, options);
 }
+
+// Re-export for callers that want the full typed API.
+export { callAiService } from './bridge.service';
+export { BridgeError } from './bridge.service';
+export type { AiBridge, BridgeUserClaims, CallAiServiceOptions } from './bridge.service';

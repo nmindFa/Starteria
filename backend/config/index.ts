@@ -33,4 +33,13 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   bodyLimit: process.env.BODY_LIMIT || '1mb',
   aiServiceUrl: process.env.AI_SERVICE_URL || 'http://localhost:8001',
+  // TODO(ADR-011): Replace shared-secret with HMAC-SHA256 signing + timestamp + replay protection per TASK-007 full spec.
+  // V1 bridge auth: simple shared secret exchanged via X-Internal-Token header.
+  bridgeSharedSecret: process.env.BRIDGE_SHARED_SECRET || 'dev-bridge-secret-do-not-use-in-prod',
+  // TASK-006: alias used by the initiative-pdfs module for the ai-service hand-off
+  // (the AI client sends this in `X-Internal-Token` until TASK-007 swaps to HMAC).
+  aiServiceToken: process.env.AI_SERVICE_TOKEN || process.env.BRIDGE_SHARED_SECRET || 'dev-shared-secret-change-me',
+  // TASK-006 / SPEC-002 V1: PDFs are persisted on the local filesystem under this directory.
+  // TODO(ADR-007): swap LocalDiskPdfStorage for an S3PresignedStorage implementation.
+  localStorageDir: process.env.LOCAL_STORAGE_DIR || './storage',
 } as const;

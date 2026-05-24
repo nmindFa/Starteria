@@ -14,6 +14,7 @@ import { BannerPorDefinir } from '../components/BannerPorDefinir';
 import { EvidenceUploader } from '../components/EvidenceUploader';
 import { AutosaveIndicator } from '../components/AutosaveIndicator';
 import { useAutosave } from '../hooks/useAutosave';
+import { AutofillField } from '../components/autofill/AutofillField';
 import * as stepService from '../services/stepService';
 import { Step1CaptureSynthesisModule } from '../components/step1-capture-synthesis/Step1CaptureSynthesisModule';
 import { buildCaptureModuleContext, buildStep1ModuleViewModels, calculateStep1Progress, getStep1CaptureMissing } from '../components/step1-architecture/step1Completion';
@@ -1232,13 +1233,26 @@ export function Step1Page() {
                     <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-500 italic mb-2">
                       <span style={{ fontWeight: 600 }} className="not-italic text-slate-600">Ej:</span> "En TechCorp, el proceso de incorporación dura 15–21 días. Durante ese tiempo el empleado no tiene accesos y no puede trabajar."
                     </div>
-                    <textarea
-                      value={asisData.casoReal}
-                      onChange={e => setAsisData(p => ({ ...p, casoReal: e.target.value }))}
-                      rows={3}
-                      placeholder="Describe el proceso real: qué ocurre, quiénes participan, cuánto dura y cuál es el problema hoy."
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
-                    />
+                    <div id="field-step1-asisData-casoReal">
+                      <AutofillField
+                        fieldPath="step1.asisData.casoReal"
+                        initiativeId={projectId}
+                        value={asisData.casoReal}
+                        onChange={(v) => setAsisData(p => ({ ...p, casoReal: String(v ?? '') }))}
+                        label="Caso real del proceso"
+                      >
+                        {({ value, onChange, readOnly }) => (
+                          <textarea
+                            value={String(value ?? '')}
+                            onChange={e => onChange(e.target.value)}
+                            readOnly={readOnly}
+                            rows={3}
+                            placeholder="Describe el proceso real: qué ocurre, quiénes participan, cuánto dura y cuál es el problema hoy."
+                            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                          />
+                        )}
+                      </AutofillField>
+                    </div>
                   </div>
 
                   {/* Pasos del proceso */}
@@ -1325,20 +1339,55 @@ export function Step1Page() {
                     {asisData.pasos.filter(p => p.trim()).length === 0 ? (
                       <p className="text-xs text-slate-400 italic">Completa al menos 2 pasos en el Bloque 1 primero.</p>
                     ) : (
-                      <div className="space-y-2">
-                        {asisData.pasos.map((p, i) => p.trim() ? (
-                          <button key={i}
-                            onClick={() => setAsisData(prev => ({ ...prev, quiebreIndex: i, quiebre: `Paso ${i + 1} — ${p}` }))}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-all ${asisData.quiebreIndex === i ? 'border-red-400 bg-red-50 text-red-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
-                            style={{ fontWeight: asisData.quiebreIndex === i ? 600 : 400 }}
-                          >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs shrink-0 ${asisData.quiebreIndex === i ? 'border-red-500 bg-red-500 text-white' : 'border-slate-300'}`} style={{ fontWeight: 700 }}>
-                              {asisData.quiebreIndex === i ? '✗' : i + 1}
-                            </span>
-                            <span>{p}</span>
-                            {asisData.quiebreIndex === i && <span className="ml-auto text-xs text-red-500 px-2 py-0.5 bg-red-100 rounded-full shrink-0">Aquí ocurre el reto</span>}
-                          </button>
-                        ) : null)}
+                      <div id="field-step1-asisData-quiebre">
+                        <AutofillField
+                          fieldPath="step1.asisData.quiebre"
+                          initiativeId={projectId}
+                          value={asisData.quiebre}
+                          onChange={(v) => setAsisData(p => ({ ...p, quiebre: String(v ?? '') }))}
+                          label="Paso del quiebre"
+                        >
+                          {({ value, onChange, readOnly }) => {
+                            // The proposed value is a string like "Paso N — <texto>".
+                            // We highlight whichever button matches `value` (whether
+                            // it came from the proposal or from a manual click).
+                            const activeQuiebre = String(value ?? '');
+                            return (
+                              <div className="space-y-2">
+                                {asisData.pasos.map((p, i) => p.trim() ? (() => {
+                                  const buttonLabel = `Paso ${i + 1} — ${p}`;
+                                  const selected = activeQuiebre === buttonLabel || asisData.quiebreIndex === i;
+                                  return (
+                                    <button key={i}
+                                      type="button"
+                                      disabled={readOnly}
+                                      onClick={() => {
+                                        setAsisData(prev => ({ ...prev, quiebreIndex: i }));
+                                        onChange(buttonLabel);
+                                      }}
+                                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-all ${selected ? 'border-red-400 bg-red-50 text-red-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'} ${readOnly ? 'opacity-90 cursor-default' : ''}`}
+                                      style={{ fontWeight: selected ? 600 : 400 }}
+                                    >
+                                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs shrink-0 ${selected ? 'border-red-500 bg-red-500 text-white' : 'border-slate-300'}`} style={{ fontWeight: 700 }}>
+                                        {selected ? '✗' : i + 1}
+                                      </span>
+                                      <span>{p}</span>
+                                      {selected && <span className="ml-auto text-xs text-red-500 px-2 py-0.5 bg-red-100 rounded-full shrink-0">Aquí ocurre el reto</span>}
+                                    </button>
+                                  );
+                                })() : null)}
+                                {/* If the proposal text doesn't match any button label (the
+                                    pasos array changed since extraction), show the proposed
+                                    text inline so the founder can still read it before confirming. */}
+                                {activeQuiebre && !asisData.pasos.some((p, i) => `Paso ${i + 1} — ${p}` === activeQuiebre) && (
+                                  <p className="text-xs text-slate-500 italic px-2">
+                                    Sugerencia IA: "{activeQuiebre}"
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          }}
+                        </AutofillField>
                       </div>
                     )}
                   </div>
@@ -1350,13 +1399,26 @@ export function Step1Page() {
                         ¿Qué pasa exactamente en ese momento? <span className="text-slate-400">(recomendado)</span>
                       </label>
                       <p className="text-xs text-slate-500 mb-2">Describe la fricción puntual. No hace falta explicar todo el proceso otra vez.</p>
-                      <textarea
-                        value={asisData.quiebreDetalle}
-                        onChange={e => setAsisData(p => ({ ...p, quiebreDetalle: e.target.value }))}
-                        rows={2}
-                        placeholder="Ej. El empleado espera 7–10 días porque TI no tiene priorización formal para estas solicitudes."
-                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
-                      />
+                      <div id="field-step1-asisData-quiebreDetalle">
+                        <AutofillField
+                          fieldPath="step1.asisData.quiebreDetalle"
+                          initiativeId={projectId}
+                          value={asisData.quiebreDetalle}
+                          onChange={(v) => setAsisData(p => ({ ...p, quiebreDetalle: String(v ?? '') }))}
+                          label="Detalle del quiebre"
+                        >
+                          {({ value, onChange, readOnly }) => (
+                            <textarea
+                              value={String(value ?? '')}
+                              onChange={e => onChange(e.target.value)}
+                              readOnly={readOnly}
+                              rows={2}
+                              placeholder="Ej. El empleado espera 7–10 días porque TI no tiene priorización formal para estas solicitudes."
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                            />
+                          )}
+                        </AutofillField>
+                      </div>
                     </div>
                   )}
 
@@ -1466,40 +1528,68 @@ export function Step1Page() {
                     <p className="text-xs text-slate-500 mb-2">
                       Marca los impactos que hoy genera este reto. Puedes seleccionar más de uno si aplica.
                     </p>
-                    <div className="flex gap-2 mb-3 flex-wrap">
-                      {STEP1_CONSEQUENCE_OPTIONS.map(option => {
-                        const selected = selectedConsequenceTags.includes(option.id);
-                        return (
-                          <button
-                            key={option.id}
-                            onClick={() => setAsisData(prev => ({
-                              ...prev,
-                              consequenceTags: (() => {
-                                const currentTags = normalizeStep1ConsequenceTags(
-                                  Array.isArray(prev.consequenceTags) || typeof prev.consequenceTags === 'string'
-                                    ? prev.consequenceTags
-                                    : (prev as ModuleASISData & { consequenceTag?: unknown }).consequenceTag,
+                    <div id="field-step1-asisData-consequenceTags">
+                      <AutofillField
+                        fieldPath="step1.asisData.consequenceTags"
+                        initiativeId={projectId}
+                        value={selectedConsequenceTags}
+                        onChange={(v) => setAsisData(prev => ({
+                          ...prev,
+                          consequenceTags: normalizeStep1ConsequenceTags(
+                            Array.isArray(v) ? (v as string[]) : [],
+                          ),
+                        }))}
+                        label="Categorías de consecuencia"
+                      >
+                        {({ value, onChange, readOnly }) => {
+                          const activeTags: string[] = Array.isArray(value) ? (value as string[]) : [];
+                          return (
+                            <div className="flex gap-2 mb-3 flex-wrap" role="group" aria-label="Categorías de consecuencia">
+                              {STEP1_CONSEQUENCE_OPTIONS.map(option => {
+                                const selected = activeTags.includes(option.id);
+                                return (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    disabled={readOnly}
+                                    onClick={() => {
+                                      const nextTags = selected
+                                        ? activeTags.filter(tag => tag !== option.id)
+                                        : [...activeTags, option.id];
+                                      onChange(nextTags);
+                                    }}
+                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${selected ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'} ${readOnly ? 'opacity-90 cursor-default' : ''}`}
+                                    style={{ fontWeight: 500 }}
+                                  >
+                                    {option.label}
+                                  </button>
                                 );
-                                return selected
-                                  ? currentTags.filter(tag => tag !== option.id)
-                                  : [...currentTags, option.id];
-                              })(),
-                            }))}
-                            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${selected ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                            style={{ fontWeight: 500 }}
-                          >
-                            {option.label}
-                          </button>
-                        );
-                      })}
+                              })}
+                            </div>
+                          );
+                        }}
+                      </AutofillField>
                     </div>
-                    <textarea
-                      value={asisData.consecuencia}
-                      onChange={e => setAsisData(p => ({ ...p, consecuencia: e.target.value }))}
-                      rows={2}
-                      placeholder="Ej. El empleado no puede trabajar durante 7 a 10 dias, generando costos de productividad y frustracion."
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
-                    />
+                    <div id="field-step1-asisData-consecuencia">
+                      <AutofillField
+                        fieldPath="step1.asisData.consecuencia"
+                        initiativeId={projectId}
+                        value={asisData.consecuencia}
+                        onChange={(v) => setAsisData(p => ({ ...p, consecuencia: String(v ?? '') }))}
+                        label="Consecuencia del reto"
+                      >
+                        {({ value, onChange, readOnly }) => (
+                          <textarea
+                            value={String(value ?? '')}
+                            onChange={e => onChange(e.target.value)}
+                            readOnly={readOnly}
+                            rows={2}
+                            placeholder="Ej. El empleado no puede trabajar durante 7 a 10 dias, generando costos de productividad y frustracion."
+                            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                          />
+                        )}
+                      </AutofillField>
+                    </div>
                     <p className="text-xs text-slate-500 mt-1">Describe el impacto concreto que deja el problema. No listes causas todavía.</p>
                   </div>
 
@@ -1511,13 +1601,26 @@ export function Step1Page() {
                     <p className="text-xs text-slate-500 mb-2">
                       <span style={{ fontWeight: 600 }}>Causa inmediata</span> = la razón directa por la que ocurre el quiebre. No la causa raíz, sino lo que lo dispara hoy.
                     </p>
-                    <textarea
-                      value={asisData.causaInmediata}
-                      onChange={e => setAsisData(p => ({ ...p, causaInmediata: e.target.value }))}
-                      rows={2}
-                      placeholder="Ej. TI recibe solicitudes por correo informal, sin priorización ni tiempo objetivo definido para onboarding."
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
-                    />
+                    <div id="field-step1-asisData-causaInmediata">
+                      <AutofillField
+                        fieldPath="step1.asisData.causaInmediata"
+                        initiativeId={projectId}
+                        value={asisData.causaInmediata}
+                        onChange={(v) => setAsisData(p => ({ ...p, causaInmediata: String(v ?? '') }))}
+                        label="Causa inmediata"
+                      >
+                        {({ value, onChange, readOnly }) => (
+                          <textarea
+                            value={String(value ?? '')}
+                            onChange={e => onChange(e.target.value)}
+                            readOnly={readOnly}
+                            rows={2}
+                            placeholder="Ej. TI recibe solicitudes por correo informal, sin priorización ni tiempo objetivo definido para onboarding."
+                            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                          />
+                        )}
+                      </AutofillField>
+                    </div>
                     <p className="text-xs text-slate-400 mt-1">No llegues aún a la causa raíz. ¿Qué está fallando operativamente hoy?</p>
                   </div>
 
@@ -2949,37 +3052,57 @@ export function Step1Page() {
                   {/* Chips sugeridos */}
                   <div>
                     <p className="text-xs text-slate-500 mb-2" style={{ fontWeight: 500 }}>Selecciona los que apliquen:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        'Datos sensibles',
-                        'Legal / regulatorio',
-                        'No interrumpir operación',
-                        'Seguridad de la información',
-                        'Presupuesto cero',
-                        'Sin cambios en sistemas',
-                      ].map(chip => {
-                        const selected = cData.limitesChips.includes(chip);
-                        return (
-                          <button
-                            key={chip}
-                            onClick={() => setCData(p => ({
-                              ...p,
-                              limitesChips: selected
-                                ? p.limitesChips.filter(c => c !== chip)
-                                : [...p.limitesChips, chip],
-                            }))}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs transition-all ${
-                              selected
-                                ? 'border-red-400 bg-red-50 text-red-700'
-                                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'
-                            }`}
-                            style={{ fontWeight: selected ? 600 : 400 }}
-                          >
-                            {selected && <X size={10} className="text-red-400" />}
-                            {chip}
-                          </button>
-                        );
-                      })}
+                    <div id="field-step1-cData-limitesChips">
+                      <AutofillField
+                        fieldPath="step1.cData.limitesChips"
+                        initiativeId={projectId}
+                        value={cData.limitesChips}
+                        onChange={(v) => setCData(p => ({
+                          ...p,
+                          limitesChips: Array.isArray(v) ? (v as string[]) : [],
+                        }))}
+                        label="Límites del piloto"
+                      >
+                        {({ value, onChange, readOnly }) => {
+                          const activeChips: string[] = Array.isArray(value) ? (value as string[]) : [];
+                          return (
+                            <div className="flex flex-wrap gap-2" role="group" aria-label="Límites del piloto">
+                              {[
+                                'Datos sensibles',
+                                'Legal / regulatorio',
+                                'No interrumpir operación',
+                                'Seguridad de la información',
+                                'Presupuesto cero',
+                                'Sin cambios en sistemas',
+                              ].map(chip => {
+                                const selected = activeChips.includes(chip);
+                                return (
+                                  <button
+                                    key={chip}
+                                    type="button"
+                                    disabled={readOnly}
+                                    onClick={() => {
+                                      const nextChips = selected
+                                        ? activeChips.filter(c => c !== chip)
+                                        : [...activeChips, chip];
+                                      onChange(nextChips);
+                                    }}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs transition-all ${
+                                      selected
+                                        ? 'border-red-400 bg-red-50 text-red-700'
+                                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                                    } ${readOnly ? 'opacity-90 cursor-default' : ''}`}
+                                    style={{ fontWeight: selected ? 600 : 400 }}
+                                  >
+                                    {selected && <X size={10} className="text-red-400" />}
+                                    {chip}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        }}
+                      </AutofillField>
                     </div>
                   </div>
 
@@ -3026,12 +3149,25 @@ export function Step1Page() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className="text-xs text-slate-500 mb-1.5 block" style={{ fontWeight: 500 }}>¿De qué depende el piloto? <span className="text-red-400">*</span></label>
-                      <input
-                        value={cData.dependencia}
-                        onChange={e => setCData(p => ({ ...p, dependencia: e.target.value }))}
-                        placeholder="Ej. Área de TI para gestionar accesos al sistema. API de nómina. Aprobación de legal."
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                      />
+                      <div id="field-step1-cData-dependencia">
+                        <AutofillField
+                          fieldPath="step1.cData.dependencia"
+                          initiativeId={projectId}
+                          value={cData.dependencia}
+                          onChange={(v) => setCData(p => ({ ...p, dependencia: String(v ?? '') }))}
+                          label="Dependencia del piloto"
+                        >
+                          {({ value, onChange, readOnly }) => (
+                            <input
+                              value={String(value ?? '')}
+                              onChange={e => onChange(e.target.value)}
+                              readOnly={readOnly}
+                              placeholder="Ej. Área de TI para gestionar accesos al sistema. API de nómina. Aprobación de legal."
+                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                            />
+                          )}
+                        </AutofillField>
+                      </div>
                     </div>
                     <div>
                       <label className="text-xs text-slate-500 mb-1.5 block" style={{ fontWeight: 500 }}>Dueño (área / rol)</label>
@@ -3098,13 +3234,26 @@ export function Step1Page() {
                   )}
                 </div>
                 <div className="p-5 space-y-3">
-                  <textarea
-                    value={cData.alternativaPiloto}
-                    onChange={e => setCData(p => ({ ...p, alternativaPiloto: e.target.value }))}
-                    rows={3}
-                    placeholder="Ej. Manual + registro en Excel compartido → formulario web simple → piloto con 10 casos antes de integrar el sistema."
-                    className={`w-full border rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none ${cData.dependencia.trim() && !cData.alternativaPiloto.trim() ? 'border-red-200' : 'border-slate-200'}`}
-                  />
+                  <div id="field-step1-cData-alternativaPiloto">
+                    <AutofillField
+                      fieldPath="step1.cData.alternativaPiloto"
+                      initiativeId={projectId}
+                      value={cData.alternativaPiloto}
+                      onChange={(v) => setCData(p => ({ ...p, alternativaPiloto: String(v ?? '') }))}
+                      label="Alternativa para pilotear"
+                    >
+                      {({ value, onChange, readOnly }) => (
+                        <textarea
+                          value={String(value ?? '')}
+                          onChange={e => onChange(e.target.value)}
+                          readOnly={readOnly}
+                          rows={3}
+                          placeholder="Ej. Manual + registro en Excel compartido → formulario web simple → piloto con 10 casos antes de integrar el sistema."
+                          className={`w-full border rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none ${cData.dependencia.trim() && !cData.alternativaPiloto.trim() ? 'border-red-200' : 'border-slate-200'}`}
+                        />
+                      )}
+                    </AutofillField>
+                  </div>
                   {/* Ejemplos rápidos */}
                   <div className="flex flex-wrap gap-1.5">
                     <span className="text-xs text-slate-400" style={{ fontWeight: 500 }}>Ejemplos:</span>

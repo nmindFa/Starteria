@@ -10,6 +10,7 @@ import { BannerPorDefinir } from '../components/BannerPorDefinir';
 import { MentorVirtualPanel } from '../components/MentorVirtualPanel';
 import { MentorSupportModal } from '../components/MentorSupportModal';
 import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
+import { AutofillField } from '../components/autofill/AutofillField';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,11 @@ export function Step0Page() {
   const navigate = useNavigate();
 
   const project = projects.find(p => p.id === projectId);
+
+  // PDF auto-fill (PRD-002): the uploader + extraction trigger live in
+  // ProjectHomePage so Step 0 is not a competing entry point. AutofillContext
+  // (mounted in RootLayout) keeps proposals available as <AutofillField>
+  // affordances on the fields below regardless of which page kicked off the run.
 
   const [form, setForm] = useState<Step0Data>({
     nombreParticipante: project?.step0Data?.nombreParticipante ?? '',
@@ -331,6 +337,17 @@ export function Step0Page() {
             {/* ── LEFT: Form ─────────────────────────────────────────────── */}
             <div className="flex-1 min-w-0 space-y-0">
 
+              {/*
+                All Step 0 fields tracked by the autofill ground truth are now
+                wrapped with <AutofillField>:
+                  freeform: nombreParticipante, rolArea, quePasaQueQuieres, quienEscuchar
+                  enum:     origen, parteProceso, impacto3meses, respaldo
+                  multi:    impacta
+                The chip multi-select (impacta) consumes/produces string[]
+                directly so the proposal's `proposedValue` (also string[])
+                flows through the render-prop unchanged.
+              */}
+
               {/* ─── Sección 1 ─── */}
               <section className="space-y-4 pb-8">
                 <div>
@@ -341,12 +358,25 @@ export function Step0Page() {
                     Usaremos tu nombre para personalizar esta ficha y el resumen de salida.
                   </p>
                 </div>
-                <input
-                  value={form.nombreParticipante}
-                  onChange={e => setForm(p => ({ ...p, nombreParticipante: e.target.value }))}
-                  placeholder="Tu nombre completo"
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                />
+                <div id="field-step0-nombreParticipante">
+                  <AutofillField
+                    fieldPath="step0.nombreParticipante"
+                    initiativeId={project.id}
+                    value={form.nombreParticipante}
+                    onChange={(v) => setForm(p => ({ ...p, nombreParticipante: String(v ?? '') }))}
+                    label="Nombre del participante"
+                  >
+                    {({ value, onChange, readOnly }) => (
+                      <input
+                        value={String(value ?? '')}
+                        onChange={e => onChange(e.target.value)}
+                        readOnly={readOnly}
+                        placeholder="Tu nombre completo"
+                        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                      />
+                    )}
+                  </AutofillField>
+                </div>
               </section>
 
               <div className="h-px bg-slate-100 mb-8" />
@@ -361,12 +391,25 @@ export function Step0Page() {
                     Esto ayuda a entender desde qué parte de la empresa estás viendo esta iniciativa.
                   </p>
                 </div>
-                <input
-                  value={form.rolArea}
-                  onChange={e => setForm(p => ({ ...p, rolArea: e.target.value }))}
-                  placeholder="Ej. Ejecutivo comercial / Ventas"
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                />
+                <div id="field-step0-rolArea">
+                  <AutofillField
+                    fieldPath="step0.rolArea"
+                    initiativeId={project.id}
+                    value={form.rolArea}
+                    onChange={(v) => setForm(p => ({ ...p, rolArea: String(v ?? '') }))}
+                    label="Rol y área"
+                  >
+                    {({ value, onChange, readOnly }) => (
+                      <input
+                        value={String(value ?? '')}
+                        onChange={e => onChange(e.target.value)}
+                        readOnly={readOnly}
+                        placeholder="Ej. Ejecutivo comercial / Ventas"
+                        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                      />
+                    )}
+                  </AutofillField>
+                </div>
               </section>
 
               <div className="h-px bg-slate-100 mb-8" />
@@ -381,29 +424,48 @@ export function Step0Page() {
                     No define tu proyecto para siempre. Solo nos ayuda a entender desde qué punto partes hoy.
                   </p>
                 </div>
-                <div className="space-y-2">
-                  {ORIGEN_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setForm(p => ({ ...p, origen: opt.value }))}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-all ${
-                        form.origen === opt.value
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-800'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span
-                        className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${
-                          form.origen === opt.value ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'
-                        }`}
-                      >
-                        {form.origen === opt.value && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                        )}
-                      </span>
-                      {opt.label}
-                    </button>
-                  ))}
+                <div id="field-step0-origen">
+                  <AutofillField
+                    fieldPath="step0.origen"
+                    initiativeId={project.id}
+                    value={form.origen}
+                    onChange={(v) => setForm(p => ({ ...p, origen: (v ?? '') as OrigenType }))}
+                    label="Origen"
+                  >
+                    {({ value, onChange, readOnly }) => (
+                      <div className="space-y-2" role="radiogroup" aria-label="Origen de la iniciativa">
+                        {ORIGEN_OPTIONS.map(opt => {
+                          const selected = value === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              disabled={readOnly}
+                              onClick={() => onChange(opt.value)}
+                              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-all ${
+                                selected
+                                  ? 'border-indigo-400 bg-indigo-50 text-indigo-800'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                              } ${readOnly ? 'opacity-90 cursor-default' : ''}`}
+                            >
+                              <span
+                                className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${
+                                  selected ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'
+                                }`}
+                              >
+                                {selected && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                )}
+                              </span>
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </AutofillField>
                 </div>
               </section>
 
@@ -419,14 +481,25 @@ export function Step0Page() {
                     No necesitas redactarlo perfecto. Escribe lo que hoy sabes.
                   </p>
                 </div>
-                <div>
-                  <textarea
+                <div id="field-step0-quePasaQueQuieres">
+                  <AutofillField
+                    fieldPath="step0.quePasaQueQuieres"
+                    initiativeId={project.id}
                     value={form.quePasaQueQuieres}
-                    onChange={e => setForm(p => ({ ...p, quePasaQueQuieres: e.target.value }))}
-                    rows={4}
-                    placeholder="Ej. Nuestro proceso de cierre mensual toma 10 días y debería tomar 3. Eso genera retrasos en reportes que el directorio necesita para tomar decisiones."
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none"
-                  />
+                    onChange={(v) => setForm(p => ({ ...p, quePasaQueQuieres: String(v ?? '') }))}
+                    label="Qué está pasando o qué quieres lograr"
+                  >
+                    {({ value, onChange, readOnly }) => (
+                      <textarea
+                        value={String(value ?? '')}
+                        onChange={e => onChange(e.target.value)}
+                        readOnly={readOnly}
+                        rows={4}
+                        placeholder="Ej. Nuestro proceso de cierre mensual toma 10 días y debería tomar 3. Eso genera retrasos en reportes que el directorio necesita para tomar decisiones."
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none"
+                      />
+                    )}
+                  </AutofillField>
                   <button
                     onClick={openIA}
                     className="mt-2 flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 transition-colors"
@@ -449,25 +522,52 @@ export function Step0Page() {
                     Elige hasta 3 grupos.
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {IMPACTA_OPTIONS.map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => {
-                        if (!form.impacta.includes(opt) && form.impacta.length >= 3) return;
-                        toggleMulti('impacta', opt);
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm transition-all ${
-                        form.impacta.includes(opt)
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                      }`}
-                      style={{ fontWeight: form.impacta.includes(opt) ? 600 : 400 }}
-                    >
-                      {form.impacta.includes(opt) && <CheckCircle2 size={12} className="text-indigo-500" />}
-                      {opt}
-                    </button>
-                  ))}
+                <div id="field-step0-impacta">
+                  <AutofillField
+                    fieldPath="step0.impacta"
+                    initiativeId={project.id}
+                    value={form.impacta}
+                    onChange={(v) =>
+                      setForm(p => ({ ...p, impacta: Array.isArray(v) ? (v as string[]) : [] }))
+                    }
+                    label="A quién impacta"
+                  >
+                    {({ value, onChange, readOnly }) => {
+                      // The proposal carries an array directly — normalise both shapes
+                      // so we never crash on a malformed payload.
+                      const selected: string[] = Array.isArray(value) ? (value as string[]) : [];
+                      return (
+                        <div className="flex flex-wrap gap-2" role="group" aria-label="Grupos impactados">
+                          {IMPACTA_OPTIONS.map(opt => {
+                            const isSelected = selected.includes(opt);
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                disabled={readOnly}
+                                onClick={() => {
+                                  if (!isSelected && selected.length >= 3) return;
+                                  const nextList = isSelected
+                                    ? selected.filter(v => v !== opt)
+                                    : [...selected, opt];
+                                  onChange(nextList);
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm transition-all ${
+                                  isSelected
+                                    ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                                } ${readOnly ? 'opacity-90 cursor-default' : ''}`}
+                                style={{ fontWeight: isSelected ? 600 : 400 }}
+                              >
+                                {isSelected && <CheckCircle2 size={12} className="text-indigo-500" />}
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    }}
+                  </AutofillField>
                 </div>
               </section>
 
@@ -483,21 +583,40 @@ export function Step0Page() {
                     Más adelante, en el Paso 1, vas a profundizar mejor el proceso. Aquí solo queremos una primera ubicación.
                   </p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {PARTE_PROCESO_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setForm(p => ({ ...p, parteProceso: opt.value }))}
-                      className={`px-3 py-3 rounded-xl border text-sm text-left transition-all ${
-                        form.parteProceso === opt.value
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                      }`}
-                      style={{ fontWeight: form.parteProceso === opt.value ? 600 : 400 }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                <div id="field-step0-parteProceso">
+                  <AutofillField
+                    fieldPath="step0.parteProceso"
+                    initiativeId={project.id}
+                    value={form.parteProceso}
+                    onChange={(v) => setForm(p => ({ ...p, parteProceso: (v ?? '') as ParteProcesoType }))}
+                    label="Parte del proceso"
+                  >
+                    {({ value, onChange, readOnly }) => (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Parte del proceso">
+                        {PARTE_PROCESO_OPTIONS.map(opt => {
+                          const selected = value === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              disabled={readOnly}
+                              onClick={() => onChange(opt.value)}
+                              className={`px-3 py-3 rounded-xl border text-sm text-left transition-all ${
+                                selected
+                                  ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                              } ${readOnly ? 'opacity-90 cursor-default' : ''}`}
+                              style={{ fontWeight: selected ? 600 : 400 }}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </AutofillField>
                 </div>
               </section>
 
@@ -513,27 +632,44 @@ export function Step0Page() {
                     Elige el impacto principal, aunque hoy sea una estimación.
                   </p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {IMPACTO_3M_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setForm(p => ({ ...p, impacto3meses: opt.value }))}
-                      className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-sm text-left transition-all ${
-                        form.impacto3meses === opt.value
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-800'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                      }`}
-                    >
-                      <span
-                        className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex-none ${
-                          form.impacto3meses === opt.value
-                            ? 'border-indigo-500 bg-indigo-500'
-                            : 'border-slate-300'
-                        }`}
-                      />
-                      {opt.label}
-                    </button>
-                  ))}
+                <div id="field-step0-impacto3meses">
+                  <AutofillField
+                    fieldPath="step0.impacto3meses"
+                    initiativeId={project.id}
+                    value={form.impacto3meses}
+                    onChange={(v) => setForm(p => ({ ...p, impacto3meses: (v ?? '') as Impacto3mesesType }))}
+                    label="Impacto a 3 meses"
+                  >
+                    {({ value, onChange, readOnly }) => (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Impacto a 3 meses">
+                        {IMPACTO_3M_OPTIONS.map(opt => {
+                          const selected = value === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              disabled={readOnly}
+                              onClick={() => onChange(opt.value)}
+                              className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-sm text-left transition-all ${
+                                selected
+                                  ? 'border-indigo-400 bg-indigo-50 text-indigo-800'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                              } ${readOnly ? 'opacity-90 cursor-default' : ''}`}
+                            >
+                              <span
+                                className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex-none ${
+                                  selected ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'
+                                }`}
+                              />
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </AutofillField>
                 </div>
               </section>
 
@@ -549,27 +685,44 @@ export function Step0Page() {
                     Elige el respaldo más claro que ya tienes hoy.
                   </p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {RESPALDO_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setForm(p => ({ ...p, respaldo: opt.value }))}
-                      className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-sm text-left transition-all ${
-                        form.respaldo === opt.value
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-800'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                      }`}
-                    >
-                      <span
-                        className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex-none ${
-                          form.respaldo === opt.value
-                            ? 'border-indigo-500 bg-indigo-500'
-                            : 'border-slate-300'
-                        }`}
-                      />
-                      {opt.label}
-                    </button>
-                  ))}
+                <div id="field-step0-respaldo">
+                  <AutofillField
+                    fieldPath="step0.respaldo"
+                    initiativeId={project.id}
+                    value={form.respaldo}
+                    onChange={(v) => setForm(p => ({ ...p, respaldo: (v ?? '') as RespaldoType }))}
+                    label="Respaldo"
+                  >
+                    {({ value, onChange, readOnly }) => (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Respaldo">
+                        {RESPALDO_OPTIONS.map(opt => {
+                          const selected = value === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              disabled={readOnly}
+                              onClick={() => onChange(opt.value)}
+                              className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-sm text-left transition-all ${
+                                selected
+                                  ? 'border-indigo-400 bg-indigo-50 text-indigo-800'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                              } ${readOnly ? 'opacity-90 cursor-default' : ''}`}
+                            >
+                              <span
+                                className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex-none ${
+                                  selected ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'
+                                }`}
+                              />
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </AutofillField>
                 </div>
               </section>
 
@@ -585,13 +738,26 @@ export function Step0Page() {
                     Ej. Gerente de Operaciones, porque puede habilitar un piloto con dos áreas.
                   </p>
                 </div>
-                <textarea
-                  value={form.quienEscuchar}
-                  onChange={e => setForm(p => ({ ...p, quienEscuchar: e.target.value }))}
-                  rows={2}
-                  placeholder="Ej. La líder de Operaciones, porque puede priorizar el piloto y ayudar a destrabar la coordinación con otras áreas."
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none"
-                />
+                <div id="field-step0-quienEscuchar">
+                  <AutofillField
+                    fieldPath="step0.quienEscuchar"
+                    initiativeId={project.id}
+                    value={form.quienEscuchar}
+                    onChange={(v) => setForm(p => ({ ...p, quienEscuchar: String(v ?? '') }))}
+                    label="Quién debería escuchar"
+                  >
+                    {({ value, onChange, readOnly }) => (
+                      <textarea
+                        value={String(value ?? '')}
+                        onChange={e => onChange(e.target.value)}
+                        readOnly={readOnly}
+                        rows={2}
+                        placeholder="Ej. La líder de Operaciones, porque puede priorizar el piloto y ayudar a destrabar la coordinación con otras áreas."
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none"
+                      />
+                    )}
+                  </AutofillField>
+                </div>
                 <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
                   <p className="text-xs text-indigo-700">
                     Una iniciativa interna gana fuerza cuando una persona clave entiende el problema, ve su impacto y ayuda a destrabar el siguiente paso.

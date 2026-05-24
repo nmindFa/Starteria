@@ -5,6 +5,7 @@ import {
   LogOut, Menu, X, ChevronRight, Bell, Settings, Zap, CreditCard
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { AutofillHydrator } from '../components/autofill/AutofillHydrator';
 
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Participante',
@@ -265,6 +266,14 @@ export function AppLayout() {
         </header>
 
         <main className="flex-1 overflow-y-auto">
+          {/*
+            Side-effect-only hydrator. Reads `:projectId` from the active route
+            via useParams() and pre-fills the AutofillContext slice on mount so
+            that hard refreshes / direct deep-links to /projects/:id/step/N
+            still render the dashed-border chips. Returns null. See
+            components/autofill/AutofillHydrator.tsx for the rationale.
+          */}
+          <AutofillHydrator />
           <Outlet />
         </main>
       </div>

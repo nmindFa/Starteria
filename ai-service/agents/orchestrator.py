@@ -10,7 +10,14 @@ Routing logic:
   step=3, action=prototype-suggest -> experiment-coach
   step=3, action=experiment-analyze -> experiment-coach
   step=4                         -> narrative-builder
+  action=pdf_extract (any step)  -> pdf-extractor  (TASK-008, ADR-002 routing table)
   agentHint overrides step/module logic when set
+
+TODO(ADR-002): once the orchestrator owns a first-class routing table, replace the
+prompt-based routing above with a structured `(step, action) -> agent_id` map. The
+pdf-extractor entry is currently handled directly via `/ai/pdf-extract` (TASK-008),
+bypassing the orchestrator because the worker is async + binary-heavy. The hook
+below is the placeholder so the routing table is complete on paper.
 """
 
 from __future__ import annotations
@@ -91,11 +98,54 @@ _SUBAGENT_DESCRIPTIONS: dict[str, str] = {
     "narrative-builder": (
         "Constructor de narrativa del Step 4: storytelling de innovacion y presentaciones de impacto."
     ),
+    # TASK-008: pdf_extract is async (ADR-008) and handled directly via the
+    # router endpoint; the orchestrator surfaces it only as a routing target so
+    # the ADR-002 table stays complete.
+    "pdf-extractor": (
+        "Extrae propuestas de campos por Step (0-4) a partir de un PDF de iniciativa, "
+        "con provenance por página y costo controlado. Async: el endpoint devuelve runId."
+    ),
 }
 
 
+# TASK-008 §13 — ADR-002 routing-table hook. Used by future structured routing.
+# For V1 the endpoint `/ai/pdf-extract` bypasses the deepagents prompt-based router.
+ACTION_ROUTING_TABLE: dict[str, str] = {
+    "pdf_extract": "pdf-extractor",
+}
+
+
+class _UnconfiguredOrchestrator:
+    """Stub returned when OPENROUTER_API_KEY is missing. Lets uvicorn start so the
+    other endpoints (notably /ai/pdf-extract, which has its own LLM init) stay up.
+    Any invocation raises a clear configuration error mapped to a 503 by the router.
+    """
+
+    def __init__(self, reason: str) -> None:
+        self._reason = reason
+
+    def invoke(self, *_args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+        raise RuntimeError(f"Orchestrator unavailable: {self._reason}")
+
+    async def ainvoke(self, *_args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+        raise RuntimeError(f"Orchestrator unavailable: {self._reason}")
+
+
 def _build_orchestrator() -> Any:
-    """Construye el agente orquestador con todos los subagentes."""
+    """Construye el agente orquestador con todos los subagentes.
+
+    Si `OPENROUTER_API_KEY` no está configurada, devuelve un stub que falla con
+    error claro en cada invocación. Esto permite que uvicorn arranque y que otros
+    endpoints (p.ej. `/ai/pdf-extract`, que tiene su propio init de LLM) sigan
+    funcionando. Sin este fallback, un container sin la key crashea al startup.
+    """
+    import os
+
+    if not os.getenv("OPENROUTER_API_KEY"):
+        msg = "OPENROUTER_API_KEY not set; deepagents-based subagents disabled until configured."
+        logger.warning(msg)
+        return _UnconfiguredOrchestrator(reason=msg)
+
     subagent_factories = [
         ("mentor-virtual", create_mentor_virtual_agent),
         ("feedback-ia", create_feedback_ia_agent),
@@ -105,29 +155,45 @@ def _build_orchestrator() -> Any:
         ("narrative-builder", create_narrative_builder_agent),
     ]
 
-    subagents = [
-        {
+    # Build each subagent defensively — a single bad factory must not kill startup
+    # for the whole orchestrator. If any factory raises (e.g. transient ChatOpenRouter
+    # init issue), log + skip that subagent. The orchestrator runs with what survives.
+    subagents = []
+    for name, factory in subagent_factories:
+        try:
+            runnable = factory()
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Failed to build subagent %r: %s — skipping", name, exc)
+            continue
+        subagents.append({
             "name": name,
             "description": _SUBAGENT_DESCRIPTIONS[name],
-            "runnable": factory(),
-        }
-        for name, factory in subagent_factories
-    ]
+            "runnable": runnable,
+        })
 
-    return create_deep_agent(
-        name=AGENT_ID,
-        model=MODEL,
-        tools=[get_agent_routing_hint, get_step_description],
-        system_prompt=_SYSTEM_PROMPT,
-        subagents=subagents,
-        backend=FilesystemBackend(
-            root_dir=str(Path(__file__).parent.parent),
-            virtual_mode=True,
-        ),
-        skills=[SKILLS_DIR],
-        checkpointer=MemorySaver(),
-        store=_shared_store,
-    )
+    if not subagents:
+        msg = "All deepagents-based subagent factories failed; orchestrator disabled."
+        logger.error(msg)
+        return _UnconfiguredOrchestrator(reason=msg)
+
+    try:
+        return create_deep_agent(
+            name=AGENT_ID,
+            model=MODEL,
+            tools=[get_agent_routing_hint, get_step_description],
+            system_prompt=_SYSTEM_PROMPT,
+            subagents=subagents,
+            backend=FilesystemBackend(
+                root_dir=str(Path(__file__).parent.parent),
+                virtual_mode=True,
+            ),
+            skills=[SKILLS_DIR],
+            checkpointer=MemorySaver(),
+            store=_shared_store,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error("create_deep_agent failed: %s — orchestrator disabled", exc)
+        return _UnconfiguredOrchestrator(reason=f"create_deep_agent failed: {exc}")
 
 
 # Singleton — initialized once per process

@@ -60,13 +60,13 @@ Claude Flow V3 is a domain-driven design architecture for multi-agent AI coordin
 ### Quick Commands
 ```bash
 # Initialize swarm
-npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized
+npx ruflo swarm init --topology hierarchical --max-agents 8 --strategy specialized
 
 # Check status
-npx @claude-flow/cli@latest swarm status
+npx ruflo swarm status
 
 # Monitor activity
-npx @claude-flow/cli@latest swarm monitor
+npx ruflo swarm monitor
 ```
 
 ---
@@ -150,17 +150,17 @@ npx @claude-flow/cli@latest swarm monitor
 ### Example Commands
 ```bash
 # Initialize
-npx @claude-flow/cli@latest init --wizard
+npx ruflo init --wizard
 
 # Spawn agent
-npx @claude-flow/cli@latest agent spawn -t coder --name my-coder
+npx ruflo agent spawn -t coder --name my-coder
 
 # Memory operations
-npx @claude-flow/cli@latest memory store --key "pattern" --value "data" --namespace patterns
-npx @claude-flow/cli@latest memory search --query "authentication"
+npx ruflo memory store --key "pattern" --value "data" --namespace patterns
+npx ruflo memory search --query "authentication"
 
 # Diagnostics
-npx @claude-flow/cli@latest doctor --fix
+npx ruflo doctor --fix
 ```
 
 ---
@@ -259,16 +259,16 @@ High-confidence insights (>0.8) can transfer between agents.
 ### Memory Commands
 ```bash
 # Store pattern
-npx @claude-flow/cli@latest memory store --key "name" --value "data" --namespace patterns
+npx ruflo memory store --key "name" --value "data" --namespace patterns
 
 # Semantic search
-npx @claude-flow/cli@latest memory search --query "authentication"
+npx ruflo memory search --query "authentication"
 
 # List entries
-npx @claude-flow/cli@latest memory list --namespace patterns
+npx ruflo memory list --namespace patterns
 
 # Initialize database
-npx @claude-flow/cli@latest memory init --force
+npx ruflo memory init --force
 ```
 
 ---
@@ -297,16 +297,16 @@ npx @claude-flow/cli@latest memory init --force
 ### Hive-Mind Commands
 ```bash
 # Initialize
-npx @claude-flow/cli@latest hive-mind init --queen-type strategic
+npx ruflo hive-mind init --queen-type strategic
 
 # Status
-npx @claude-flow/cli@latest hive-mind status
+npx ruflo hive-mind status
 
 # Spawn workers
-npx @claude-flow/cli@latest hive-mind spawn --count 5 --type worker
+npx ruflo hive-mind spawn --count 5 --type worker
 
 # Consensus
-npx @claude-flow/cli@latest hive-mind consensus --propose "task"
+npx ruflo hive-mind consensus --propose "task"
 ```
 
 ---
@@ -350,7 +350,7 @@ npx @claude-flow/cli@latest hive-mind consensus --propose "task"
 ### MCP Server Setup
 ```bash
 # Add Claude Flow MCP
-claude mcp add claude-flow -- npx -y @claude-flow/cli@latest
+claude mcp add claude-flow -- npx -y ruflo
 
 # Optional servers
 claude mcp add ruv-swarm -- npx -y ruv-swarm mcp start
@@ -364,24 +364,24 @@ claude mcp add flow-nexus -- npx -y flow-nexus@latest mcp start
 ### Essential Commands
 ```bash
 # Setup
-npx @claude-flow/cli@latest init --wizard
-npx @claude-flow/cli@latest daemon start
-npx @claude-flow/cli@latest doctor --fix
+npx ruflo init --wizard
+npx ruflo daemon start
+npx ruflo doctor --fix
 
 # Swarm
-npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8
-npx @claude-flow/cli@latest swarm status
+npx ruflo swarm init --topology hierarchical --max-agents 8
+npx ruflo swarm status
 
 # Agents
-npx @claude-flow/cli@latest agent spawn -t coder
-npx @claude-flow/cli@latest agent list
+npx ruflo agent spawn -t coder
+npx ruflo agent list
 
 # Memory
-npx @claude-flow/cli@latest memory search --query "patterns"
+npx ruflo memory search --query "patterns"
 
 # Hooks
-npx @claude-flow/cli@latest hooks pre-task --description "task"
-npx @claude-flow/cli@latest hooks worker dispatch --trigger optimize
+npx ruflo hooks pre-task --description "task"
+npx ruflo hooks worker dispatch --trigger optimize
 ```
 
 ### File Structure

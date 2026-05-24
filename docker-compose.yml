@@ -17,6 +17,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # Isolated pgvector instance for the pdf_extractor spike (ai-service/spikes/pdf_extractor).
+  # NOT used by backend/. Remove this service when the spike is promoted or abandoned.
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: starteria-pgvector
+    restart: unless-stopped
+    profiles: ["spike"]
+    environment:
+      POSTGRES_DB: ${PGVECTOR_DB:-starteria_pdf_spike}
+      POSTGRES_USER: ${PGVECTOR_USER:-postgres}
+      POSTGRES_PASSWORD: ${PGVECTOR_PASSWORD:-postgres}
+    ports:
+      - "5435:5432"
+    volumes:
+      - pgvectordata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -35,6 +56,13 @@ services:
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # PDF auto-fill (PRD-002 / SPEC-002)
+      LOCAL_STORAGE_DIR: /app/storage
+      AI_SERVICE_URL: http://ai-service:8001
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-shared-secret-change-me}
+      BRIDGE_SHARED_SECRET: ${BRIDGE_SHARED_SECRET:-dev-shared-secret-change-me}
+    volumes:
+      - pdfstorage:/app/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,12 +71,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        # Relative path → nginx (sidecar) proxies /api/* to starteria-backend:3001.
+        # This avoids CORS entirely (same-origin requests) and matches the auth router
+        # mounted at /api/v1/* in backend/app.ts.
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
+        VITE_FEATURE_PDF_AUTOFILL: ${VITE_FEATURE_PDF_AUTOFILL:-true}
     container_name: starteria-frontend
     restart: unless-stopped
     ports:
       - "80:80"
     environment:
-      VITE_API_URL: http://localhost:3001
+      VITE_API_URL: ${VITE_API_URL:-/api/v1}
+      VITE_FEATURE_PDF_AUTOFILL: ${VITE_FEATURE_PDF_AUTOFILL:-true}
     depends_on:
       - backend
 
@@ -60,15 +95,35 @@ services:
     restart: unless-stopped
     ports:
       - "8001:8001"
+    # Read OPENROUTER_API_KEY (and other ai-service-specific keys) directly from
+    # ai-service/.env. Without this, docker-compose only interpolates from the
+    # root .env, so a key placed in ai-service/.env never reaches the container
+    # and pdf_extractor.extractor._build_llm() raises RuntimeError on every run.
+    env_file:
+      - ./ai-service/.env
     environment:
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-deepseek/deepseek-chat}
       - ENVIRONMENT=${NODE_ENV:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
       - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-starteria-ai-service}
       - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      # PDF auto-fill (TASK-007 bridge V1; matches backend AI_SERVICE_TOKEN)
+      - AI_SERVICE_INTERNAL_TOKEN=${AI_SERVICE_TOKEN:-dev-shared-secret-change-me}
+      - EVAL_COST_CAP_USD=${EVAL_COST_CAP_USD:-0.30}
+      # Outbound push: when an extraction finishes, ai-service POSTs the run state
+      # to backend so the DB is updated even when no frontend is polling. The
+      # backend listens at /api/v1/internal/ai/webhooks/pdf-extract/runs/:aiRunId.
+      # Token is the same shared secret used in the inbound direction so rotation
+      # stays single-keyed. Leave BACKEND_WEBHOOK_URL empty to disable the push
+      # (the backend's reactive polling path is the fallback).
+      - BACKEND_WEBHOOK_URL=${BACKEND_WEBHOOK_URL:-http://backend:3001/api/v1/internal/ai/webhooks/pdf-extract/runs}
+      - BACKEND_WEBHOOK_TOKEN=${AI_SERVICE_TOKEN:-dev-shared-secret-change-me}
     depends_on:
       - backend
 
 volumes:
   pgdata:
+  pgvectordata:
+  pdfstorage:

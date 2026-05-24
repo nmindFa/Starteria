@@ -1,0 +1,1416 @@
+{
+  "ran_at": "2026-05-19T19:47:21.957205",
+  "metadata": {
+    "model": "deepseek/deepseek-chat",
+    "language": "es",
+    "pages": 14,
+    "started_at": "2026-05-19T19:44:31.249386",
+    "finished_at": "2026-05-19T19:47:21.927307",
+    "duration_ms": 170677,
+    "per_step_ms": {
+      "step0": 23286,
+      "step1": 39433,
+      "step2": 16367,
+      "step3": 27672,
+      "step4": 63916
+    },
+    "per_step_tokens": {
+      "step0": {
+        "input": 2673,
+        "output": 1104
+      },
+      "step1": {
+        "input": 2824,
+        "output": 1669
+      },
+      "step2": {
+        "input": 2399,
+        "output": 858
+      },
+      "step3": {
+        "input": 2971,
+        "output": 1129
+      },
+      "step4": {
+        "input": 2936,
+        "output": 2292
+      }
+    },
+    "parse_failures": []
+  },
+  "totals": {
+    "total_fields": 57,
+    "proposed_count": 52,
+    "correct_count": 38,
+    "provenance_ok_count": 51,
+    "precision": 0.7307692307692307,
+    "recall": 0.6666666666666666,
+    "hallucination_rate": 0.0,
+    "provenance_page_accuracy": 0.9807692307692307
+  },
+  "must_omit_violations": [],
+  "fields": [
+    {
+      "path": "step0.nombreParticipante",
+      "rule": "substring",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Nancy Andrade",
+      "actual": "Nancy Andrade"
+    },
+    {
+      "path": "step0.rolArea",
+      "rule": "substring",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Sub Gerente Créditos y Cobranzas / Sub Gerente Sucursales — Unimaq (Ferreycorp)",
+      "actual": "Sub Gerente Créditos y Cobranzas — Unimaq"
+    },
+    {
+      "path": "step0.origen",
+      "rule": "exact",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "problema",
+      "actual": "problema"
+    },
+    {
+      "path": "step0.quePasaQueQuieres",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "Las sucursales no pueden resolver excepciones de crédito localmente: deben esper",
+      "actual": "Las sucursales enfrentan rigidez operativa debido a la centralización de decisio"
+    },
+    {
+      "path": "step0.impacta",
+      "rule": "list_overlap",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "['Operaciones', 'Ventas', 'Clientes externos', 'Finanzas']",
+      "actual": "['Clientes externos', 'Operaciones', 'Finanzas']"
+    },
+    {
+      "path": "step0.parteProceso",
+      "rule": "exact",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "durante",
+      "actual": "durante"
+    },
+    {
+      "path": "step0.impacto3meses",
+      "rule": "exact",
+      "weight": 0.7,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": false,
+      "expected": "cliente",
+      "actual": "productividad"
+    },
+    {
+      "path": "step0.respaldo",
+      "rule": "exact",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "datos",
+      "actual": "datos"
+    },
+    {
+      "path": "step0.quienEscuchar",
+      "rule": "list_overlap",
+      "weight": 0.7,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Jefes de Oficina, Administradores de Sucursal, Equipo de Créditos",
+      "actual": "Jefes de oficina, administradores, equipo de créditos"
+    },
+    {
+      "path": "step1.asisData.casoReal",
+      "rule": "freeform_long",
+      "weight": 0.9,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Un cliente con urgencia llega a la sucursal para liberar pedido o crédito; el si",
+      "actual": "Un cliente con urgencia llega a la sucursal para resolver un problema de crédito"
+    },
+    {
+      "path": "step1.asisData.quiebre",
+      "rule": "substring",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Esperar autorización desde Lima",
+      "actual": "Esperar la autorización desde Lima"
+    },
+    {
+      "path": "step1.asisData.quiebreDetalle",
+      "rule": "freeform_long",
+      "weight": 0.9,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "La decisión de liberación está centralizada en Lima; las reglas de admisión en S",
+      "actual": "El quiebre ocurre debido a criterios contradictorios en SAP heredados desde la i"
+    },
+    {
+      "path": "step1.asisData.consecuencia",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "El cliente queda sin operar; el equipo de créditos se satura administrativamente",
+      "actual": "El quiebre genera una carga administrativa masiva para el equipo de créditos, de"
+    },
+    {
+      "path": "step1.asisData.consequenceTags",
+      "rule": "list_overlap",
+      "weight": 0.7,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "['operativa', 'economica', 'humana']",
+      "actual": "['operativa', 'humana']"
+    },
+    {
+      "path": "step1.asisData.causaInmediata",
+      "rule": "freeform_long",
+      "weight": 0.9,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "Criterios contradictorios en SAP heredados desde la implementación + centralizac",
+      "actual": "Criterios contradictorios en SAP heredados desde la implementación"
+    },
+    {
+      "path": "step1.asisData.evidenciaTipo",
+      "rule": "exact",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "dato",
+      "actual": "dato"
+    },
+    {
+      "path": "step1.asisData.evidenciaNota",
+      "rule": "substring",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "6,000+ excepciones en 2025 con 5h+ de lead time de respuesta",
+      "actual": "6,000+ excepciones en 2025 con 5h+ lead time"
+    },
+    {
+      "path": "step1.asisData.alcance",
+      "rule": "exact",
+      "weight": 0.7,
+      "proposed": false,
+      "correct": false,
+      "provenance_ok": false,
+      "expected": "durante",
+      "actual": "—"
+    },
+    {
+      "path": "step1.cData.limitesChips",
+      "rule": "list_overlap",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "['no comprometer riesgo financiero', 'reglas claras', 'control corporativo', 'ca",
+      "actual": "['no comprometer riesgo financiero', 'reglas claras', 'capacitación constante']"
+    },
+    {
+      "path": "step1.cData.dependencia",
+      "rule": "substring",
+      "weight": 0.9,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Reglas de admisión en SAP + Equipo de Créditos en Lima (centralización)",
+      "actual": "SAP, equipo de Lima"
+    },
+    {
+      "path": "step1.cData.alternativaPiloto",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Piloto en sucursales Arequipa y Huancayo usando SAP Fiori (Liberación Directa) +",
+      "actual": "El piloto se ejecutó en las sucursales de Arequipa y Huancayo, utilizando herram"
+    },
+    {
+      "path": "step2.hmw",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "¿Cómo habilitamos a jefes y administradores de sucursal con criterios claros, ca",
+      "actual": "¿Cómo habilitamos a los jefes y administradores de sucursal con criterios claros"
+    },
+    {
+      "path": "step2.testCard.hipotesis",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Si habilitamos a los jefes y administradores con criterios claros, capacitación ",
+      "actual": "Si habilitamos a los jefes y administradores con criterios claros, capacitación "
+    },
+    {
+      "path": "step2.testCard.queTestan",
+      "rule": "substring",
+      "weight": 0.7,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Viabilidad del modelo de autonomía descentralizada en condiciones reales",
+      "actual": "viabilidad del modelo"
+    },
+    {
+      "path": "step2.testCard.conQuien",
+      "rule": "substring",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "Sucursales Arequipa y Huancayo (jefes y administradores)",
+      "actual": "jefes y administradores de sucursal"
+    },
+    {
+      "path": "step2.testCard.dondeCuando",
+      "rule": "substring",
+      "weight": 0.7,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Sedes con alto flujo (Arequipa y Huancayo), durante operación normal incluyendo ",
+      "actual": "Arequipa y Huancayo, sedes con alto flujo"
+    },
+    {
+      "path": "step2.testCard.metodo",
+      "rule": "substring",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "SAP Fiori (Liberación Directa) + Plataforma de Alerta Rápida + Reglas de Verific",
+      "actual": "SAP Fiori (Liberación Directa), Plataforma de Alerta Rápida, Normas: Reglas de V"
+    },
+    {
+      "path": "step2.testCard.metrica",
+      "rule": "substring",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Lead time de respuesta (minutos) y % de solicitudes resueltas localmente",
+      "actual": "Reducción del tiempo de respuesta (lead time), % de solicitudes resueltas localm"
+    },
+    {
+      "path": "step3.formatoExp",
+      "rule": "exact",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Piloto operativo",
+      "actual": "Piloto operativo"
+    },
+    {
+      "path": "step3.logistica.donde",
+      "rule": "substring",
+      "weight": 1.0,
+      "proposed": false,
+      "correct": false,
+      "provenance_ok": false,
+      "expected": "Arequipa y Huancayo",
+      "actual": "—"
+    },
+    {
+      "path": "step3.instrumentacion",
+      "rule": "list_overlap",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "[{'dato': 'Lead time de respuesta', 'metricaExito': 'Reducción ≥50%', 'fuente': ",
+      "actual": "[{'dato': 'Lead time', 'metricaExito': 'Reducción del tiempo de respuesta', 'fue"
+    },
+    {
+      "path": "step3.testCycles[0].queValidamos",
+      "rule": "freeform_long",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Si habilitar autonomía local con SAP Fiori + Reglas Nivel 2 reduce lead time y m",
+      "actual": "Si habilitar autonomía local con SAP Fiori reduce lead time manteniendo control"
+    },
+    {
+      "path": "step3.testCycles[0].metricaPrincipal",
+      "rule": "substring",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Lead time (minutos) y % resolución local",
+      "actual": "Lead time (min) y % de resolución local"
+    },
+    {
+      "path": "step3.testCycles[0].resultadoEsperado",
+      "rule": "freeform_long",
+      "weight": 0.6,
+      "proposed": false,
+      "correct": false,
+      "provenance_ok": false,
+      "expected": "Reducción significativa de lead time (objetivo implícito: <60min) y resolución l",
+      "actual": "—"
+    },
+    {
+      "path": "step3.testCycles[0].resultadoObservado",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Lead time pasó de 300 min (5h) a 21 min (-93%); 42% de las solicitudes se resolv",
+      "actual": "300min → 21min (-93%); 42% resueltas localmente"
+    },
+    {
+      "path": "step3.testCycles[0].decision",
+      "rule": "exact",
+      "weight": 0.9,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "mantener",
+      "actual": "mantener"
+    },
+    {
+      "path": "step3.testCycles[0].aprendizaje",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": false,
+      "correct": false,
+      "provenance_ok": false,
+      "expected": "(1) Capacidad Local: la sucursal puede asumir mayor protagonismo cuando sabe exa",
+      "actual": "—"
+    },
+    {
+      "path": "step3.goNoGo",
+      "rule": "exact",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Go",
+      "actual": "Go"
+    },
+    {
+      "path": "step3.aprendizajes",
+      "rule": "list_overlap",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "['Capacidad Local: la sucursal puede asumir mayor protagonismo cuando sabe exact",
+      "actual": "['La sucursal puede asumir mayor protagonismo cuando sabe exactamente hasta dónd"
+    },
+    {
+      "path": "step3.diagnostico.senales",
+      "rule": "list_overlap",
+      "weight": 1.0,
+      "proposed": false,
+      "correct": false,
+      "provenance_ok": false,
+      "expected": "['-93% reducción de tiempo (300min → 21min)', '42% de solicitudes resueltas loca",
+      "actual": "—"
+    },
+    {
+      "path": "step4.audience",
+      "rule": "exact",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Comite",
+      "actual": "Comite"
+    },
+    {
+      "path": "step4.meetingGoal",
+      "rule": "substring",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Solicitar aprobación de escalamiento + sponsorship + presupuesto tecnología",
+      "actual": "Validar priorización estratégica, asignar sponsorship gerencial y aprobar presup"
+    },
+    {
+      "path": "step4.decision",
+      "rule": "exact",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Go",
+      "actual": "Go"
+    },
+    {
+      "path": "step4.closureType",
+      "rule": "exact",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Implementar",
+      "actual": "Implementar"
+    },
+    {
+      "path": "step4.presentation.problem",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "Rigidez operativa: las sucursales no pueden resolver excepciones de crédito sin ",
+      "actual": "La rigidez operativa y la centralización de decisiones en Lima generan una carga"
+    },
+    {
+      "path": "step4.presentation.urgency",
+      "rule": "freeform_long",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "La operatividad del cliente se detiene en fines de semana y cierres de mes; el e",
+      "actual": "La necesidad de responder rápidamente a las excepciones y mejorar la experiencia"
+    },
+    {
+      "path": "step4.presentation.evidence",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "6,000+ excepciones en 2025; 5h+ lead time; piloto Arequipa+Huancayo: 300min → 21",
+      "actual": "En 2025 se registraron más de 6,000 excepciones con un lead time de respuesta de"
+    },
+    {
+      "path": "step4.presentation.proposal",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "Protocolo de Autonomía: habilitación local de jefes y administradores con criter",
+      "actual": "Habilitar a los jefes y administradores locales con criterios claros, capacitaci"
+    },
+    {
+      "path": "step4.presentation.solutionComponents",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "SAP Fiori (Liberación Directa) + Plataforma de Alerta Rápida + Reglas de Verific",
+      "actual": "Herramientas como SAP Fiori (Liberación Directa), Plataforma de Alerta Rápida y "
+    },
+    {
+      "path": "step4.presentation.tests",
+      "rule": "substring",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Piloto en sucursales Arequipa y Huancayo, sedes con alto flujo, durante operació",
+      "actual": "Piloto ejecutado en las sucursales de Arequipa y Huancayo, elegidas por su alto "
+    },
+    {
+      "path": "step4.presentation.results",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Reducción de lead time 300min → 21min (-93%) y 42% de solicitudes resueltas loca",
+      "actual": "El tiempo de respuesta se redujo en un 93%, alcanzando 21 minutos, y el 42% de l"
+    },
+    {
+      "path": "step4.presentation.recommendation",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Adoptar escenario Conservador: monitoreo del dashboard de métricas + despliegue ",
+      "actual": "Se recomienda el escenario Conservador, que incluye el monitoreo del dashboard d"
+    },
+    {
+      "path": "step4.presentation.orgNeeds",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Priorización estratégica del frente, sponsor gerencial para remover barreras téc",
+      "actual": "Priorización estratégica, asignación de un sponsor gerencial para remover barrer"
+    },
+    {
+      "path": "step4.presentation.nextStep",
+      "rule": "freeform_long",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "Pedido al Comité: aprobar priorización, asignar sponsor gerencial, iniciar fase ",
+      "actual": "Aprobar el presupuesto para la repotenciación tecnológica y asignar un sponsor g"
+    },
+    {
+      "path": "step4.implementationPlan",
+      "rule": "list_overlap",
+      "weight": 1.0,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "[{'stage': 'Flexibilización y Continuidad del Negocio', 'activity': 'Disponibili",
+      "actual": "[{'stage': 'Conservador', 'activity': 'Monitoreo del dashboard de métricas', 'ex"
+    },
+    {
+      "path": "step4.orgContext.affectedAreas",
+      "rule": "list_overlap",
+      "weight": 0.7,
+      "proposed": true,
+      "correct": false,
+      "provenance_ok": true,
+      "expected": "Sucursales (Arequipa, Huancayo, Lima y red nacional), Equipo de Créditos y Cobra",
+      "actual": "Área de Créditos y sucursales de Arequipa y Huancayo."
+    },
+    {
+      "path": "step4.orgContext.risks",
+      "rule": "freeform_long",
+      "weight": 0.8,
+      "proposed": true,
+      "correct": true,
+      "provenance_ok": true,
+      "expected": "Si no se establecen reglas claras y dashboard de seguimiento, la autonomía puede",
+      "actual": "La autonomía sin reglas claras y datos confiables puede llevar al descontrol. Es"
+    }
+  ],
+  "thresholds": {
+    "precision_per_field_min": 0.8,
+    "recall_per_field_min": 0.7,
+    "hallucination_rate_max": 0.03,
+    "must_omit_violation_max": 0.05,
+    "confidence_low_band_max": 0.59,
+    "confidence_med_band": [
+      0.6,
+      0.79
+    ],
+    "confidence_high_band_min": 0.8,
+    "provenance_page_accuracy_min": 0.9
+  },
+  "extraction": {
+    "step0": {
+      "nombreParticipante": {
+        "value": "Nancy Andrade",
+        "provenance": [
+          {
+            "page": 14,
+            "quote": "Nancy Andrade\nSub Gerente Créditos y Cobranzas",
+            "confidence": 0.95
+          }
+        ],
+        "confidence": 0.95
+      },
+      "rolArea": {
+        "value": "Sub Gerente Créditos y Cobranzas — Unimaq",
+        "provenance": [
+          {
+            "page": 14,
+            "quote": "Nancy Andrade\nSub Gerente Créditos y Cobranzas",
+            "confidence": 0.95
+          }
+        ],
+        "confidence": 0.95
+      },
+      "origen": {
+        "value": "problema",
+        "provenance": [
+          {
+            "page": 3,
+            "quote": "El Reto:\nRigidez Operativa",
+            "confidence": 0.92
+          }
+        ],
+        "confidence": 0.92
+      },
+      "quePasaQueQuieres": {
+        "value": "Las sucursales enfrentan rigidez operativa debido a la centralización de decisiones en Lima, generando 6,000+ excepciones anuales y un lead time de 5 horas que afecta la operatividad del cliente. El objetivo es habilitar a los jefes y administradores locales con criterios claros y herramientas para resolver excepciones de forma rápida y segura.",
+        "provenance": [
+          {
+            "page": 3,
+            "quote": "El Reto:\nRigidez Operativa\nUna carga administrativa masiva para el equipo de créditos\nque detiene la operatividad del cliente durante ﬁnes de\nsemana o cierres de mes.",
+            "confidence": 0.9
+          },
+          {
+            "page": 5,
+            "quote": "Si habilitamos a los jefes y\nadministradores con criterios claros,\ncapacitación y herramientas ya\ndisponibles...",
+            "confidence": 0.9
+          }
+        ],
+        "confidence": 0.88
+      },
+      "impacta": {
+        "value": [
+          "Clientes externos",
+          "Operaciones",
+          "Finanzas"
+        ],
+        "provenance": [
+          {
+            "page": 3,
+            "quote": "Una carga administrativa masiva para el equipo de créditos\nque detiene la operatividad del cliente durante ﬁnes de\nsemana o cierres de mes.",
+            "confidence": 0.85
+          },
+          {
+            "page": 4,
+            "quote": "Cuellos de botella por\ncentralización de decisiones en\nLima.",
+            "confidence": 0.8
+          }
+        ],
+        "confidence": 0.8
+      },
+      "parteProceso": {
+        "value": "durante",
+        "provenance": [
+          {
+            "page": 3,
+            "quote": "Una carga administrativa masiva para el equipo de créditos\nque detiene la operatividad del cliente durante ﬁnes de\nsemana o cierres de mes.",
+            "confidence": 0.85
+          }
+        ],
+        "confidence": 0.85
+      },
+      "impacto3meses": {
+        "value": "productividad",
+        "provenance": [
+          {
+            "page": 8,
+            "quote": "300 min (5h)\n21 minDurante\nExperimento\n-93%",
+            "confidence": 0.8
+          }
+        ],
+        "confidence": 0.8
+      },
+      "respaldo": {
+        "value": "datos",
+        "provenance": [
+          {
+            "page": 3,
+            "quote": "6,000+\nEXCEPCIONES EN 2025\n5h+\nLEAD TIME DE RESPUESTA",
+            "confidence": 0.9
+          },
+          {
+            "page": 8,
+            "quote": "300 min (5h)\n21 minDurante\nExperimento\n-93%",
+            "confidence": 0.9
+          }
+        ],
+        "confidence": 0.9
+      },
+      "quienEscuchar": {
+        "value": "Jefes de oficina, administradores, equipo de créditos",
+        "provenance": [
+          {
+            "page": 5,
+            "quote": "Si habilitamos a los jefes y\nadministradores con criterios claros,\ncapacitación y herramientas ya\ndisponibles...",
+            "confidence": 0.85
+          },
+          {
+            "page": 14,
+            "quote": "Jose llanos\nJefe Oﬁcina Chiclayo\nVanessa Tello\nJefe Adm Trujillo",
+            "confidence": 0.8
+          }
+        ],
+        "confidence": 0.8
+      }
+    },
+    "step1": {
+      "asisData": {
+        "casoReal": {
+          "value": "Un cliente con urgencia llega a la sucursal para resolver un problema de crédito; el sistema SAP bloquea la operación debido a criterios contradictorios heredados; el ejecutivo debe esperar la autorización desde Lima, lo que detiene la operatividad del cliente durante fines de semana o cierres de mes.",
+          "provenance": [
+            {
+              "page": 2,
+              "quote": "\"Entiendo tu urgencia, pero necesitamos esperar la autorización desde Lima.\"",
+              "confidence": 0.9
+            },
+            {
+              "page": 3,
+              "quote": "Una carga administrativa masiva para el equipo de créditos que detiene la operatividad del cliente durante fines de semana o cierres de mes.",
+              "confidence": 0.85
+            },
+            {
+              "page": 4,
+              "quote": "Criterios contradictorios en SAP heredados desde la implementación.",
+              "confidence": 0.85
+            }
+          ],
+          "confidence": 0.87
+        },
+        "quiebre": {
+          "value": "Esperar la autorización desde Lima",
+          "provenance": [
+            {
+              "page": 2,
+              "quote": "\"Entiendo tu urgencia, pero necesitamos esperar la autorización desde Lima.\"",
+              "confidence": 0.95
+            }
+          ],
+          "confidence": 0.95
+        },
+        "quiebreDetalle": {
+          "value": "El quiebre ocurre debido a criterios contradictorios en SAP heredados desde la implementación, cuellos de botella por la centralización de decisiones en Lima, y la dificultad de consultar datos en tiempo real para el perfil comercial.",
+          "provenance": [
+            {
+              "page": 4,
+              "quote": "Criterios contradictorios en SAP heredados desde la implementación.",
+              "confidence": 0.9
+            },
+            {
+              "page": 4,
+              "quote": "Cuellos de botella por centralización de decisiones en Lima.",
+              "confidence": 0.9
+            },
+            {
+              "page": 4,
+              "quote": "Datos difíciles de consultar en tiempo real para el perfil comercial.",
+              "confidence": 0.85
+            }
+          ],
+          "confidence": 0.88
+        },
+        "consecuencia": {
+          "value": "El quiebre genera una carga administrativa masiva para el equipo de créditos, deteniendo la operatividad del cliente durante fines de semana o cierres de mes, con un lead time de respuesta de 5 horas y más de 6,000 excepciones en 2025.",
+          "provenance": [
+            {
+              "page": 3,
+              "quote": "Una carga administrativa masiva para el equipo de créditos que detiene la operatividad del cliente durante fines de semana o cierres de mes.",
+              "confidence": 0.9
+            },
+            {
+              "page": 3,
+              "quote": "6,000+ EXCEPCIONES EN 2025",
+              "confidence": 0.85
+            },
+            {
+              "page": 3,
+              "quote": "5h+ LEAD TIME DE RESPUESTA",
+              "confidence": 0.85
+            }
+          ],
+          "confidence": 0.87
+        },
+        "consequenceTags": {
+          "value": [
+            "operativa",
+            "humana"
+          ],
+          "provenance": [
+            {
+              "page": 3,
+              "quote": "Una carga administrativa masiva para el equipo de créditos que detiene la operatividad del cliente durante fines de semana o cierres de mes.",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "causaInmediata": {
+          "value": "Criterios contradictorios en SAP heredados desde la implementación",
+          "provenance": [
+            {
+              "page": 4,
+              "quote": "Criterios contradictorios en SAP heredados desde la implementación.",
+              "confidence": 0.95
+            }
+          ],
+          "confidence": 0.95
+        },
+        "evidenciaTipo": {
+          "value": "dato",
+          "provenance": [
+            {
+              "page": 3,
+              "quote": "6,000+ EXCEPCIONES EN 2025",
+              "confidence": 0.9
+            },
+            {
+              "page": 3,
+              "quote": "5h+ LEAD TIME DE RESPUESTA",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "evidenciaNota": {
+          "value": "6,000+ excepciones en 2025 con 5h+ lead time",
+          "provenance": [
+            {
+              "page": 3,
+              "quote": "6,000+ EXCEPCIONES EN 2025",
+              "confidence": 0.9
+            },
+            {
+              "page": 3,
+              "quote": "5h+ LEAD TIME DE RESPUESTA",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "alcance": null
+      },
+      "cData": {
+        "limitesChips": {
+          "value": [
+            "no comprometer riesgo financiero",
+            "reglas claras",
+            "capacitación constante"
+          ],
+          "provenance": [
+            {
+              "page": 5,
+              "quote": "sin comprometer la gestión del riesgo financiero",
+              "confidence": 0.9
+            },
+            {
+              "page": 7,
+              "quote": "La autonomía real requiere reglas claras, datos confiables para el seguimiento y capacitación constante.",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "dependencia": {
+          "value": "SAP, equipo de Lima",
+          "provenance": [
+            {
+              "page": 4,
+              "quote": "Cuellos de botella por centralización de decisiones en Lima.",
+              "confidence": 0.9
+            },
+            {
+              "page": 4,
+              "quote": "Criterios contradictorios en SAP heredados desde la implementación.",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "alternativaPiloto": {
+          "value": "El piloto se ejecutó en las sucursales de Arequipa y Huancayo, utilizando herramientas como SAP Fiori (Liberación Directa), Plataforma de Alerta Rápida, y Normas de Verificación Nivel 2.",
+          "provenance": [
+            {
+              "page": 6,
+              "quote": "Arequipa y Huancayo Elegimos sedes con alto flujo para demostrar la viabilidad del modelo en condiciones reales.",
+              "confidence": 0.9
+            },
+            {
+              "page": 6,
+              "quote": "Herramientas Utilizadas: SAP Fiori (Liberación Directa) Plataforma de Alerta Rápida Normas: Reglas de Verificación Nivel 2",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        }
+      }
+    },
+    "step2": {
+      "hmw": {
+        "value": "¿Cómo habilitamos a los jefes y administradores de sucursal con criterios claros, capacitación y herramientas para resolver excepciones de forma rápida y segura, sin comprometer la gestión del riesgo financiero?",
+        "provenance": [
+          {
+            "page": 5,
+            "quote": "Si habilitamos a los jefes y administradores con criterios claros, capacitación y herramientas ya disponibles... Con esto podrán resolver excepciones de forma rápida y segura, sin comprometer la gestión del riesgo financiero.",
+            "confidence": 0.95
+          }
+        ],
+        "confidence": 0.95
+      },
+      "testCard": {
+        "hipotesis": {
+          "value": "Si habilitamos a los jefes y administradores con criterios claros, capacitación y herramientas ya disponibles, entonces podrán resolver excepciones de forma rápida y segura, sin comprometer la gestión del riesgo financiero.",
+          "provenance": [
+            {
+              "page": 5,
+              "quote": "Si habilitamos a los jefes y administradores con criterios claros, capacitación y herramientas ya disponibles... Con esto podrán resolver excepciones de forma rápida y segura, sin comprometer la gestión del riesgo financiero.",
+              "confidence": 0.95
+            }
+          ],
+          "confidence": 0.95
+        },
+        "queTestan": {
+          "value": "viabilidad del modelo",
+          "provenance": [
+            {
+              "page": 6,
+              "quote": "Elegimos sedes con alto flujo para demostrar la viabilidad del modelo en condiciones reales.",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "conQuien": {
+          "value": "jefes y administradores de sucursal",
+          "provenance": [
+            {
+              "page": 5,
+              "quote": "Si habilitamos a los jefes y administradores con criterios claros, capacitación y herramientas ya disponibles...",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "dondeCuando": {
+          "value": "Arequipa y Huancayo, sedes con alto flujo",
+          "provenance": [
+            {
+              "page": 6,
+              "quote": "Arequipa y Huancayo Elegimos sedes con alto flujo para demostrar la viabilidad del modelo en condiciones reales.",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "metodo": {
+          "value": "SAP Fiori (Liberación Directa), Plataforma de Alerta Rápida, Normas: Reglas de Verificación Nivel 2",
+          "provenance": [
+            {
+              "page": 6,
+              "quote": "Herramientas Utilizadas: SAP Fiori (Liberación Directa) Plataforma de Alerta Rápida Normas: Reglas de Verificación Nivel 2",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "metrica": {
+          "value": "Reducción del tiempo de respuesta (lead time), % de solicitudes resueltas localmente",
+          "provenance": [
+            {
+              "page": 8,
+              "quote": "300 min (5h) 21 min Durante Experimento -93% 42% Impacto del experimento Antes del Experimento Reducción del Tiempo Solicitudes resueltas localmente",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        }
+      }
+    },
+    "step3": {
+      "formatoExp": {
+        "value": "Piloto operativo",
+        "provenance": [
+          {
+            "page": 6,
+            "quote": "El Experimento Piloto — Arequipa y Huancayo",
+            "confidence": 0.95
+          }
+        ],
+        "confidence": 0.95
+      },
+      "logistica": {
+        "donde": null
+      },
+      "instrumentacion": {
+        "value": [
+          {
+            "dato": "Lead time",
+            "metricaExito": "Reducción del tiempo de respuesta",
+            "fuente": "Solicitudes resueltas localmente"
+          },
+          {
+            "dato": "Resolución local",
+            "metricaExito": "Porcentaje de solicitudes resueltas localmente",
+            "fuente": "Solicitudes resueltas localmente"
+          }
+        ],
+        "provenance": [
+          {
+            "page": 8,
+            "quote": "300 min (5h) — 21 min — -93% — 42%",
+            "confidence": 0.95
+          }
+        ],
+        "confidence": 0.95
+      },
+      "testCycles": [
+        {
+          "queValidamos": {
+            "value": "Si habilitar autonomía local con SAP Fiori reduce lead time manteniendo control",
+            "provenance": [
+              {
+                "page": 5,
+                "quote": "Si habilitamos a los jefes y administradores con criterios claros, capacitación y herramientas ya disponibles...",
+                "confidence": 0.88
+              }
+            ],
+            "confidence": 0.88
+          },
+          "metricaPrincipal": {
+            "value": "Lead time (min) y % de resolución local",
+            "provenance": [
+              {
+                "page": 8,
+                "quote": "Reducción del Tiempo — Solicitudes resueltas localmente",
+                "confidence": 0.95
+              }
+            ],
+            "confidence": 0.95
+          },
+          "resultadoEsperado": null,
+          "resultadoObservado": {
+            "value": "300min → 21min (-93%); 42% resueltas localmente",
+            "provenance": [
+              {
+                "page": 8,
+                "quote": "300 min (5h) — 21 min — -93% — 42%",
+                "confidence": 0.95
+              }
+            ],
+            "confidence": 0.95
+          },
+          "decision": {
+            "value": "mantener",
+            "provenance": [
+              {
+                "page": 9,
+                "quote": "Escenarios recomendados: Conservador (Optimizar)",
+                "confidence": 0.85
+              }
+            ],
+            "confidence": 0.85
+          },
+          "aprendizaje": null
+        }
+      ],
+      "goNoGo": {
+        "value": "Go",
+        "provenance": [
+          {
+            "page": 9,
+            "quote": "Escenarios recomendados: Conservador (Optimizar)",
+            "confidence": 0.85
+          }
+        ],
+        "confidence": 0.85
+      },
+      "aprendizajes": {
+        "value": [
+          "La sucursal puede asumir mayor protagonismo cuando sabe exactamente hasta dónde decidir.",
+          "La autonomía real requiere reglas claras, datos confiables para el seguimiento y capacitación constante.",
+          "La información debe traducirse según el perfil: comercial, administrativo o créditos."
+        ],
+        "provenance": [
+          {
+            "page": 7,
+            "quote": "Capacidad Local — La sucursal puede asumir mayor protagonismo cuando sabe exactamente hasta dónde decidir.",
+            "confidence": 0.95
+          },
+          {
+            "page": 7,
+            "quote": "Autonomía ≠ Descontrol — La autonomía real requiere reglas claras, datos confiables para el seguimiento y capacitación constante.",
+            "confidence": 0.95
+          },
+          {
+            "page": 7,
+            "quote": "Comunicación Periódica — La información debe traducirse según el perfil: comercial, administrativo o créditos.",
+            "confidence": 0.95
+          }
+        ],
+        "confidence": 0.95
+      },
+      "diagnostico": {
+        "senales": null
+      }
+    },
+    "step4": {
+      "audience": {
+        "value": "Comite",
+        "provenance": [
+          {
+            "page": 12,
+            "quote": "Pedido al Comité",
+            "confidence": 0.95
+          }
+        ],
+        "confidence": 0.95
+      },
+      "meetingGoal": {
+        "value": "Validar priorización estratégica, asignar sponsorship gerencial y aprobar presupuesto para repotenciación tecnológica.",
+        "provenance": [
+          {
+            "page": 12,
+            "quote": "Priorización\nValidar que este frente siga como eje estratégico de atención.\nSponsorship\nAsignar un sponsor gerencial para remover barreras técnicas.\nTecnología\nIniciar la fase de repotenciación del gestor documental.\n(Costo: S/.20,000 aproximadamente)",
+            "confidence": 0.9
+          }
+        ],
+        "confidence": 0.9
+      },
+      "decision": {
+        "value": "Go",
+        "provenance": [
+          {
+            "page": 9,
+            "quote": "Escenarios recomendados\n1. Conservador\nMonitoreo del dashboard de métricas y despliegue nacional de capacitación progresiva.",
+            "confidence": 0.88
+          }
+        ],
+        "confidence": 0.88
+      },
+      "closureType": {
+        "value": "Implementar",
+        "provenance": [
+          {
+            "page": 9,
+            "quote": "Escenarios recomendados\n1. Conservador\nMonitoreo del dashboard de métricas y despliegue nacional de capacitación progresiva.",
+            "confidence": 0.88
+          }
+        ],
+        "confidence": 0.88
+      },
+      "presentation": {
+        "problem": {
+          "value": "La rigidez operativa y la centralización de decisiones en Lima generan una carga administrativa masiva para el equipo de créditos, deteniendo la operatividad del cliente durante fines de semana o cierres de mes.",
+          "provenance": [
+            {
+              "page": 3,
+              "quote": "El Reto:\nRigidez Operativa\nUna carga administrativa masiva para el equipo de créditos que detiene la operatividad del cliente durante fines de semana o cierres de mes.",
+              "confidence": 0.95
+            }
+          ],
+          "confidence": 0.95
+        },
+        "urgency": {
+          "value": "La necesidad de responder rápidamente a las excepciones y mejorar la experiencia del cliente es crítica para mantener la competitividad y la confianza del cliente.",
+          "provenance": [
+            {
+              "page": 2,
+              "quote": "\"Entiendo tu urgencia, pero necesitamos esperar la autorización desde Lima.\"",
+              "confidence": 0.8
+            }
+          ],
+          "confidence": 0.8
+        },
+        "evidence": {
+          "value": "En 2025 se registraron más de 6,000 excepciones con un lead time de respuesta de 5 horas. Durante el experimento piloto, el tiempo de respuesta se redujo en un 93%, alcanzando 21 minutos, y el 42% de las solicitudes se resolvieron localmente.",
+          "provenance": [
+            {
+              "page": 3,
+              "quote": "6,000+\nEXCEPCIONES EN 2025\n5h+\nLEAD TIME DE RESPUESTA",
+              "confidence": 0.9
+            },
+            {
+              "page": 8,
+              "quote": "300 min (5h)\n21 minDurante\nExperimento\n-93%\n42%",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "proposal": {
+          "value": "Habilitar a los jefes y administradores locales con criterios claros, capacitación y herramientas disponibles para resolver excepciones de forma rápida y segura, sin comprometer la gestión del riesgo financiero.",
+          "provenance": [
+            {
+              "page": 5,
+              "quote": "Nuestra Hipótesis\nHabilitación Local\nSi habilitamos a los jefes y administradores con criterios claros, capacitación y herramientas ya disponibles...\nAgilidad Controlada\nCon esto podrán resolver excepciones de forma rápida y segura, sin comprometer la gestión del riesgo financiero.",
+              "confidence": 0.95
+            }
+          ],
+          "confidence": 0.95
+        },
+        "solutionComponents": {
+          "value": "Herramientas como SAP Fiori (Liberación Directa), Plataforma de Alerta Rápida y Normas de Verificación Nivel 2, junto con capacitación constante y comunicación periódica.",
+          "provenance": [
+            {
+              "page": 6,
+              "quote": "Herramientas Utilizadas:\nSAP Fiori (Liberación Directa)\nPlataforma de Alerta Rápida\nNormas: Reglas de Verificación Nivel 2",
+              "confidence": 0.9
+            },
+            {
+              "page": 7,
+              "quote": "Comunicación Periódica\nLa información debe traducirse según el perfil: comercial, administrativo o créditos.",
+              "confidence": 0.8
+            }
+          ],
+          "confidence": 0.85
+        },
+        "tests": {
+          "value": "Piloto ejecutado en las sucursales de Arequipa y Huancayo, elegidas por su alto flujo, para demostrar la viabilidad del modelo en condiciones reales.",
+          "provenance": [
+            {
+              "page": 6,
+              "quote": "El Experimento Piloto\nArequipa y Huancayo\nElegimos sedes con alto flujo para demostrar la viabilidad del modelo en condiciones reales.",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "results": {
+          "value": "El tiempo de respuesta se redujo en un 93%, alcanzando 21 minutos, y el 42% de las solicitudes se resolvieron localmente.",
+          "provenance": [
+            {
+              "page": 8,
+              "quote": "300 min (5h)\n21 minDurante\nExperimento\n-93%\n42%",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "recommendation": {
+          "value": "Se recomienda el escenario Conservador, que incluye el monitoreo del dashboard de métricas y el despliegue nacional de capacitación progresiva.",
+          "provenance": [
+            {
+              "page": 9,
+              "quote": "Escenarios recomendados\n1. Conservador\nMonitoreo del dashboard de métricas y despliegue nacional de capacitación progresiva.",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "orgNeeds": {
+          "value": "Priorización estratégica, asignación de un sponsor gerencial para remover barreras técnicas y aprobación de un presupuesto de S/.20,000 para la repotenciación del gestor documental.",
+          "provenance": [
+            {
+              "page": 12,
+              "quote": "Priorización\nValidar que este frente siga como eje estratégico de atención.\nSponsorship\nAsignar un sponsor gerencial para remover barreras técnicas.\nTecnología\nIniciar la fase de repotenciación del gestor documental.\n(Costo: S/.20,000 aproximadamente)",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        },
+        "nextStep": {
+          "value": "Aprobar el presupuesto para la repotenciación tecnológica y asignar un sponsor gerencial para liderar la implementación.",
+          "provenance": [
+            {
+              "page": 12,
+              "quote": "Sponsorship\nAsignar un sponsor gerencial para remover barreras técnicas.\nTecnología\nIniciar la fase de repotenciación del gestor documental.\n(Costo: S/.20,000 aproximadamente)",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        }
+      },
+      "implementationPlan": {
+        "value": [
+          {
+            "stage": "Conservador",
+            "activity": "Monitoreo del dashboard de métricas",
+            "expectedResult": "Despliegue nacional de capacitación progresiva",
+            "status": "Cierre: 01/06/26"
+          }
+        ],
+        "provenance": [
+          {
+            "page": 10,
+            "quote": "Conservador\nGantt de Cambios- Área de Créditos\nCierre: 01/06/26",
+            "confidence": 0.9
+          }
+        ],
+        "confidence": 0.85
+      },
+      "orgContext": {
+        "affectedAreas": {
+          "value": "Área de Créditos y sucursales de Arequipa y Huancayo.",
+          "provenance": [
+            {
+              "page": 10,
+              "quote": "Gantt de Cambios- Área de Créditos",
+              "confidence": 0.8
+            },
+            {
+              "page": 6,
+              "quote": "El Experimento Piloto\nArequipa y Huancayo",
+              "confidence": 0.8
+            }
+          ],
+          "confidence": 0.8
+        },
+        "risks": {
+          "value": "La autonomía sin reglas claras y datos confiables puede llevar al descontrol. Es crucial mantener una comunicación periódica y capacitación constante para mitigar estos riesgos.",
+          "provenance": [
+            {
+              "page": 7,
+              "quote": "Autonomía ≠ Descontrol\nLa autonomía real requiere reglas claras, datos confiables para el seguimiento y capacitación constante.",
+              "confidence": 0.9
+            }
+          ],
+          "confidence": 0.9
+        }
+      }
+    },
+    "must_omit_violations": [],
+    "extraction_metadata": {
+      "model": "deepseek/deepseek-chat",
+      "language": "es",
+      "pages": 14,
+      "started_at": "2026-05-19T19:44:31.249386",
+      "finished_at": "2026-05-19T19:47:21.927307",
+      "duration_ms": 170677,
+      "per_step_ms": {
+        "step0": 23286,
+        "step1": 39433,
+        "step2": 16367,
+        "step3": 27672,
+        "step4": 63916
+      },
+      "per_step_tokens": {
+        "step0": {
+          "input": 2673,
+          "output": 1104
+        },
+        "step1": {
+          "input": 2824,
+          "output": 1669
+        },
+        "step2": {
+          "input": 2399,
+          "output": 858
+        },
+        "step3": {
+          "input": 2971,
+          "output": 1129
+        },
+        "step4": {
+          "input": 2936,
+          "output": 2292
+        }
+      },
+      "parse_failures": []
+    }
+  }
+}

@@ -251,6 +251,41 @@ enum PortfolioDecisionOutcome {
   cerrar_con_aprendizaje
 }
 
+// ─── PDF Autofill (TASK-006 / SPEC-002 / ADR-007) ────────────────────────────
+// V1 stores PDFs on the backend local filesystem keyed by `fileKey`. Per ADR-007
+// this is a swap-in candidate for S3 + presigned URLs; the IPdfStorage interface
+// in backend/modules/initiative-pdfs/storage.service.ts isolates the swap.
+
+enum PdfStatus {
+  UPLOADED
+  PARSING
+  EXTRACTING
+  READY
+  FAILED
+  DELETED
+}
+
+enum ExtractionRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  COST_CAPPED
+}
+
+enum ConfidenceBand {
+  HIGH
+  MED
+  LOW
+}
+
+enum ProposalStatus {
+  PENDING
+  CONFIRMED
+  EDITED
+  DISCARDED
+}
+
 // ─── Models ─────────────────────────────────────────────────────────────────
 
 model User {
@@ -271,14 +306,14 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  projects         Project[]
-  teamMemberships  TeamMember[]
-  mentorSessions   MentorSession[]
-  evidence         Evidence[]
-  refreshTokens    RefreshToken[]
-  auditLogs        AuditLog[]
-  helpRequests     HelpRequest[]    @relation("HelpRequester")
-  mentorHelpRequests HelpRequest[]  @relation("HelpMentor")
+  projects           Project[]
+  teamMemberships    TeamMember[]
+  mentorSessions     MentorSession[]
+  evidence           Evidence[]
+  refreshTokens      RefreshToken[]
+  auditLogs          AuditLog[]
+  helpRequests       HelpRequest[]       @relation("HelpRequester")
+  mentorHelpRequests HelpRequest[]       @relation("HelpMentor")
   sponsorCheckpoints SponsorCheckpoint[] @relation("SponsorCheckpoints")
 
   @@index([email])
@@ -287,34 +322,35 @@ model User {
 }
 
 model Project {
-  id            String        @id @default(cuid())
-  name          String
-  description   String?
-  status        ProjectStatus @default(DRAFT)
-  currentStep   Int           @default(0)
-  step0Status   Step0Status   @default(NOT_STARTED)
-  step0Data     Json?
-  mentorCredits Int           @default(3)
-  riskLevel     RiskLevel?
-  isArchived    Boolean       @default(false)
-  lastPosition  Json?
+  id                 String        @id @default(cuid())
+  name               String
+  description        String?
+  status             ProjectStatus @default(DRAFT)
+  currentStep        Int           @default(0)
+  step0Status        Step0Status   @default(NOT_STARTED)
+  step0Data          Json?
+  mentorCredits      Int           @default(3)
+  riskLevel          RiskLevel?
+  isArchived         Boolean       @default(false)
+  lastPosition       Json?
   sponsorTouchpoints Json?
   sponsorComments    Json?
-  createdAt     DateTime      @default(now())
-  lastModified  DateTime      @updatedAt
+  createdAt          DateTime      @default(now())
+  lastModified       DateTime      @updatedAt
 
   ownerId  String
   owner    User    @relation(fields: [ownerId], references: [id])
   cohortId String?
   cohort   Cohort? @relation(fields: [cohortId], references: [id])
 
-  steps          Step[]
-  evidence       Evidence[]
-  teamMembers    TeamMember[]
+  steps              Step[]
+  evidence           Evidence[]
+  teamMembers        TeamMember[]
   mentorSessions     MentorSession[]
   helpRequests       HelpRequest[]
   sponsorCheckpoints SponsorCheckpoint[]
   portfolioMeta      InitiativePortfolioMeta[]
+  initiativePdfs     InitiativePdf[]
 
   @@index([ownerId])
   @@index([cohortId])
@@ -333,9 +369,9 @@ model Step {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  modules    Module[]
-  runs       Run[]
-  feedbackIA FeedbackIA[]
+  modules       Module[]
+  runs          Run[]
+  feedbackIA    FeedbackIA[]
   mentorSession MentorSession?
 
   @@unique([projectId, number])
@@ -427,7 +463,7 @@ model TeamMember {
   invitedAt DateTime         @default(now())
   joinedAt  DateTime?
 
-  modulePermissions String[]    // Module IDs the colaborador can edit
+  modulePermissions String[] // Module IDs the colaborador can edit
 
   @@unique([projectId, userId])
   @@index([projectId])
@@ -515,20 +551,20 @@ model HelpRequest {
 }
 
 model SponsorCheckpoint {
-  id                   String                   @id @default(cuid())
-  projectId            String
-  project              Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  stepNumber           Int
-  sponsorId            String
-  sponsor              User                     @relation("SponsorCheckpoints", fields: [sponsorId], references: [id])
-  status               SponsorCheckpointStatus  @default(PENDING)
-  strategicFeedback    String?
-  alignmentSignal      AlignmentSignal?
-  focusRecommendation  String?
-  respondedAt          DateTime?
-  expiresAt            DateTime
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @updatedAt
+  id                  String                  @id @default(cuid())
+  projectId           String
+  project             Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stepNumber          Int
+  sponsorId           String
+  sponsor             User                    @relation("SponsorCheckpoints", fields: [sponsorId], references: [id])
+  status              SponsorCheckpointStatus @default(PENDING)
+  strategicFeedback   String?
+  alignmentSignal     AlignmentSignal?
+  focusRecommendation String?
+  respondedAt         DateTime?
+  expiresAt           DateTime
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
 
   @@unique([projectId, stepNumber])
   @@index([projectId])
@@ -563,31 +599,31 @@ model StrategicFront {
 }
 
 model Challenge {
-  id                     String                  @id @default(cuid())
-  strategicFrontId       String
-  strategicFront         StrategicFront          @relation(fields: [strategicFrontId], references: [id], onDelete: Cascade)
-  title                  String
-  name                   String?
-  description            String?
-  type                   ChallengeType           @default(crecimiento)
-  whatWeWantToMove       String?
-  objective              String?
-  whyNow                 String?
-  successCriteria        String?
-  challengeOwner         String?
-  challengeOwnerStatus   StakeholderStatus       @default(definido)
-  sponsorStatus          StakeholderStatus       @default(definido)
-  openCallStatus         ChallengeOpenCallStatus @default(inactiva)
-  visibleToParticipants  Boolean                 @default(false)
-  publicationNotes       String?
-  lastPublishedAt        DateTime?
-  status                 ChallengeStatus         @default(draft)
-  activationMode         ChallengeActivationMode @default(convocatoria_abierta)
-  coverageStatus         ChallengeCoverageStatus @default(sin_cobertura)
-  sponsorId              String?
-  ownerId                String?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  id                    String                  @id @default(cuid())
+  strategicFrontId      String
+  strategicFront        StrategicFront          @relation(fields: [strategicFrontId], references: [id], onDelete: Cascade)
+  title                 String
+  name                  String?
+  description           String?
+  type                  ChallengeType           @default(crecimiento)
+  whatWeWantToMove      String?
+  objective             String?
+  whyNow                String?
+  successCriteria       String?
+  challengeOwner        String?
+  challengeOwnerStatus  StakeholderStatus       @default(definido)
+  sponsorStatus         StakeholderStatus       @default(definido)
+  openCallStatus        ChallengeOpenCallStatus @default(inactiva)
+  visibleToParticipants Boolean                 @default(false)
+  publicationNotes      String?
+  lastPublishedAt       DateTime?
+  status                ChallengeStatus         @default(draft)
+  activationMode        ChallengeActivationMode @default(convocatoria_abierta)
+  coverageStatus        ChallengeCoverageStatus @default(sin_cobertura)
+  sponsorId             String?
+  ownerId               String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 
   selectedPeople   ChallengeInvitation[]
   assignedSquad    ChallengeSquadMember[]
@@ -624,51 +660,51 @@ model ChallengeSquadMember {
 }
 
 model InitiativePortfolioMeta {
-  id                          String                     @id @default(cuid())
-  projectId                   String
-  project                     Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  challengeId                 String
-  challenge                   Challenge                  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  strategicFrontId            String?
+  id                           String                     @id @default(cuid())
+  projectId                    String
+  project                      Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  challengeId                  String
+  challenge                    Challenge                  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  strategicFrontId             String?
   // Portfolio tracking fields
-  teamOwner                   String?
-  currentStep                 String?
-  status                      InitiativePortfolioStatus  @default(en_step_0)
-  mentor                      String?
-  sponsorTouchpoint           String?
-  mainAlert                   String?
-  nextActionRecommended       String?
-  attackedArea                String?
-  hypothesisCovered           String?
-  mainMetric                  String?
-  contributionType            InitiativeContributionType @default(descubrir)
-  estimatedContribution       EstimatedContribution      @default(bajo)
-  lastActivity                String?
-  signalSummary               String?
-  mainBlocker                 String?
-  teamLabel                   String?
-  requiresSponsor             Boolean                    @default(false)
-  readyForDecision            Boolean                    @default(false)
-  blockedDays                 Int                        @default(0)
-  requiresExternalCapability  Boolean                    @default(false)
-  partialSignal               Boolean                    @default(false)
-  resolvedCorePart            Boolean                    @default(false)
-  executiveSummary            String?
-  experimentSummary           String?
-  aiCommentSummary            String?
-  mentorCommentSummary        String?
+  teamOwner                    String?
+  currentStep                  String?
+  status                       InitiativePortfolioStatus  @default(en_step_0)
+  mentor                       String?
+  sponsorTouchpoint            String?
+  mainAlert                    String?
+  nextActionRecommended        String?
+  attackedArea                 String?
+  hypothesisCovered            String?
+  mainMetric                   String?
+  contributionType             InitiativeContributionType @default(descubrir)
+  estimatedContribution        EstimatedContribution      @default(bajo)
+  lastActivity                 String?
+  signalSummary                String?
+  mainBlocker                  String?
+  teamLabel                    String?
+  requiresSponsor              Boolean                    @default(false)
+  readyForDecision             Boolean                    @default(false)
+  blockedDays                  Int                        @default(0)
+  requiresExternalCapability   Boolean                    @default(false)
+  partialSignal                Boolean                    @default(false)
+  resolvedCorePart             Boolean                    @default(false)
+  executiveSummary             String?
+  experimentSummary            String?
+  aiCommentSummary             String?
+  mentorCommentSummary         String?
   decisionRecommendationReason String?
   // Complex arrays kept as Json
-  teamMembers                 Json?
-  deliverables                Json?
-  stepsTimeline               Json?
+  teamMembers                  Json?
+  deliverables                 Json?
+  stepsTimeline                Json?
   // Legacy/decision fields
-  coverageScore               Float?
-  alignmentNotes              String?
-  decisionOutcome             PortfolioDecisionOutcome?
-  decisionNotes               String?
-  createdAt                   DateTime                   @default(now())
-  updatedAt                   DateTime                   @updatedAt
+  coverageScore                Float?
+  alignmentNotes               String?
+  decisionOutcome              PortfolioDecisionOutcome?
+  decisionNotes                String?
+  createdAt                    DateTime                   @default(now())
+  updatedAt                    DateTime                   @updatedAt
 
   @@unique([projectId, challengeId])
   @@index([projectId])
@@ -695,14 +731,14 @@ model InitiativeOverlap {
 }
 
 model ExecutiveOutput {
-  id                     String                   @id @default(cuid())
+  id                     String                    @id @default(cuid())
   projectId              String
   challengeId            String
-  challenge              Challenge                @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  challenge              Challenge                 @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   // Renamed from projectId — this references the Initiative (Project) id
   initiativeId           String?
   recommendation         PortfolioDecisionOutcome?
-  status                 ExecutiveOutputStatus    @default(borrador_ejecutivo)
+  status                 ExecutiveOutputStatus     @default(borrador_ejecutivo)
   whyNow                 String?
   kpiToMove              String?
   approachSummary        String?
@@ -721,10 +757,86 @@ model ExecutiveOutput {
   timeline               Json?
   sharedAt               DateTime?
   decisionAt             DateTime?
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 
   @@unique([projectId, challengeId])
   @@index([challengeId])
   @@index([projectId])
+}
+
+// ─── PDF Autofill models (TASK-006) ──────────────────────────────────────────
+
+model InitiativePdf {
+  id               String    @id @default(uuid())
+  projectId        String
+  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileKey          String    @unique
+  fileName         String
+  mimeType         String
+  fileSize         Int
+  uploadedBy       String
+  uploadedAt       DateTime  @default(now())
+  retentionUntil   DateTime?
+  deletedAt        DateTime?
+  status           PdfStatus @default(UPLOADED)
+  languageDetected String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  extractionRuns PdfExtractionRun[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([retentionUntil])
+}
+
+model PdfExtractionRun {
+  id          String              @id @default(uuid())
+  pdfId       String
+  pdf         InitiativePdf       @relation(fields: [pdfId], references: [id], onDelete: Cascade)
+  projectId   String
+  aiRunId     String?             // ai-service's own runId (RunRegistry); used to poll upstream
+  status      ExtractionRunStatus @default(PENDING)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  costUsd     Decimal?            @db.Decimal(10, 4)
+  tokensIn    Int?
+  tokensOut   Int?
+  model       String?
+  language    String?
+  errorReason String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  proposals PdfFieldProposal[]
+
+  @@index([pdfId])
+  @@index([projectId, status])
+  @@index([status])
+  // Webhook push from ai-service looks up runs by aiRunId on every terminal-state
+  // notification. Without this index, lookups degrade to a sequential scan as the
+  // table grows.
+  @@index([aiRunId])
+}
+
+model PdfFieldProposal {
+  id             String           @id @default(uuid())
+  runId          String
+  run            PdfExtractionRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  projectId      String
+  fieldPath      String
+  proposedValue  Json
+  provenance     Json
+  confidence     Float
+  confidenceBand ConfidenceBand
+  status         ProposalStatus   @default(PENDING)
+  finalValue     Json?
+  confirmedBy    String?
+  confirmedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([runId, fieldPath])
+  @@index([projectId, status])
 }

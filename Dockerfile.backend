@@ -58,6 +58,11 @@ COPY --from=builder /app/dist/backend ./dist/backend/
 RUN addgroup -g 1001 -S appgroup && \
     adduser -S appuser -u 1001 -G appgroup
 
+# PDF auto-fill local storage (SPEC-002 / TASK-006). The compose file mounts
+# /app/storage to a named volume `pdfstorage`. Pre-create with correct ownership
+# so the non-root appuser can write.
+RUN mkdir -p /app/storage && chown -R appuser:appgroup /app/storage
+
 USER appuser
 
 EXPOSE 3001

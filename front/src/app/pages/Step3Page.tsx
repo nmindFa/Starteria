@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -12,6 +12,7 @@ import { StatusChip } from '../components/StatusChip';
 import { FeedbackIAPanel } from '../components/FeedbackIAPanel';
 import { AutosaveIndicator, useAutosave } from '../components/AutosaveIndicator';
 import { useStepData } from '../hooks/useStepData';
+import * as stepService from '../services/stepService';
 
 type ModuleId = 'A' | 'B' | 'C';
 type GoNoGoDecision = 'Go' | 'Iterar' | 'No-Go' | 'Pivote' | null;
@@ -661,8 +662,69 @@ export function Step3Page() {
   // Overlay_S3_MentorComplete_Demo — gatillo visible siempre en S3C para aprobar Step 3 en demo
   const [showFinalizarDemo, setShowFinalizarDemo] = useState(false);
 
-  // Autosave
-  const saveState = useAutosave({ checklistItems, formatoExp, componentes, logistica, instrumentacion, testCycles, activeCycleId, goNoGo, aprendizajes, diagnostico });
+  // ── TASK-010: hydrate Step 3 state from backend on mount ─────────────────────
+  // Mirrors Step 1's pattern. Falls back silently to the existing defaults
+  // when nothing is persisted, so the empty-state UX is preserved.
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = await stepService.getStepData(projectId, 3);
+        if (cancelled || !stored || typeof stored !== 'object') return;
+        const formData = (stored as { formData?: Record<string, unknown> }).formData;
+        if (!formData) return;
+        if (Array.isArray(formData.checklistItems)) setChecklistItems(formData.checklistItems as LaunchChecklistItem[]);
+        if (typeof formData.formatoExp === 'string') setFormatoExp(formData.formatoExp);
+        if (Array.isArray(formData.componentes)) setComponentes(formData.componentes as Componente[]);
+        if (formData.logistica && typeof formData.logistica === 'object') setLogistica(formData.logistica as typeof logistica);
+        if (Array.isArray(formData.instrumentacion)) setInstrumentacion(formData.instrumentacion as InstrumentacionRow[]);
+        if (Array.isArray(formData.testCycles)) setTestCycles(formData.testCycles as TestCycle[]);
+        if (typeof formData.activeCycleId === 'string') setActiveCycleId(formData.activeCycleId);
+        if (formData.goNoGo === 'Go' || formData.goNoGo === 'Iterar' || formData.goNoGo === 'No-Go' || formData.goNoGo === 'Pivote' || formData.goNoGo === null) {
+          setGoNoGo(formData.goNoGo as GoNoGoDecision);
+        }
+        if (Array.isArray(formData.aprendizajes)) setAprendizajes(formData.aprendizajes as typeof aprendizajes);
+        if (formData.diagnostico && typeof formData.diagnostico === 'object') setDiagnostico(formData.diagnostico as typeof diagnostico);
+      } catch {
+        // 404 / auth — keep defaults silently.
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  // ── Autosave (TASK-010) ─────────────────────────────────────────────────────
+  const step3FormData = {
+    checklistItems,
+    formatoExp,
+    componentes,
+    logistica,
+    instrumentacion,
+    testCycles,
+    activeCycleId,
+    goNoGo,
+    aprendizajes,
+    diagnostico,
+  };
+
+  const autosaveFn = useCallback(
+    async (data: typeof step3FormData) => {
+      if (!projectId) return;
+      await stepService.saveStepData(projectId, 3, {
+        _meta: { version: 1, lastSavedAt: new Date().toISOString(), lastSavedBy: 'user' },
+        formData: data,
+      });
+    },
+    [projectId],
+  );
+
+  const { state: saveState } = useAutosave({
+    data: step3FormData,
+    saveFn: autosaveFn,
+    delay: 2000,
+    enabled: !!projectId,
+  });
 
   // ── Gate ─────────────────────────────────────────────────────────────────────
   if (!project) return <div className="p-6"><p className="text-slate-500">Proyecto no encontrado.</p></div>;

@@ -48,3 +48,7 @@ BHIL-AI-First-Development-Toolkit/
 image copy.png
 k8s/image.png
 langsmith-skills/
+
+# TASK-006: local PDF storage (TODO(ADR-007): replaced by S3 in a future TASK)
+backend/storage/
+storage/

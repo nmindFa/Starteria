@@ -16,6 +16,12 @@ COPY front/vite.config.ts ./
 COPY front/postcss.config.mjs ./
 COPY front/src/ ./src/
 
+# Vite envs must be present at build time (prefixed VITE_*) — they get baked into the bundle.
+ARG VITE_API_URL=http://localhost:3001
+ARG VITE_FEATURE_PDF_AUTOFILL=true
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_FEATURE_PDF_AUTOFILL=$VITE_FEATURE_PDF_AUTOFILL
+
 # Build the production bundle
 RUN npm run build
 

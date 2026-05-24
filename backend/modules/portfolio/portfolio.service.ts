@@ -235,6 +235,37 @@ export class PortfolioService {
     const challenge = await this.prisma.challenge.findUnique({ where: { id: challengeId } });
     if (!challenge) throw AppError.notFound('Desafío', 'CHALLENGE_NOT_FOUND', { hint: 'Verifica el ID del desafío.' });
 
+    // TASK-006 / SPEC-002 US-017 guard:
+    // Block the `en_step_4 → esperando_revision` transition while any PDF autofill
+    // proposal is still PENDING for this project. The founder MUST confirm,
+    // edit, or discard every proposal before the initiative can move forward.
+    if (input.status === 'esperando_revision') {
+      const existing = await this.prisma.initiativePortfolioMeta.findUnique({
+        where: { projectId_challengeId: { projectId, challengeId } },
+        select: { status: true },
+      });
+      if (existing?.status === 'en_step_4') {
+        const pending = await this.prisma.pdfFieldProposal.findMany({
+          where: { projectId, status: 'PENDING' },
+          select: { fieldPath: true },
+        });
+        if (pending.length > 0) {
+          throw AppError.conflict(
+            'Hay propuestas de autofill sin confirmar.',
+            'AUTOFILL_UNCONFIRMED',
+            {
+              hint: 'Confirma, edita o descarta cada propuesta antes de avanzar.',
+              details: pending.slice(0, 50).map((p) => ({
+                field: p.fieldPath,
+                code: 'PDF_PROPOSAL_PENDING',
+                message: 'Propuesta de autofill sin resolver.',
+              })),
+            },
+          );
+        }
+      }
+    }
+
     return this.prisma.initiativePortfolioMeta.upsert({
       where: { projectId_challengeId: { projectId, challengeId } },
       create: {
